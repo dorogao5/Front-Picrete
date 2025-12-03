@@ -1,0 +1,160 @@
+# ============================================
+# Node.js / Frontend
+# ============================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Build outputs
+dist/
+dist-ssr/
+build/
+*.local
+*.local.*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+
+# Vite
+.vite/
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# ============================================
+# IDEs and Editors
+# ============================================
+# VSCode
+.vscode/
+*.code-workspace
+.history/
+
+# IntelliJ IDEA / PyCharm
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+.vim/
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# ============================================
+# Operating System Files
+# ============================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ============================================
+# Logs
+# ============================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ============================================
+# Temporary files
+# ============================================
+*.tmp
+*.temp
+*.bak
+*.backup
+*.swp
+*.swo
+*~
+.cache/
+
+# ============================================
+# Testing
+# ============================================
+.coverage
+.nyc_output
+coverage/
+*.lcov
+test-results/
+playwright-report/
+playwright/.cache/
+
+# ============================================
+# Misc
+# ============================================
+*.zip
+*.tar.gz
+*.rar
+*.7z
+.sass-cache/
+.parcel-cache/
+.next/
+.nuxt/
+.output/
+.vercel/
+.turbo/
+.astro/
+
