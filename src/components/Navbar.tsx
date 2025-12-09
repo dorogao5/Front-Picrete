@@ -10,7 +10,7 @@ import {
 } from "./ui/dropdown-menu";
 import { User, LogOut } from "lucide-react";
 import logo from "@/assets/logo.png";
-import { isAuthenticated, getUser, logout } from "@/lib/auth";
+import { isAuthenticated, getUser, isAdmin, logout } from "@/lib/auth";
 
 export const Navbar = () => {
   const navigate = useNavigate();
@@ -73,6 +73,12 @@ export const Navbar = () => {
                     <User className="mr-2 h-4 w-4" />
                     <span>Профиль</span>
                   </DropdownMenuItem>
+                  {isAdmin() && (
+                    <DropdownMenuItem onClick={() => navigate('/admin')} className="cursor-pointer">
+                      <User className="mr-2 h-4 w-4" />
+                      <span>Админка</span>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600">
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Выйти</span>

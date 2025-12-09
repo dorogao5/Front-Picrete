@@ -7,6 +7,12 @@ export interface User {
   role: 'admin' | 'teacher' | 'assistant' | 'student';
   is_active: boolean;
   is_verified: boolean;
+  pd_consent?: boolean;
+  pd_consent_at?: string | null;
+  pd_consent_version?: string | null;
+  terms_accepted_at?: string | null;
+  terms_version?: string | null;
+  privacy_version?: string | null;
 }
 
 export const setAuthToken = (token: string) => {
@@ -39,6 +45,11 @@ export const isAuthenticated = (): boolean => {
 export const isTeacher = (): boolean => {
   const user = getUser();
   return user?.role === 'teacher' || user?.role === 'admin';
+};
+
+export const isAdmin = (): boolean => {
+  const user = getUser();
+  return user?.role === 'admin';
 };
 
 export const isStudent = (): boolean => {

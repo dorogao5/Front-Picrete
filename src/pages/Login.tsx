@@ -37,7 +37,9 @@ const Login = () => {
       toast.success("Вход выполнен успешно");
       
 
-      if (user.role === "teacher" || user.role === "admin") {
+      if (user.role === "admin") {
+        navigate("/admin", { replace: true });
+      } else if (user.role === "teacher") {
         navigate("/teacher", { replace: true });
       } else {
         navigate("/student", { replace: true });

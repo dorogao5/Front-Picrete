@@ -5,10 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import logo from "@/assets/logo.png";
 import { authAPI } from "@/lib/api";
 import { setAuthToken, setUser } from "@/lib/auth";
 import { toast } from "sonner";
+const POLICY_VERSION = "2025-12-09";
 
 const Signup = () => {
   const [isu, setIsu] = useState("");
@@ -16,6 +18,8 @@ const Signup = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState<"student" | "teacher">("student");
+  const [pdConsent, setPdConsent] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -32,6 +36,11 @@ const Signup = () => {
       return;
     }
 
+    if (!pdConsent || !termsAccepted) {
+      toast.error("Необходимо принять условия и согласие на обработку персональных данных");
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await authAPI.signup({
@@ -39,6 +48,10 @@ const Signup = () => {
         full_name: fullName,
         password,
         role,
+        pd_consent: true,
+        pd_consent_version: POLICY_VERSION,
+        terms_version: POLICY_VERSION,
+        privacy_version: POLICY_VERSION,
       });
       
       const { access_token, user } = response.data;
@@ -149,7 +162,33 @@ const Signup = () => {
             </Select>
           </div>
 
-          <Button type="submit" className="w-full" size="lg" disabled={loading}>
+          <div className="space-y-3 rounded-lg border border-border/60 p-4 bg-muted/30">
+            <div className="flex items-start space-x-3">
+              <Checkbox id="pdConsent" checked={pdConsent} onCheckedChange={(v) => setPdConsent(Boolean(v))} />
+              <Label htmlFor="pdConsent" className="leading-relaxed">
+                Согласен(а) на обработку персональных данных в соответствии с{" "}
+                <Link to="/consent" className="text-primary hover:underline">Согласием на обработку персональных данных</Link> и{" "}
+                <Link to="/privacy" className="text-primary hover:underline">Политикой конфиденциальности</Link>.
+              </Label>
+            </div>
+            <div className="flex items-start space-x-3">
+              <Checkbox id="termsAccepted" checked={termsAccepted} onCheckedChange={(v) => setTermsAccepted(Boolean(v))} />
+              <Label htmlFor="termsAccepted" className="leading-relaxed">
+                Принимаю условия{" "}
+                <Link to="/terms" className="text-primary hover:underline">Пользовательского соглашения</Link>.
+              </Label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Версия документов: {POLICY_VERSION}. Для работы сервиса необходимо принять условия.
+            </p>
+          </div>
+
+          <Button
+            type="submit"
+            className="w-full"
+            size="lg"
+            disabled={loading || !pdConsent || !termsAccepted}
+          >
             {loading ? "Регистрация..." : "Создать аккаунт"}
           </Button>
         </form>

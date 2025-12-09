@@ -134,8 +134,21 @@ const Landing = () => {
 
       {/* Footer */}
       <footer className="py-12 px-6 border-t border-border">
-        <div className="container mx-auto text-center text-muted-foreground">
+        <div className="container mx-auto text-center text-muted-foreground space-y-3">
           <p>© 2025 Picrete. Платформа автоматизированной проверки контрольных работ по химии</p>
+          <div className="flex justify-center gap-4 text-sm">
+            <Link to="/privacy" className="hover:underline text-muted-foreground hover:text-foreground">
+              Политика конфиденциальности
+            </Link>
+            <span aria-hidden>•</span>
+            <Link to="/terms" className="hover:underline text-muted-foreground hover:text-foreground">
+              Пользовательское соглашение
+            </Link>
+            <span aria-hidden>•</span>
+            <Link to="/consent" className="hover:underline text-muted-foreground hover:text-foreground">
+              Согласие на обработку персональных данных
+            </Link>
+          </div>
         </div>
       </footer>
     </div>
