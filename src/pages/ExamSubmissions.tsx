@@ -35,7 +35,6 @@ const ExamSubmissions = () => {
         const submissionsResponse = await examsAPI.listSubmissions(examId!, filter ? { status: filter } : undefined);
         setSubmissions(submissionsResponse.data);
       } catch (error: any) {
-        console.error("Error loading exam data:", error);
         const errorMessage = error.response?.data?.detail || error.message || "Ошибка загрузки данных";
         toast.error(errorMessage);
       } finally {

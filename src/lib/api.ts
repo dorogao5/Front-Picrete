@@ -24,7 +24,7 @@ api.interceptors.request.use((config) => {
 
 // Handle auth errors
 let isRedirecting = false;
-let redirectTimeout: NodeJS.Timeout | null = null;
+let redirectTimeout: ReturnType<typeof setTimeout> | null = null;
 
 api.interceptors.response.use(
   (response) => response,
@@ -152,6 +152,15 @@ export const submissionsAPI = {
   
   overrideScore: (submissionId: string, data: { final_score: number; teacher_comments: string }) =>
     api.post(`/submissions/${submissionId}/override-score`, data),
+
+  regrade: (submissionId: string) =>
+    api.post(`/submissions/${submissionId}/regrade`),
+
+  gradingStatus: (submissionId: string) =>
+    api.get(`/submissions/grading-status/${submissionId}`),
+
+  autoSave: (sessionId: string, data: Record<string, unknown>) =>
+    api.post(`/submissions/sessions/${sessionId}/auto-save`, data),
 };
 
 // Users API

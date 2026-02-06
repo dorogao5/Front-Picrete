@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,7 @@ import { CheckCircle, XCircle, Clock, FileText, RefreshCw, Award } from "lucide-
 import { submissionsAPI } from "@/lib/api";
 import { toast } from "sonner";
 import AiAnalysis from "@/components/AiAnalysis";
-import 'katex/dist/katex.min.css';
-import { InlineMath, BlockMath } from 'react-katex';
+import { renderLatex } from "@/lib/renderLatex";
 
 const ExamResult = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -17,41 +16,6 @@ const ExamResult = () => {
   const [submission, setSubmission] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [retaking, setRetaking] = useState(false);
-
-  const renderLatex = (text: string) => {
-    if (!text) return text;
-    
-    try {
-      // Split by newlines first
-      const lines = text.split('\n');
-      
-      return lines.map((line, lineIndex) => {
-        // Process each line for LaTeX
-        const parts = line.split(/(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$)/);
-        
-        const lineContent = parts.map((part, partIndex) => {
-          if (part.startsWith("$$") && part.endsWith("$$")) {
-            const mathContent = part.slice(2, -2).trim();
-            return <BlockMath key={partIndex}>{mathContent}</BlockMath>;
-          } else if (part.startsWith("$") && part.endsWith("$")) {
-            const mathContent = part.slice(1, -1).trim();
-            return <InlineMath key={partIndex}>{mathContent}</InlineMath>;
-          }
-          return <span key={partIndex}>{part}</span>;
-        });
-        
-        return (
-          <span key={lineIndex}>
-            {lineContent}
-            {lineIndex < lines.length - 1 && <br />}
-          </span>
-        );
-      });
-    } catch (error) {
-      console.error('Error rendering LaTeX:', error);
-      return <span>{text}</span>;
-    }
-  };
 
   useEffect(() => {
     const loadResult = async () => {
@@ -105,52 +69,34 @@ const ExamResult = () => {
     ? ((submission.final_score || submission.ai_score || 0) / submission.max_score) * 100
     : 0;
 
-  // Check if student can retake the exam
-  const canRetake = submission.exam && submission.session && 
+  const canRetake = submission.exam && submission.session &&
     submission.status === "approved" &&
     submission.session.total_attempts < submission.exam.max_attempts;
 
-  const handleRetake = async () => {
+  const handleRetake = () => {
     if (!submission.exam) return;
-    
     setRetaking(true);
-    try {
-      // Navigate to the exam page to start a new attempt
-      navigate(`/exam/${submission.exam.id}`);
-      toast.success("Начинаем новую попытку...");
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Ошибка при начале новой попытки");
-      setRetaking(false);
-    }
+    navigate(`/exam/${submission.exam.id}`);
+    toast.success("Начинаем новую попытку...");
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "approved":
-        return "text-green-600";
-      case "processing":
-        return "text-yellow-600";
-      case "preliminary":
-        return "text-blue-600";
-      case "flagged":
-        return "text-red-600";
-      default:
-        return "text-gray-600";
+      case "approved": return "text-green-600";
+      case "processing": return "text-yellow-600";
+      case "preliminary": return "text-blue-600";
+      case "flagged": return "text-red-600";
+      default: return "text-gray-600";
     }
   };
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case "approved":
-        return "Проверено";
-      case "processing":
-        return "В обработке";
-      case "preliminary":
-        return "Предварительная проверка";
-      case "flagged":
-        return "Требует внимания";
-      default:
-        return status;
+      case "approved": return "Проверено";
+      case "processing": return "В обработке";
+      case "preliminary": return "Предварительная проверка";
+      case "flagged": return "Требует внимания";
+      default: return status;
     }
   };
 
@@ -173,8 +119,8 @@ const ExamResult = () => {
               )}
             </div>
             {canRetake && (
-              <Button 
-                size="lg" 
+              <Button
+                size="lg"
                 onClick={handleRetake}
                 disabled={retaking}
                 className="gap-2"
@@ -260,7 +206,7 @@ const ExamResult = () => {
               {submission.scores.map((score: any, index: number) => {
                 const taskScore = score.final_score !== null ? score.final_score : score.ai_score || 0;
                 const taskPercent = score.max_score > 0 ? (taskScore / score.max_score) * 100 : 0;
-                
+
                 return (
                   <div key={index} className="border rounded-lg p-4 bg-gradient-to-r from-background to-muted/20">
                     <div className="flex items-center justify-between mb-3">
@@ -281,9 +227,9 @@ const ExamResult = () => {
                         </div>
                       </div>
                     </div>
-                    
+
                     <Progress value={taskPercent} className="h-2 mb-3" />
-                    
+
                     {score.teacher_comment && (
                       <div className="mt-3 p-3 bg-primary/10 border border-primary/20 rounded">
                         <p className="text-sm font-semibold text-primary mb-1">
@@ -292,7 +238,7 @@ const ExamResult = () => {
                         <p className="text-sm whitespace-pre-wrap">{score.teacher_comment}</p>
                       </div>
                     )}
-                    
+
                     {!score.teacher_comment && score.ai_comment && (
                       <div className="mt-3 p-3 bg-secondary/50 rounded">
                         <p className="text-sm font-semibold mb-1">
@@ -354,12 +300,12 @@ const ExamResult = () => {
               <div className="flex-1">
                 <h3 className="font-bold text-lg mb-1">Доступна повторная попытка</h3>
                 <p className="text-sm text-muted-foreground">
-                  У вас осталось {submission.exam.max_attempts - submission.session.total_attempts} попыток из {submission.exam.max_attempts}. 
+                  У вас осталось {submission.exam.max_attempts - submission.session.total_attempts} попыток из {submission.exam.max_attempts}.
                   Вы можете пройти контрольную работу еще раз для улучшения результата.
                 </p>
               </div>
-              <Button 
-                size="lg" 
+              <Button
+                size="lg"
                 onClick={handleRetake}
                 disabled={retaking}
                 className="gap-2"
@@ -382,4 +328,3 @@ const ExamResult = () => {
 };
 
 export default ExamResult;
-

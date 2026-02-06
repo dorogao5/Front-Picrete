@@ -1,8 +1,9 @@
-import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Landing from "./pages/Landing";
 import Demo from "./pages/Demo";
 import Login from "./pages/Login";
@@ -20,37 +21,55 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfUse from "./pages/TermsOfUse";
 import DataProcessingConsent from "./pages/DataProcessingConsent";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000,       // 5 minutes
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/demo" element={<Demo />} />
-          <Route path="/teacher" element={<TeacherDashboard />} />
-          <Route path="/student" element={<StudentDashboard />} />
-          <Route path="/create-exam" element={<CreateExam />} />
-          <Route path="/exam/:examId/edit" element={<CreateExam />} />
-          <Route path="/exam/:examId/submissions" element={<ExamSubmissions />} />
-          <Route path="/exam/:sessionId/result" element={<ExamResult />} />
-          <Route path="/exam/:examId" element={<TakeExam />} />
-          <Route path="/submission/:submissionId" element={<SubmissionReview />} />
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/privacy" element={<PrivacyPolicy />} />
-          <Route path="/terms" element={<TermsOfUse />} />
-          <Route path="/consent" element={<DataProcessingConsent />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/" element={<Landing />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/demo" element={<Demo />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<TermsOfUse />} />
+            <Route path="/consent" element={<DataProcessingConsent />} />
+
+            {/* Teacher / admin routes */}
+            <Route path="/teacher" element={<ProtectedRoute roles={["teacher", "admin"]}><TeacherDashboard /></ProtectedRoute>} />
+            <Route path="/create-exam" element={<ProtectedRoute roles={["teacher", "admin"]}><CreateExam /></ProtectedRoute>} />
+            <Route path="/exam/:examId/edit" element={<ProtectedRoute roles={["teacher", "admin"]}><CreateExam /></ProtectedRoute>} />
+            <Route path="/exam/:examId/submissions" element={<ProtectedRoute roles={["teacher", "admin"]}><ExamSubmissions /></ProtectedRoute>} />
+            <Route path="/submission/:submissionId" element={<ProtectedRoute roles={["teacher", "admin"]}><SubmissionReview /></ProtectedRoute>} />
+
+            {/* Student routes */}
+            <Route path="/student" element={<ProtectedRoute roles={["student"]}><StudentDashboard /></ProtectedRoute>} />
+
+            {/* Any authenticated user */}
+            <Route path="/exam/:examId" element={<ProtectedRoute><TakeExam /></ProtectedRoute>} />
+            <Route path="/exam/:sessionId/result" element={<ProtectedRoute><ExamResult /></ProtectedRoute>} />
+
+            {/* Admin only */}
+            <Route path="/admin" element={<ProtectedRoute roles={["admin"]}><AdminDashboard /></ProtectedRoute>} />
+
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;

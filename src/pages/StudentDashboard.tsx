@@ -36,14 +36,6 @@ const StudentDashboard = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      // Проверяем наличие токена перед запросами
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        // Если токена нет, не делаем запросы - interceptor обработает редирект
-        setLoading(false);
-        return;
-      }
-      
       try {
         const [examsResponse, submissionsResponse] = await Promise.all([
           examsAPI.list(),
@@ -52,7 +44,6 @@ const StudentDashboard = () => {
         setExams(examsResponse.data);
         setSubmissions(submissionsResponse.data);
       } catch (error: any) {
-        console.error("Error fetching data:", error);
         // Не показываем ошибку для 401 - interceptor сам обработает редирект
         if (error.response?.status === 401) {
           setLoading(false);

@@ -227,13 +227,16 @@ const CreateExam = () => {
       let resultExamId = examId;
 
       if (isEditMode) {
-        // Update existing exam
+        // Update exam metadata (backend ignores task_types in PATCH)
         await examsAPI.update(examId!, {
           ...examData,
           start_time: startTimeUTC,
           end_time: endTimeUTC,
-          task_types: taskTypes,
         });
+        // Send each task type via the dedicated endpoint
+        for (const tt of taskTypes) {
+          await examsAPI.addTaskType(examId!, tt);
+        }
         toast.success("Контрольная работа обновлена");
       } else {
         // Create new exam

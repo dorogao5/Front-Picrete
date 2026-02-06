@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
@@ -7,62 +7,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CheckCircle, XCircle, Eye, Edit3, AlertTriangle, RotateCcw, RotateCw, ZoomIn, ZoomOut } from "lucide-react";
+import { CheckCircle, XCircle, Edit3, AlertTriangle, RotateCcw, RotateCw, ZoomIn, ZoomOut, RefreshCw } from "lucide-react";
 import { submissionsAPI } from "@/lib/api";
 import { toast } from "sonner";
 import ImageLightbox from "@/components/ImageLightbox";
 import AiAnalysis from "@/components/AiAnalysis";
-import 'katex/dist/katex.min.css';
-import { InlineMath, BlockMath } from 'react-katex';
+import { renderLatex } from "@/lib/renderLatex";
 
 const SubmissionReview = () => {
   const { submissionId } = useParams<{ submissionId: string }>();
   const navigate = useNavigate();
 
-  const renderLatex = (text: string) => {
-    if (!text) return text;
-    
-    try {
-      // Split by newlines first
-      const lines = text.split('\n');
-      
-      return lines.map((line, lineIndex) => {
-        // Process each line for LaTeX
-        const parts = line.split(/(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$)/);
-        
-        const lineContent = parts.map((part, partIndex) => {
-          if (part.startsWith("$$") && part.endsWith("$$")) {
-            const mathContent = part.slice(2, -2).trim();
-            return <BlockMath key={partIndex}>{mathContent}</BlockMath>;
-          } else if (part.startsWith("$") && part.endsWith("$")) {
-            const mathContent = part.slice(1, -1).trim();
-            return <InlineMath key={partIndex}>{mathContent}</InlineMath>;
-          }
-          return <span key={partIndex}>{part}</span>;
-        });
-        
-        return (
-          <span key={lineIndex}>
-            {lineContent}
-            {lineIndex < lines.length - 1 && <br />}
-          </span>
-        );
-      });
-    } catch (error) {
-      console.error('Error rendering LaTeX:', error);
-      return <span>{text}</span>;
-    }
-  };
-  
   const [submission, setSubmission] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [regrading, setRegrading] = useState(false);
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [imageAngles, setImageAngles] = useState<Record<string, number>>({});
   const [imageScales, setImageScales] = useState<Record<string, number>>({});
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
-  
+
   const [overrideScore, setOverrideScore] = useState<number>(0);
   const [teacherComments, setTeacherComments] = useState("");
 
@@ -74,7 +39,7 @@ const SubmissionReview = () => {
         setSubmission(submissionData);
         setOverrideScore(submissionData.final_score || submissionData.ai_score || 0);
         setTeacherComments(submissionData.teacher_comments || "");
-        
+
         // Load presigned URLs for all images
         if (submissionData.images && submissionData.images.length > 0) {
           const urls: Record<string, string> = {};
@@ -84,11 +49,10 @@ const SubmissionReview = () => {
               if (urlResponse.data.view_url) {
                 urls[image.id] = urlResponse.data.view_url;
               } else if (urlResponse.data.file_path) {
-                // Local storage fallback
                 urls[image.id] = `/api/uploads/${urlResponse.data.file_path}`;
               }
-            } catch (error) {
-              console.error(`Failed to load URL for image ${image.id}:`, error);
+            } catch {
+              // Image URL load failures are non-critical
             }
           }
           setImageUrls(urls);
@@ -135,11 +99,25 @@ const SubmissionReview = () => {
       });
       toast.success("Оценка изменена");
       setEditing(false);
-      // Reload submission
       const response = await submissionsAPI.get(submissionId!);
       setSubmission(response.data);
     } catch (error: any) {
       toast.error(error.response?.data?.detail || "Ошибка при изменении оценки");
+    }
+  };
+
+  const handleRegrade = async () => {
+    try {
+      setRegrading(true);
+      await submissionsAPI.regrade(submissionId!);
+      toast.success("Работа отправлена на повторную проверку AI");
+      // Reload submission to reflect new status
+      const response = await submissionsAPI.get(submissionId!);
+      setSubmission(response.data);
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || "Ошибка при запросе переоценки");
+    } finally {
+      setRegrading(false);
     }
   };
 
@@ -202,7 +180,6 @@ const SubmissionReview = () => {
                               (e.target as HTMLImageElement).src = "/placeholder.svg";
                             }}
                             onClick={() => {
-                              // open lightbox at this image index
                               setLightboxIndex(index);
                               setLightboxOpen(true);
                             }}
@@ -247,7 +224,7 @@ const SubmissionReview = () => {
             {/* AI Analysis */}
             <Card className="p-6">
               <h2 className="text-2xl font-bold mb-4">Анализ AI</h2>
-              
+
               <Tabs defaultValue="overview">
                 <TabsList>
                   <TabsTrigger value="overview">Общее</TabsTrigger>
@@ -338,7 +315,7 @@ const SubmissionReview = () => {
             {/* Score Card */}
             <Card className="p-6 bg-gradient-card">
               <h3 className="font-semibold mb-4">Итоговая оценка</h3>
-              
+
               {editing ? (
                 <div className="space-y-4">
                   <div>
@@ -356,7 +333,7 @@ const SubmissionReview = () => {
                       Максимум: {submission.max_score}
                     </p>
                   </div>
-                  
+
                   <div>
                     <Label htmlFor="teacher_comments">Комментарии</Label>
                     <Textarea
@@ -409,7 +386,7 @@ const SubmissionReview = () => {
                       <Edit3 className="w-4 h-4 mr-2" />
                       Изменить оценку
                     </Button>
-                    
+
                     {submission.status !== "approved" && (
                       <Button onClick={handleApprove} className="w-full">
                         <CheckCircle className="w-4 h-4 mr-2" />
@@ -425,6 +402,15 @@ const SubmissionReview = () => {
             <Card className="p-6">
               <h3 className="font-semibold mb-4">Действия</h3>
               <div className="space-y-2">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleRegrade}
+                  disabled={regrading || submission.status === "processing"}
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${regrading ? 'animate-spin' : ''}`} />
+                  {regrading ? "Отправка..." : "Переоценить AI"}
+                </Button>
                 <Button variant="outline" className="w-full" onClick={() => navigate(-1)}>
                   Назад к списку
                 </Button>
@@ -438,4 +424,3 @@ const SubmissionReview = () => {
 };
 
 export default SubmissionReview;
-

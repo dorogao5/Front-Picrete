@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Navbar } from "@/components/Navbar";
 import { usersAPI } from "@/lib/api";
-import { getAuthToken, isAdmin, logout } from "@/lib/auth";
+import { logout } from "@/lib/auth";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { RefreshCw, ShieldCheck, ShieldHalf } from "lucide-react";
@@ -32,7 +31,6 @@ const roleLabels: Record<RoleOption, string> = {
 };
 
 const AdminDashboard = () => {
-  const navigate = useNavigate();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<{
@@ -55,14 +53,6 @@ const AdminDashboard = () => {
     is_verified: false,
   });
   const [resetPasswords, setResetPasswords] = useState<Record<string, string>>({});
-
-  // Basic guard: require admin token & role
-  useEffect(() => {
-    const token = getAuthToken();
-    if (!token || !isAdmin()) {
-      navigate("/login", { replace: true });
-    }
-  }, [navigate]);
 
   const filterParams = useMemo(() => {
     return {
@@ -202,7 +192,7 @@ const AdminDashboard = () => {
               <Label>Активен</Label>
               <Select
                 value={filters.is_active}
-                onValueChange={(value) => setFilters((f) => ({ ...f, is_active: value }))}
+                onValueChange={(value) => setFilters((f) => ({ ...f, is_active: value as "all" | "true" | "false" }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Все" />
@@ -218,7 +208,7 @@ const AdminDashboard = () => {
               <Label>Верификация</Label>
               <Select
                 value={filters.is_verified}
-                onValueChange={(value) => setFilters((f) => ({ ...f, is_verified: value }))}
+                onValueChange={(value) => setFilters((f) => ({ ...f, is_verified: value as "all" | "true" | "false" }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Все" />

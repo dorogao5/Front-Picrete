@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
@@ -9,13 +9,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Clock, Upload, CheckCircle, AlertCircle, Image as ImageIcon } from "lucide-react";
 import { submissionsAPI } from "@/lib/api";
 import { toast } from "sonner";
-import 'katex/dist/katex.min.css';
-import { InlineMath, BlockMath } from 'react-katex';
+import { renderLatex } from "@/lib/renderLatex";
 
 const TakeExam = () => {
   const { examId } = useParams<{ examId: string }>();
   const navigate = useNavigate();
-  
+
   const [session, setSession] = useState<any>(null);
   const [tasks, setTasks] = useState<any[]>([]);
   const [timeRemaining, setTimeRemaining] = useState(0);
@@ -26,94 +25,27 @@ const TakeExam = () => {
   const [showTimeoutDialog, setShowTimeoutDialog] = useState(false);
   const initialRemainingRef = useRef<number | null>(null);
 
-  // Save images to localStorage
-  const saveImagesToStorage = useCallback(async (images: { [key: number]: File[] }) => {
-    if (!session?.id) return;
-    
-    try {
-      const storageKey = `exam_images_${session.id}`;
-      const imageData: { [key: number]: { name: string; size: number; type: string; dataUrl: string }[] } = {};
-      
-      for (const taskIndex in images) {
-        const taskImages = images[parseInt(taskIndex)];
-        imageData[parseInt(taskIndex)] = [];
-        
-        for (const file of taskImages) {
-          // Skip files larger than 2MB to avoid localStorage quota issues
-          if (file.size > 2 * 1024 * 1024) {
-            console.warn(`Skipping large file ${file.name} (${file.size} bytes) to avoid localStorage quota`);
-            continue;
-          }
-          
-          // Convert file to data URL for storage
-          const dataUrl = await new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.readAsDataURL(file);
-          });
-          
-          imageData[parseInt(taskIndex)].push({
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            dataUrl: dataUrl
-          });
-        }
-      }
-      
-      const dataString = JSON.stringify(imageData);
-      
-      // Check localStorage quota (usually 5-10MB)
-      if (dataString.length > 4 * 1024 * 1024) { // 4MB limit
-        console.warn('Image data too large for localStorage, skipping save');
-        return;
-      }
-      
-      localStorage.setItem(storageKey, dataString);
-    } catch (error) {
-      console.warn('Failed to save images to localStorage:', error);
-    }
-  }, [session?.id]);
+  // Stable object-URL cache: maps File → objectURL, revoked on unmount
+  const objectUrlCache = useRef<Map<File, string>>(new Map());
 
-  // Load images from localStorage
-  const loadImagesFromStorage = useCallback(async () => {
-    if (!session?.id) return {};
-    
-    try {
-      const storageKey = `exam_images_${session.id}`;
-      const savedData = localStorage.getItem(storageKey);
-      
-      if (!savedData) return {};
-      
-      const imageData = JSON.parse(savedData);
-      const loadedImages: { [key: number]: File[] } = {};
-      
-      for (const taskIndex in imageData) {
-        const taskImages = imageData[parseInt(taskIndex)];
-        loadedImages[parseInt(taskIndex)] = [];
-        
-        for (const imgData of taskImages) {
-          try {
-            // Convert data URL back to File
-            const response = await fetch(imgData.dataUrl);
-            const blob = await response.blob();
-            const file = new File([blob], imgData.name, {
-              type: imgData.type,
-              lastModified: Date.now()
-            });
-            loadedImages[parseInt(taskIndex)].push(file);
-          } catch (error) {
-            console.warn('Failed to restore image:', imgData.name, error);
-          }
-        }
-      }
-      
-      return loadedImages;
-    } catch (error) {
-      console.warn('Failed to load images from localStorage:', error);
-      return {};
+  const getObjectUrl = useCallback((file: File): string => {
+    const cache = objectUrlCache.current;
+    let url = cache.get(file);
+    if (!url) {
+      url = URL.createObjectURL(file);
+      cache.set(file, url);
     }
-  }, [session?.id]);
+    return url;
+  }, []);
+
+  // Revoke all cached object-URLs on unmount
+  useEffect(() => {
+    const cache = objectUrlCache.current;
+    return () => {
+      cache.forEach((url) => URL.revokeObjectURL(url));
+      cache.clear();
+    };
+  }, []);
 
   // Helper functions
   const formatTime = (seconds: number) => {
@@ -150,45 +82,33 @@ const TakeExam = () => {
   // Auto-submit function
   const handleAutoSubmit = useCallback(async () => {
     if (!session || submitting) return;
-    
+
     try {
       setSubmitting(true);
-      
-      // Upload any remaining images before submitting
+
       const totalImages = Object.values(uploadedImages).reduce(
         (sum, files) => sum + files.length,
         0
       );
-      
+
       if (totalImages > 0) {
         await uploadImages();
       }
-      
-      // Submit exam - this will create submission if it doesn't exist
+
       await submissionsAPI.submit(session.id);
-      
-      // Clear saved images from localStorage
-      if (session.id) {
-        localStorage.removeItem(`exam_images_${session.id}`);
-      }
-      
       toast.success("Работа автоматически отправлена");
     } catch (error: any) {
-      console.error("Auto-submit error:", error);
       const errorMessage = error.response?.data?.detail || "Ошибка при автоматической отправке работы";
       toast.error(errorMessage);
     } finally {
       setSubmitting(false);
-      // Navigate to results page regardless of submission success
-      // The backend scheduler will handle creating empty submissions for expired sessions
       navigate(`/exam/${session.id}/result`);
     }
   }, [session?.id, submitting, uploadedImages, uploadImages, navigate]);
 
   // Event handlers
-  const handleTimeoutConfirm = useCallback(async () => {
+  const handleTimeoutConfirm = useCallback(() => {
     setShowTimeoutDialog(false);
-    // Auto-submit already happened, just navigate
     if (session) {
       navigate(`/exam/${session.id}/result`);
     }
@@ -199,7 +119,7 @@ const TakeExam = () => {
       toast.error("Время экзамена истекло. Действия заблокированы.");
       return;
     }
-    
+
     if (!files) return;
 
     const newFiles = Array.from(files).filter(
@@ -219,75 +139,47 @@ const TakeExam = () => {
       toast.error("Время экзамена истекло. Действия заблокированы.");
       return;
     }
-    
-    setUploadedImages((prev) => ({
-      ...prev,
-      [taskIndex]: prev[taskIndex].filter((_, i) => i !== imageIndex),
-    }));
+
+    setUploadedImages((prev) => {
+      const removed = prev[taskIndex]?.[imageIndex];
+      if (removed) {
+        const url = objectUrlCache.current.get(removed);
+        if (url) {
+          URL.revokeObjectURL(url);
+          objectUrlCache.current.delete(removed);
+        }
+      }
+      return {
+        ...prev,
+        [taskIndex]: prev[taskIndex].filter((_, i) => i !== imageIndex),
+      };
+    });
   }, [isTimeUp]);
 
   const handleSubmit = useCallback(async () => {
     if (!session || isTimeUp) return;
 
-    // Check if images uploaded
     const totalImages = Object.values(uploadedImages).reduce(
       (sum, files) => sum + files.length,
       0
     );
 
-    // Permit manual finish without images; backend will create empty submission if needed
-
     setSubmitting(true);
     try {
-      // Upload remaining images
       if (totalImages > 0) {
         await uploadImages();
       }
 
-      // Submit exam - this will create submission if it doesn't exist
       await submissionsAPI.submit(session.id);
-      
-      // Clear saved images from localStorage
-      if (session.id) {
-        localStorage.removeItem(`exam_images_${session.id}`);
-      }
-      
       toast.success("Работа отправлена на проверку");
       navigate(`/exam/${session.id}/result`);
     } catch (error: any) {
-      console.error("Submit error:", error);
       const errorMessage = error.response?.data?.detail || "Ошибка при отправке работы";
       toast.error(errorMessage);
     } finally {
       setSubmitting(false);
     }
   }, [session?.id, isTimeUp, uploadedImages, uploadImages, navigate]);
-
-  const renderLatex = useCallback((text: string) => {
-    // Split by newlines first
-    const lines = text.split('\n');
-    
-    return lines.map((line, lineIndex) => {
-      // Process each line for LaTeX
-      const parts = line.split(/(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$)/);
-      
-      const lineContent = parts.map((part, partIndex) => {
-        if (part.startsWith("$$") && part.endsWith("$$")) {
-          return <BlockMath key={partIndex}>{part.slice(2, -2)}</BlockMath>;
-        } else if (part.startsWith("$") && part.endsWith("$")) {
-          return <InlineMath key={partIndex}>{part.slice(1, -1)}</InlineMath>;
-        }
-        return <span key={partIndex}>{part}</span>;
-      });
-      
-      return (
-        <span key={lineIndex}>
-          {lineContent}
-          {lineIndex < lines.length - 1 && <br />}
-        </span>
-      );
-    });
-  }, []);
 
   // Load session and variant
   useEffect(() => {
@@ -296,23 +188,12 @@ const TakeExam = () => {
         const response = await submissionsAPI.enterExam(examId!);
         const sessionData = response.data;
         setSession(sessionData);
-        
-        // Load variant
+
         const variantResponse = await submissionsAPI.getSessionVariant(sessionData.id);
         setTasks(variantResponse.data.tasks);
         setTimeRemaining(variantResponse.data.time_remaining);
         initialRemainingRef.current = variantResponse.data.time_remaining;
-        
-        // Load saved images from localStorage
-        const savedImages = await loadImagesFromStorage();
-        if (Object.keys(savedImages).length > 0) {
-          setUploadedImages(savedImages);
-          const totalImages = Object.values(savedImages).reduce((sum, files) => sum + files.length, 0);
-          toast.info(`Восстановлено ${totalImages} ранее загруженных изображений`);
-        }
       } catch (error: any) {
-        // Don't show error toast or navigate if it's an auth error
-        // The axios interceptor will handle redirecting to login
         if (error.response?.status !== 401) {
           toast.error(error.response?.data?.detail || "Ошибка при входе в экзамен");
           navigate("/student");
@@ -323,7 +204,7 @@ const TakeExam = () => {
     if (examId) {
       enterExam();
     }
-  }, [examId, navigate, loadImagesFromStorage]);
+  }, [examId, navigate]);
 
   // Timer countdown with auto-submit
   useEffect(() => {
@@ -333,7 +214,6 @@ const TakeExam = () => {
     const interval = setInterval(() => {
       setTimeRemaining((prev) => {
         if (prev <= 1) {
-          // Auto-submit 1 second before time expires
           handleAutoSubmit();
           setIsTimeUp(true);
           setShowTimeoutDialog(true);
@@ -345,36 +225,27 @@ const TakeExam = () => {
     return () => clearInterval(interval);
   }, [timeRemaining, isTimeUp, handleAutoSubmit]);
 
-  // Auto-save images to localStorage when they change
-  useEffect(() => {
-    if (session?.id && Object.keys(uploadedImages).length > 0) {
-      saveImagesToStorage(uploadedImages);
-    }
-  }, [uploadedImages, session?.id, saveImagesToStorage]);
-
-  // Periodic auto-save every 10 seconds
+  // Server-side auto-save every 30 seconds
   useEffect(() => {
     if (!session?.id || isTimeUp) return;
-    
-    const interval = setInterval(() => {
-      if (Object.keys(uploadedImages).length > 0) {
-        saveImagesToStorage(uploadedImages);
-        console.log('Auto-saved images to localStorage');
-      }
-    }, 10000); // Every 10 seconds
-    
-    return () => clearInterval(interval);
-  }, [session?.id, uploadedImages, saveImagesToStorage, isTimeUp]);
 
-  // Cleanup localStorage only when exam is submitted or session ends
-  useEffect(() => {
-    return () => {
-      // Only clean up localStorage if exam was submitted or time is up
-      if (session?.id && (isTimeUp || submitting)) {
-        localStorage.removeItem(`exam_images_${session.id}`);
+    const interval = setInterval(async () => {
+      const totalImages = Object.values(uploadedImages).reduce(
+        (sum, files) => sum + files.length,
+        0
+      );
+      try {
+        await submissionsAPI.autoSave(session.id, {
+          imageCount: totalImages,
+          savedAt: new Date().toISOString(),
+        });
+      } catch {
+        // Auto-save is best-effort; failures are silent
       }
-    };
-  }, [session?.id, isTimeUp, submitting]);
+    }, 30_000);
+
+    return () => clearInterval(interval);
+  }, [session?.id, uploadedImages, isTimeUp]);
 
   if (!session || tasks.length === 0) {
     return (
@@ -456,12 +327,12 @@ const TakeExam = () => {
                     {task.task_type.max_score} баллов
                   </span>
                 </div>
-                
+
                 <div className="prose max-w-none">
                   <p className="text-muted-foreground mb-4">
                     {renderLatex(task.task_type.description)}
                   </p>
-                  
+
                   <div className="bg-secondary/50 p-4 rounded-lg mb-4">
                     <h3 className="font-semibold mb-2">Ваш вариант:</h3>
                     <div>{renderLatex(task.variant.content)}</div>
@@ -491,14 +362,14 @@ const TakeExam = () => {
                 <div className="mb-4">
                   <label className="block">
                     <div className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                      isTimeUp 
-                        ? 'cursor-not-allowed opacity-50 bg-gray-100 dark:bg-gray-800' 
+                      isTimeUp
+                        ? 'cursor-not-allowed opacity-50 bg-gray-100 dark:bg-gray-800'
                         : 'cursor-pointer hover:border-primary'
                     }`}>
                       <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
                       <p className="text-sm text-muted-foreground">
-                        {isTimeUp 
-                          ? "Время истекло - загрузка заблокирована" 
+                        {isTimeUp
+                          ? "Время истекло - загрузка заблокирована"
                           : "Нажмите или перетащите изображения (JPEG, PNG)"
                         }
                       </p>
@@ -523,7 +394,7 @@ const TakeExam = () => {
                         className="relative border rounded-lg overflow-hidden group"
                       >
                         <img
-                          src={URL.createObjectURL(file)}
+                          src={getObjectUrl(file)}
                           alt={`Uploaded ${imgIndex + 1}`}
                           className="w-full h-32 object-cover"
                         />
@@ -583,4 +454,3 @@ const TakeExam = () => {
 };
 
 export default TakeExam;
-
