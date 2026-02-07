@@ -27,7 +27,7 @@ const TeacherDashboard = () => {
     const fetchExams = async () => {
       try {
         const response = await examsAPI.list();
-        setExams(response.data);
+        setExams(response.data.items);
       } catch (error: any) {
         // Не показываем ошибку для 401 - interceptor сам обработает редирект
         if (error.response?.status === 401) {

@@ -96,6 +96,8 @@ const ExamResult = () => {
       case "processing": return "В обработке";
       case "preliminary": return "Предварительная проверка";
       case "flagged": return "Требует внимания";
+      case "rejected": return "Отклонено";
+      case "uploaded": return "Загружено";
       default: return status;
     }
   };

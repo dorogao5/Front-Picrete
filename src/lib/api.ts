@@ -77,9 +77,9 @@ api.interceptors.response.use(
   }
 );
 
-// Auth API
+// Auth API (signup always creates Student role - only admins can create teachers via /users)
 export const authAPI = {
-  signup: (data: { isu: string; full_name: string; password: string; role: string; pd_consent: boolean; pd_consent_version?: string; terms_version?: string; privacy_version?: string }) =>
+  signup: (data: { isu: string; full_name: string; password: string; pd_consent: boolean; pd_consent_version?: string; terms_version?: string; privacy_version?: string }) =>
     api.post('/auth/signup', data),
   
   login: (data: { isu: string; password: string }) =>
@@ -91,13 +91,13 @@ export const authAPI = {
 // Exams API
 export const examsAPI = {
   list: (params?: { status?: string; skip?: number; limit?: number }) =>
-    api.get('/exams/', { params }),
+    api.get('/exams', { params }),
   
   get: (examId: string) =>
     api.get(`/exams/${examId}`),
   
   create: (data: any) =>
-    api.post('/exams/', data),
+    api.post('/exams', data),
   
   update: (examId: string, data: any) =>
     api.patch(`/exams/${examId}`, data),
@@ -168,10 +168,10 @@ export const usersAPI = {
   me: () => api.get('/users/me'),
   
   list: (params?: { skip?: number; limit?: number; isu?: string; role?: string; is_active?: boolean; is_verified?: boolean }) =>
-    api.get('/users/', { params }),
+    api.get('/users', { params }),
   
   create: (data: any) =>
-    api.post('/users/', data),
+    api.post('/users', data),
 
   get: (userId: string) =>
     api.get(`/users/${userId}`),

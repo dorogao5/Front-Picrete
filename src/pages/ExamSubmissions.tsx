@@ -33,7 +33,7 @@ const ExamSubmissions = () => {
         setExam(examResponse.data);
         
         const submissionsResponse = await examsAPI.listSubmissions(examId!, filter ? { status: filter } : undefined);
-        setSubmissions(submissionsResponse.data);
+        setSubmissions(submissionsResponse.data.items);
       } catch (error: any) {
         const errorMessage = error.response?.data?.detail || error.message || "Ошибка загрузки данных";
         toast.error(errorMessage);
@@ -68,6 +68,10 @@ const ExamSubmissions = () => {
         return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
           <AlertCircle className="w-3 h-3 mr-1" />
           Требует ручной проверки
+        </Badge>;
+      case "rejected":
+        return <Badge variant="outline" className="bg-gray-100 text-gray-700 border-gray-200">
+          Отклонено
         </Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;

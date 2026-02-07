@@ -21,6 +21,7 @@ interface TaskVariant {
 }
 
 interface TaskType {
+  id?: string;
   title: string;
   description: string;
   order_index: number;
@@ -67,9 +68,9 @@ const CreateExam = () => {
         const response = await examsAPI.get(examId);
         const exam = response.data;
         
-        // Convert UTC time back to Moscow time for the datetime-local input
-        const startTime = new Date(exam.start_time + 'Z'); // Add Z to indicate UTC
-        const endTime = new Date(exam.end_time + 'Z');
+        // Backend returns RFC3339 UTC (e.g. "2025-01-02T10:20:30Z") — parse as-is
+        const startTime = new Date(exam.start_time);
+        const endTime = new Date(exam.end_time);
         
         // Format for datetime-local input (YYYY-MM-DDTHH:mm)
         const formatForInput = (date: Date) => {
@@ -93,9 +94,10 @@ const CreateExam = () => {
           break_duration_minutes: exam.break_duration_minutes || 0,
         });
         
-        // Load task types
+        // Load task types (preserve id — backend не поддерживает обновление, только добавление)
         if (exam.task_types && exam.task_types.length > 0) {
           setTaskTypes(exam.task_types.map((tt: any) => ({
+            id: tt.id,
             title: tt.title,
             description: tt.description,
             order_index: tt.order_index,
@@ -210,11 +212,31 @@ const CreateExam = () => {
       // Validate
       if (!examData.title || !examData.start_time || !examData.end_time) {
         toast.error("Заполните все обязательные поля");
+        setLoading(false);
         return;
       }
 
       if (taskTypes.length === 0) {
         toast.error("Добавьте хотя бы один тип задачи");
+        setLoading(false);
+        return;
+      }
+
+      // Для варианта с пустым content: используем description (одно поле «Условие» = и описание, и текст варианта)
+      const preparedTaskTypes = taskTypes.map(tt => ({
+        ...tt,
+        variants: tt.variants.map(v => ({
+          ...v,
+          content: (v.content || "").trim() || (tt.description || "").trim(),
+        })),
+      }));
+
+      const emptyContent = preparedTaskTypes.some(tt =>
+        tt.variants.some(v => !(v.content || "").trim())
+      );
+      if (emptyContent) {
+        toast.error("Заполните условие задачи (хотя бы для одного варианта)");
+        setLoading(false);
         return;
       }
 
@@ -233,18 +255,23 @@ const CreateExam = () => {
           start_time: startTimeUTC,
           end_time: endTimeUTC,
         });
-        // Send each task type via the dedicated endpoint
-        for (const tt of taskTypes) {
+        // Добавляем только НОВЫЕ типы задач (без id) — backend не поддерживает обновление существующих
+        const newTaskTypes = preparedTaskTypes.filter(tt => !tt.id);
+        for (const tt of newTaskTypes) {
           await examsAPI.addTaskType(examId!, tt);
         }
-        toast.success("Контрольная работа обновлена");
+        if (newTaskTypes.length > 0) {
+          toast.success(`Контрольная работа обновлена. Добавлено задач: ${newTaskTypes.length}`);
+        } else {
+          toast.success("Контрольная работа обновлена");
+        }
       } else {
         // Create new exam
         const response = await examsAPI.create({
           ...examData,
           start_time: startTimeUTC,
           end_time: endTimeUTC,
-          task_types: taskTypes,
+          task_types: preparedTaskTypes,
         });
         resultExamId = response.data.id;
         toast.success("Контрольная работа создана");
@@ -508,7 +535,7 @@ const CreateExam = () => {
 
                       <TabsContent value="basic" className="space-y-4">
                         <div>
-                          <Label>Название</Label>
+                          <Label>Название *</Label>
                           <Input
                             value={taskType.title}
                             onChange={(e) =>
@@ -518,23 +545,25 @@ const CreateExam = () => {
                           />
                         </div>
                         <div>
-                          <Label>Описание задачи</Label>
+                          <Label>Условие задачи * {taskType.variants.length === 1 && "(для одного варианта — одно поле)"}</Label>
                           <Textarea
-                            value={taskType.description}
-                            onChange={(e) =>
-                              updateTaskType(
-                                taskIndex,
-                                "description",
-                                e.target.value
-                              )
-                            }
-                            placeholder="Полное условие задачи..."
+                            value={taskType.variants.length === 1
+                              ? (taskType.variants[0]?.content || taskType.description)
+                              : taskType.description}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              updateTaskType(taskIndex, "description", val);
+                              if (taskType.variants.length === 1 && taskType.variants[0]) {
+                                updateVariant(taskIndex, 0, "content", val);
+                              }
+                            }}
+                            placeholder="Текст условия: что должен сделать студент..."
                             rows={4}
                           />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <Label>Максимальный балл</Label>
+                            <Label>Макс. балл</Label>
                             <Input
                               type="number"
                               value={taskType.max_score}
@@ -569,6 +598,12 @@ const CreateExam = () => {
                       </TabsContent>
 
                       <TabsContent value="variants" className="space-y-4">
+                        {taskType.variants.length === 1 ? (
+                          <p className="text-sm text-muted-foreground">
+                            Один вариант — условие заполняется во вкладке «Основное».
+                            Добавьте варианты, если нужно раздать студентам разные условия.
+                          </p>
+                        ) : null}
                         <Button
                           size="sm"
                           variant="outline"
@@ -597,24 +632,26 @@ const CreateExam = () => {
                               )}
                             </div>
                             <div className="space-y-3">
+                              {taskType.variants.length > 1 && (
+                                <div>
+                                  <Label>Текст варианта *</Label>
+                                  <Textarea
+                                    value={variant.content}
+                                    onChange={(e) =>
+                                      updateVariant(
+                                        taskIndex,
+                                        variantIndex,
+                                        "content",
+                                        e.target.value
+                                      )
+                                    }
+                                    placeholder="Условие для этого варианта..."
+                                    rows={3}
+                                  />
+                                </div>
+                              )}
                               <div>
-                                <Label>Текст варианта</Label>
-                                <Textarea
-                                  value={variant.content}
-                                  onChange={(e) =>
-                                    updateVariant(
-                                      taskIndex,
-                                      variantIndex,
-                                      "content",
-                                      e.target.value
-                                    )
-                                  }
-                                  placeholder="Вычислите pH раствора при смешивании..."
-                                  rows={3}
-                                />
-                              </div>
-                              <div>
-                                <Label>Эталонное решение</Label>
+                                <Label>Эталонное решение (необяз.)</Label>
                                 <Textarea
                                   value={variant.reference_solution}
                                   onChange={(e) =>
@@ -626,11 +663,11 @@ const CreateExam = () => {
                                     )
                                   }
                                   placeholder="Пошаговое решение..."
-                                  rows={3}
+                                  rows={2}
                                 />
                               </div>
                               <div>
-                                <Label>Правильный ответ</Label>
+                                <Label>Правильный ответ (необяз.)</Label>
                                 <Input
                                   value={variant.reference_answer}
                                   onChange={(e) =>
@@ -652,8 +689,7 @@ const CreateExam = () => {
                       <TabsContent value="grading">
                         <div className="space-y-4">
                           <p className="text-sm text-muted-foreground">
-                            Критерии оценивания настраиваются через JSON. По
-                            умолчанию используются стандартные критерии.
+                            Дополнительно: критерии оценивания (JSON). По умолчанию — стандартные.
                           </p>
                           <Textarea
                             value={JSON.stringify(taskType.rubric, null, 2)}

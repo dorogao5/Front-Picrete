@@ -95,7 +95,7 @@ const SubmissionReview = () => {
     try {
       await submissionsAPI.overrideScore(submissionId!, {
         final_score: overrideScore,
-        teacher_comments: teacherComments,
+        teacher_comments: teacherComments || "", // backend требует строку
       });
       toast.success("Оценка изменена");
       setEditing(false);

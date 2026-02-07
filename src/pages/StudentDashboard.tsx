@@ -41,8 +41,8 @@ const StudentDashboard = () => {
           examsAPI.list(),
           submissionsAPI.mySubmissions(),
         ]);
-        setExams(examsResponse.data);
-        setSubmissions(submissionsResponse.data);
+        setExams(examsResponse.data.items);
+        setSubmissions(submissionsResponse.data.items);
       } catch (error: any) {
         // Не показываем ошибку для 401 - interceptor сам обработает редирект
         if (error.response?.status === 401) {
@@ -70,7 +70,8 @@ const StudentDashboard = () => {
            (exam.status === 'published' || exam.status === 'active');
   });
 
-  const completedSubmissions = submissions.filter(s => s.status !== 'pending');
+  // Показываем только сданные работы (id есть); статусы: uploaded, processing, preliminary, approved, flagged, rejected
+  const completedSubmissions = submissions.filter(s => s.id != null);
 
   const formatDateTime = (dateString: string) => {
     // Backend stores time in UTC, convert to GMT+3 (Moscow time)
@@ -225,6 +226,10 @@ const StudentDashboard = () => {
                   switch (status) {
                     case 'preliminary': return 'На проверке';
                     case 'approved': return 'Проверено';
+                    case 'processing': return 'В обработке';
+                    case 'flagged': return 'Требует внимания';
+                    case 'rejected': return 'Отклонено';
+                    case 'uploaded': return 'Загружено';
                     default: return status;
                   }
                 };

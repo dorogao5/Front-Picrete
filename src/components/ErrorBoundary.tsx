@@ -40,10 +40,16 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
             <h1 className="text-2xl font-bold mb-2">Произошла ошибка</h1>
             <p className="text-muted-foreground mb-6">
-              Что-то пошло не так. Попробуйте перезагрузить страницу.
+              Что-то пошло не так. Нажмите «Перезагрузить» — страница обновится без кэша. Если ошибка повторится, нажмите Ctrl+Shift+R (или Cmd+Shift+R на Mac).
             </p>
             <div className="flex gap-3 justify-center">
-              <Button onClick={() => window.location.reload()}>
+              <Button
+                onClick={() => {
+                  const url = new URL(window.location.href);
+                  url.searchParams.set("_", String(Date.now()));
+                  window.location.replace(url.toString());
+                }}
+              >
                 Перезагрузить
               </Button>
               <Button variant="outline" onClick={this.handleReset}>

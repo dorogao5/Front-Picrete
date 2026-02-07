@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import logo from "@/assets/logo.png";
 import { authAPI } from "@/lib/api";
@@ -17,7 +16,6 @@ const Signup = () => {
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [role, setRole] = useState<"student" | "teacher">("student");
   const [pdConsent, setPdConsent] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -28,6 +26,11 @@ const Signup = () => {
     
     if (password !== confirmPassword) {
       toast.error("Пароли не совпадают");
+      return;
+    }
+
+    if (password.length < 8) {
+      toast.error("Пароль должен быть не менее 8 символов");
       return;
     }
 
@@ -47,7 +50,6 @@ const Signup = () => {
         isu,
         full_name: fullName,
         password,
-        role,
         pd_consent: true,
         pd_consent_version: POLICY_VERSION,
         terms_version: POLICY_VERSION,
@@ -69,12 +71,8 @@ const Signup = () => {
       setLoading(false);
       toast.success("Регистрация успешна");
       
-      // Навигация происходит после сохранения токена
-      if (user.role === "teacher" || user.role === "admin") {
-        navigate("/teacher", { replace: true });
-      } else {
-        navigate("/student", { replace: true });
-      }
+      // Signup всегда создаёт student — редирект в панель студента
+      navigate("/student", { replace: true });
     } catch (error: any) {
       toast.error(error.response?.data?.detail || error.message || "Ошибка регистрации");
       setLoading(false);
@@ -122,7 +120,7 @@ const Signup = () => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password">Пароль *</Label>
+            <Label htmlFor="password">Пароль * (минимум 8 символов)</Label>
             <Input
               id="password"
               type="password"
@@ -130,7 +128,7 @@ const Signup = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              minLength={6}
+              minLength={8}
               className="transition-all duration-300 focus:shadow-soft"
             />
           </div>
@@ -144,22 +142,9 @@ const Signup = () => {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
-              minLength={6}
+              minLength={8}
               className="transition-all duration-300 focus:shadow-soft"
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="role">Роль *</Label>
-            <Select value={role} onValueChange={(value) => setRole(value as "student" | "teacher")}>
-              <SelectTrigger>
-                <SelectValue placeholder="Выберите роль" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="student">Студент</SelectItem>
-                <SelectItem value="teacher">Преподаватель</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
 
           <div className="space-y-3 rounded-lg border border-border/60 p-4 bg-muted/30">

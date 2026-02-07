@@ -67,7 +67,7 @@ const AdminDashboard = () => {
     setLoading(true);
     try {
       const response = await usersAPI.list(filterParams);
-      setUsers(response.data);
+      setUsers(response.data.items);
     } catch (error: any) {
       if (error.response?.status === 401) {
         logout();
