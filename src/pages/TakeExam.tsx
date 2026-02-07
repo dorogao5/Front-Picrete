@@ -105,15 +105,10 @@ const TakeExam = () => {
         (sum, files) => sum + files.length,
         0
       );
-      const totalExisting = existingServerImagesRef.current.length;
       if (totalNewImages > 0) {
         await uploadImages();
       }
-      if (totalExisting === 0 && totalNewImages === 0) {
-        toast.error("Добавьте хотя бы одно фото решения перед отправкой");
-        return;
-      }
-
+      // Always submit (with or without images) so teacher sees the attempt
       await submissionsAPI.submit(session.id);
       toast.success("Работа автоматически отправлена");
       // Navigate only on success (not in finally), so errors keep user on page
@@ -184,12 +179,6 @@ const TakeExam = () => {
       (sum, files) => sum + files.length,
       0
     );
-    const totalExisting = existingServerImages.length;
-    // Existing-images guard (manual submit): require at least one image on server or in form
-    if (totalNew === 0 && totalExisting === 0) {
-      toast.error("Добавьте хотя бы одно фото решения");
-      return;
-    }
 
     setSubmitting(true);
     try {
@@ -206,7 +195,7 @@ const TakeExam = () => {
     } finally {
       setSubmitting(false);
     }
-  }, [session?.id, isTimeUp, uploadedImages, existingServerImages.length, uploadImages, navigate]);
+  }, [session?.id, isTimeUp, uploadedImages, uploadImages, navigate]);
 
   // Load session and variant
   useEffect(() => {
