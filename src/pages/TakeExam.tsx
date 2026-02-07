@@ -19,11 +19,20 @@ const TakeExam = () => {
   const [tasks, setTasks] = useState<any[]>([]);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [uploadedImages, setUploadedImages] = useState<{ [key: number]: File[] }>({});
+  /** Images already on server (e.g. after refresh) — not re-uploaded, shown as "загружено" */
+  const [existingServerImages, setExistingServerImages] = useState<
+    { id: string; filename: string; order_index: number }[]
+  >([]);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [isTimeUp, setIsTimeUp] = useState(false);
   const [showTimeoutDialog, setShowTimeoutDialog] = useState(false);
   const initialRemainingRef = useRef<number | null>(null);
+  /** Refs so timer/auto-submit always see latest state (avoids stale closure → no_images) */
+  const uploadedImagesRef = useRef(uploadedImages);
+  const existingServerImagesRef = useRef(existingServerImages);
+  uploadedImagesRef.current = uploadedImages;
+  existingServerImagesRef.current = existingServerImages;
 
   // Stable object-URL cache: maps File → objectURL, revoked on unmount
   const objectUrlCache = useRef<Map<File, string>>(new Map());
@@ -57,15 +66,20 @@ const TakeExam = () => {
       .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Upload images function
+  // Upload images function (reads current files from ref so auto-submit always uploads latest)
   const uploadImages = useCallback(async () => {
     if (!session || isTimeUp) return;
 
+    const current = uploadedImagesRef.current;
+    const totalNew = Object.values(current).reduce((sum, files) => sum + files.length, 0);
+    if (totalNew === 0) return;
+
     setUploading(true);
     try {
-      let orderIndex = 0;
-      for (const taskIndex in uploadedImages) {
-        const files = uploadedImages[taskIndex];
+      const baseOrder = existingServerImagesRef.current.length;
+      let orderIndex = baseOrder;
+      for (const taskIndex in current) {
+        const files = current[taskIndex];
         for (const file of files) {
           await submissionsAPI.uploadImage(session.id, file, orderIndex);
           orderIndex++;
@@ -74,37 +88,44 @@ const TakeExam = () => {
       toast.success("Все изображения загружены");
     } catch (error: any) {
       toast.error(error.response?.data?.detail || "Ошибка при загрузке изображений");
+      throw error;
     } finally {
       setUploading(false);
     }
-  }, [session?.id, isTimeUp, uploadedImages]);
+  }, [session?.id, isTimeUp]);
 
-  // Auto-submit function
+  // Auto-submit: use refs so we always see latest images (avoids stale closure → no_images)
   const handleAutoSubmit = useCallback(async () => {
     if (!session || submitting) return;
 
+    setSubmitting(true);
     try {
-      setSubmitting(true);
-
-      const totalImages = Object.values(uploadedImages).reduce(
+      const currentNew = uploadedImagesRef.current;
+      const totalNewImages = Object.values(currentNew).reduce(
         (sum, files) => sum + files.length,
         0
       );
-
-      if (totalImages > 0) {
+      const totalExisting = existingServerImagesRef.current.length;
+      if (totalNewImages > 0) {
         await uploadImages();
+      }
+      if (totalExisting === 0 && totalNewImages === 0) {
+        toast.error("Добавьте хотя бы одно фото решения перед отправкой");
+        return;
       }
 
       await submissionsAPI.submit(session.id);
       toast.success("Работа автоматически отправлена");
+      // Navigate only on success (not in finally), so errors keep user on page
+      navigate(`/exam/${session.id}/result`);
     } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || "Ошибка при автоматической отправке работы";
+      const errorMessage =
+        error.response?.data?.detail || "Ошибка при автоматической отправке работы";
       toast.error(errorMessage);
     } finally {
       setSubmitting(false);
-      navigate(`/exam/${session.id}/result`);
     }
-  }, [session?.id, submitting, uploadedImages, uploadImages, navigate]);
+  }, [session?.id, submitting, uploadImages, navigate]);
 
   // Event handlers
   const handleTimeoutConfirm = useCallback(() => {
@@ -159,14 +180,20 @@ const TakeExam = () => {
   const handleSubmit = useCallback(async () => {
     if (!session || isTimeUp) return;
 
-    const totalImages = Object.values(uploadedImages).reduce(
+    const totalNew = Object.values(uploadedImages).reduce(
       (sum, files) => sum + files.length,
       0
     );
+    const totalExisting = existingServerImages.length;
+    // Existing-images guard (manual submit): require at least one image on server or in form
+    if (totalNew === 0 && totalExisting === 0) {
+      toast.error("Добавьте хотя бы одно фото решения");
+      return;
+    }
 
     setSubmitting(true);
     try {
-      if (totalImages > 0) {
+      if (totalNew > 0) {
         await uploadImages();
       }
 
@@ -179,7 +206,7 @@ const TakeExam = () => {
     } finally {
       setSubmitting(false);
     }
-  }, [session?.id, isTimeUp, uploadedImages, uploadImages, navigate]);
+  }, [session?.id, isTimeUp, uploadedImages, existingServerImages.length, uploadImages, navigate]);
 
   // Load session and variant
   useEffect(() => {
@@ -193,6 +220,7 @@ const TakeExam = () => {
         setTasks(variantResponse.data.tasks);
         setTimeRemaining(variantResponse.data.time_remaining);
         initialRemainingRef.current = variantResponse.data.time_remaining;
+        setExistingServerImages(variantResponse.data.existing_images ?? []);
       } catch (error: any) {
         if (error.response?.status !== 401) {
           toast.error(error.response?.data?.detail || "Ошибка при входе в экзамен");
@@ -295,6 +323,16 @@ const TakeExam = () => {
 
       <div className="container mx-auto px-6 pt-40 pb-12">
         {/* Warning if low time */}
+        {existingServerImages.length > 0 && (
+          <Alert className="mb-6 border-green-500 bg-green-50 dark:bg-green-950">
+            <CheckCircle className="h-4 w-4" />
+            <AlertDescription>
+              Уже загружено на сервер ({existingServerImages.length}):{" "}
+              {existingServerImages.map((img) => img.filename).join(", ")}
+            </AlertDescription>
+          </Alert>
+        )}
+
         {timeRemaining < 600 && timeRemaining > 0 && !isTimeUp && (
           <Alert className="mb-6 border-red-500">
             <AlertCircle className="h-4 w-4" />
