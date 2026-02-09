@@ -155,6 +155,8 @@ export const coursesAPI = {
     data: { title?: string; organization?: string; is_active?: boolean }
   ) => api.patch(`/courses/${courseId}`, data),
 
+  delete: (courseId: string) => api.delete(`/courses/${courseId}`),
+
   rotateInviteCode: (courseId: string, data: { role: "teacher" | "student" }) =>
     api.post(`/courses/${courseId}/invite-codes/rotate`, data),
 
@@ -279,4 +281,6 @@ export const usersAPI = {
       is_verified?: boolean;
     }
   ) => api.patch(`/users/${userId}`, data),
+
+  delete: (userId: string) => api.delete(`/users/${userId}`),
 };

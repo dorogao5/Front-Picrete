@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { coursesAPI, getApiErrorMessage, usersAPI } from "@/lib/api";
 import type { Membership } from "@/lib/auth";
 import { toast } from "sonner";
-import { RefreshCw, ShieldCheck, ShieldHalf } from "lucide-react";
+import { RefreshCw, ShieldCheck, ShieldHalf, Trash2 } from "lucide-react";
 
 interface AdminUser {
   id: string;
@@ -59,6 +59,8 @@ const AdminDashboard = () => {
     Record<string, { rule_type: PolicyType; rule_config: string }>
   >({});
   const [resetPasswords, setResetPasswords] = useState<Record<string, string>>({});
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [deletingCourseId, setDeletingCourseId] = useState<string | null>(null);
 
   const filterParams = useMemo(() => {
     return {
@@ -212,6 +214,57 @@ const AdminDashboard = () => {
       toast.success("Identity policy обновлена");
     } catch (error: unknown) {
       toast.error(getApiErrorMessage(error, "Не удалось обновить identity policy"));
+    }
+  };
+
+  const handleDeleteUser = async (user: AdminUser) => {
+    const confirmed = window.confirm(
+      `Удалить пользователя @${user.username}? Это действие полностью удалит пользователя из БД и связанные membership-записи.`
+    );
+    if (!confirmed) return;
+
+    setDeletingUserId(user.id);
+    try {
+      await usersAPI.delete(user.id);
+      setUsers((prev) => prev.filter((item) => item.id !== user.id));
+      setResetPasswords((prev) => {
+        const next = { ...prev };
+        delete next[user.id];
+        return next;
+      });
+      toast.success("Пользователь удален");
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Не удалось удалить пользователя"));
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
+  const handleDeleteCourse = async (membership: Membership) => {
+    const confirmed = window.confirm(
+      `Удалить курс "${membership.course_title}" (${membership.course_slug})? Это действие полностью удалит курс и все связанные данные из БД.`
+    );
+    if (!confirmed) return;
+
+    setDeletingCourseId(membership.course_id);
+    try {
+      await coursesAPI.delete(membership.course_id);
+      setMemberships((prev) => prev.filter((item) => item.course_id !== membership.course_id));
+      setInviteCodes((prev) => {
+        const next = { ...prev };
+        delete next[membership.course_id];
+        return next;
+      });
+      setPolicyDrafts((prev) => {
+        const next = { ...prev };
+        delete next[membership.course_id];
+        return next;
+      });
+      toast.success("Курс удален");
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Не удалось удалить курс"));
+    } finally {
+      setDeletingCourseId(null);
     }
   };
 
@@ -431,21 +484,32 @@ const AdminDashboard = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="mt-4 space-y-2">
-                    <Label className="text-sm">Новый пароль</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="password"
-                        value={resetPasswords[user.id] || ""}
-                        onChange={(event) =>
-                          setResetPasswords((prev) => ({ ...prev, [user.id]: event.target.value }))
-                        }
-                        placeholder="Введите новый пароль"
-                      />
-                      <Button variant="outline" onClick={() => handleResetPassword(user.id)}>
-                        Сбросить
-                      </Button>
+                  <div className="mt-4 flex flex-col md:flex-row md:items-end gap-3">
+                    <div className="space-y-2 flex-1">
+                      <Label className="text-sm">Новый пароль</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="password"
+                          value={resetPasswords[user.id] || ""}
+                          onChange={(event) =>
+                            setResetPasswords((prev) => ({ ...prev, [user.id]: event.target.value }))
+                          }
+                          placeholder="Введите новый пароль"
+                        />
+                        <Button variant="outline" onClick={() => handleResetPassword(user.id)}>
+                          Сбросить
+                        </Button>
+                      </div>
                     </div>
+                    <Button
+                      variant="destructive"
+                      onClick={() => handleDeleteUser(user)}
+                      disabled={deletingUserId === user.id}
+                      className="gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      {deletingUserId === user.id ? "Удаление..." : "Удалить пользователя"}
+                    </Button>
                   </div>
                 </Card>
               ))}
@@ -516,7 +580,19 @@ const AdminDashboard = () => {
                           slug: {membership.course_slug} | roles: {membership.roles.join(", ")}
                         </p>
                       </div>
-                      <Badge variant="secondary">{membership.status}</Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">{membership.status}</Badge>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="gap-2"
+                          onClick={() => handleDeleteCourse(membership)}
+                          disabled={deletingCourseId === membership.course_id}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          {deletingCourseId === membership.course_id ? "Удаление..." : "Удалить"}
+                        </Button>
+                      </div>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
