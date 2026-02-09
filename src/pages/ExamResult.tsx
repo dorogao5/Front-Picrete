@@ -5,25 +5,61 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle, XCircle, Clock, FileText, RefreshCw, Award } from "lucide-react";
-import { submissionsAPI } from "@/lib/api";
+import { getApiErrorMessage, submissionsAPI } from "@/lib/api";
 import { toast } from "sonner";
 import AiAnalysis from "@/components/AiAnalysis";
 import { renderLatex } from "@/lib/renderLatex";
 
+interface SubmissionScore {
+  criterion_name: string;
+  criterion_description?: string | null;
+  ai_score: number | null;
+  final_score: number | null;
+  max_score: number;
+  teacher_comment?: string | null;
+  ai_comment?: string | null;
+}
+
+interface SubmissionExamInfo {
+  id: string;
+  max_attempts: number;
+}
+
+interface SubmissionSessionInfo {
+  attempt_number: number;
+  total_attempts: number;
+}
+
+interface SubmissionResult {
+  submitted_at: string;
+  status: string;
+  ai_score: number | null;
+  final_score: number | null;
+  max_score: number;
+  ai_comments?: string | null;
+  teacher_comments?: string | null;
+  scores?: SubmissionScore[];
+  ai_analysis?: Record<string, unknown> & { recommendations?: string[] };
+  is_flagged: boolean;
+  flag_reasons: string[];
+  exam?: SubmissionExamInfo;
+  session?: SubmissionSessionInfo;
+}
+
 const ExamResult = () => {
-  const { sessionId } = useParams<{ sessionId: string }>();
+  const { courseId, sessionId } = useParams<{ courseId: string; sessionId: string }>();
   const navigate = useNavigate();
-  const [submission, setSubmission] = useState<any>(null);
+  const [submission, setSubmission] = useState<SubmissionResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [retaking, setRetaking] = useState(false);
 
   useEffect(() => {
     const loadResult = async () => {
       try {
-        const response = await submissionsAPI.getResult(sessionId!);
-        setSubmission(response.data);
-      } catch (error: any) {
-        toast.error(error.response?.data?.detail || "Ошибка при загрузке результата");
+        const response = await submissionsAPI.getResult(sessionId!, courseId);
+        setSubmission(response.data as SubmissionResult);
+      } catch (error: unknown) {
+        toast.error(getApiErrorMessage(error, "Ошибка при загрузке результата"));
       } finally {
         setLoading(false);
       }
@@ -32,7 +68,7 @@ const ExamResult = () => {
     if (sessionId) {
       loadResult();
     }
-  }, [sessionId]);
+  }, [courseId, sessionId]);
 
   if (loading) {
     return (
@@ -56,7 +92,7 @@ const ExamResult = () => {
             <p className="text-muted-foreground mb-6">
               Возможно, работа еще не была сдана
             </p>
-            <Link to="/student">
+            <Link to={courseId ? `/c/${courseId}/student` : "/dashboard"}>
               <Button>Вернуться к списку</Button>
             </Link>
           </Card>
@@ -69,14 +105,31 @@ const ExamResult = () => {
     ? ((submission.final_score || submission.ai_score || 0) / submission.max_score) * 100
     : 0;
 
-  const canRetake = submission.exam && submission.session &&
+  const retakeContext =
+    submission.exam && submission.session
+      ? {
+          examId: submission.exam.id,
+          maxAttempts: submission.exam.max_attempts,
+          totalAttempts: submission.session.total_attempts,
+        }
+      : null;
+
+  const canRetake =
     submission.status === "approved" &&
-    submission.session.total_attempts < submission.exam.max_attempts;
+    retakeContext !== null &&
+    retakeContext.totalAttempts < retakeContext.maxAttempts;
+
+  const remainingAttempts = retakeContext
+    ? retakeContext.maxAttempts - retakeContext.totalAttempts
+    : 0;
+  const recommendations = submission.ai_analysis && Array.isArray(submission.ai_analysis.recommendations)
+    ? submission.ai_analysis.recommendations.filter((item): item is string => typeof item === "string")
+    : [];
 
   const handleRetake = () => {
-    if (!submission.exam) return;
+    if (!retakeContext) return;
     setRetaking(true);
-    navigate(`/exam/${submission.exam.id}`);
+    navigate(courseId ? `/c/${courseId}/exam/${retakeContext.examId}` : "/dashboard");
     toast.success("Начинаем новую попытку...");
   };
 
@@ -205,7 +258,7 @@ const ExamResult = () => {
               <h3 className="text-2xl font-bold">Разбалловка по заданиям</h3>
             </div>
             <div className="space-y-6">
-              {submission.scores.map((score: any, index: number) => {
+              {submission.scores.map((score, index) => {
                 const taskScore = score.final_score !== null ? score.final_score : score.ai_score || 0;
                 const taskPercent = score.max_score > 0 ? (taskScore / score.max_score) * 100 : 0;
 
@@ -265,12 +318,11 @@ const ExamResult = () => {
         )}
 
         {/* Recommendations */}
-        {submission.ai_analysis?.recommendations &&
-          submission.ai_analysis.recommendations.length > 0 && (
+        {recommendations.length > 0 && (
             <Card className="p-6 mb-8 bg-blue-50 dark:bg-blue-950">
               <h3 className="text-xl font-bold mb-4">Рекомендации</h3>
               <ul className="list-disc list-inside space-y-2">
-                {submission.ai_analysis.recommendations.map((rec: string, i: number) => (
+                {recommendations.map((rec, i) => (
                   <li key={i}>{renderLatex(rec)}</li>
                 ))}
               </ul>
@@ -293,7 +345,7 @@ const ExamResult = () => {
         )}
 
         {/* Retake Notice */}
-        {canRetake && (
+        {canRetake && retakeContext && (
           <Card className="p-6 mb-8 bg-gradient-to-r from-primary/10 to-accent/10 border-primary/30">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
@@ -302,7 +354,7 @@ const ExamResult = () => {
               <div className="flex-1">
                 <h3 className="font-bold text-lg mb-1">Доступна повторная попытка</h3>
                 <p className="text-sm text-muted-foreground">
-                  У вас осталось {submission.exam.max_attempts - submission.session.total_attempts} попыток из {submission.exam.max_attempts}.
+                  У вас осталось {remainingAttempts} попыток из {retakeContext.maxAttempts}.
                   Вы можете пройти контрольную работу еще раз для улучшения результата.
                 </p>
               </div>
@@ -320,7 +372,7 @@ const ExamResult = () => {
         )}
 
         <div className="text-center">
-          <Link to="/student">
+          <Link to={courseId ? `/c/${courseId}/student` : "/dashboard"}>
             <Button size="lg" variant="outline">Вернуться к списку экзаменов</Button>
           </Link>
         </div>

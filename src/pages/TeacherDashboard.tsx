@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Navbar } from "@/components/Navbar";
 import { Plus, FileText, CheckCircle, Clock, AlertCircle } from "lucide-react";
-import { examsAPI } from "@/lib/api";
+import { examsAPI, getApiErrorStatus } from "@/lib/api";
 import { toast } from "sonner";
 
 interface ExamSummary {
@@ -20,17 +20,22 @@ interface ExamSummary {
 }
 
 const TeacherDashboard = () => {
+  const { courseId } = useParams<{ courseId: string }>();
   const [exams, setExams] = useState<ExamSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchExams = async () => {
+      if (!courseId) {
+        setLoading(false);
+        return;
+      }
       try {
-        const response = await examsAPI.list();
+        const response = await examsAPI.list(courseId);
         setExams(response.data.items);
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Не показываем ошибку для 401 - interceptor сам обработает редирект
-        if (error.response?.status === 401) {
+        if (getApiErrorStatus(error) === 401) {
           setLoading(false);
           return;
         }
@@ -42,7 +47,11 @@ const TeacherDashboard = () => {
     };
 
     fetchExams();
-  }, []);
+  }, [courseId]);
+
+  if (!courseId) {
+    return null;
+  }
 
   // Calculate statistics
   const stats = {
@@ -62,7 +71,7 @@ const TeacherDashboard = () => {
             <h1 className="text-4xl font-bold mb-2">Панель преподавателя</h1>
             <p className="text-muted-foreground">Управление контрольными работами и проверка решений</p>
           </div>
-          <Link to="/create-exam">
+          <Link to={`/c/${courseId}/create-exam`}>
             <Button size="lg" className="shadow-elegant">
               <Plus className="w-5 h-5 mr-2" />
               Создать КР
@@ -133,7 +142,7 @@ const TeacherDashboard = () => {
               <FileText className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
               <h3 className="text-xl font-semibold mb-2">Контрольных работ пока нет</h3>
               <p className="text-muted-foreground mb-6">Создайте первую контрольную работу</p>
-              <Link to="/create-exam">
+              <Link to={`/c/${courseId}/create-exam`}>
                 <Button>
                   <Plus className="w-5 h-5 mr-2" />
                   Создать КР
@@ -181,10 +190,10 @@ const TeacherDashboard = () => {
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <Link to={`/exam/${exam.id}/submissions`}>
+                        <Link to={`/c/${courseId}/exam/${exam.id}/submissions`}>
                           <Button variant="outline">Проверка</Button>
                         </Link>
-                        <Link to={`/exam/${exam.id}/edit`}>
+                        <Link to={`/c/${courseId}/exam/${exam.id}/edit`}>
                           <Button variant="ghost">Редактировать</Button>
                         </Link>
                       </div>

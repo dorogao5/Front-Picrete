@@ -6,16 +6,18 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import logo from "@/assets/logo.png";
-import { authAPI } from "@/lib/api";
-import { setAuthToken, setUser } from "@/lib/auth";
+import { authAPI, getApiErrorMessage } from "@/lib/api";
+import { getDefaultAppPath, setAuthSession } from "@/lib/auth";
 import { toast } from "sonner";
 const POLICY_VERSION = "2025-12-09";
 
 const Signup = () => {
-  const [isu, setIsu] = useState("");
+  const [username, setUsername] = useState("");
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
+  const [identityValue, setIdentityValue] = useState("");
   const [pdConsent, setPdConsent] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -34,8 +36,8 @@ const Signup = () => {
       return;
     }
 
-    if (isu.length !== 6) {
-      toast.error("ISU должен содержать 6 цифр");
+    if (username.trim().length < 3) {
+      toast.error("Username должен содержать минимум 3 символа");
       return;
     }
 
@@ -46,35 +48,45 @@ const Signup = () => {
 
     setLoading(true);
     try {
+      const normalizedIdentity = identityValue.trim();
+      let identityPayload: Record<string, string> = {};
+      if (normalizedIdentity) {
+        if (/^\d{6}$/.test(normalizedIdentity)) {
+          identityPayload = { isu: normalizedIdentity };
+        } else if (normalizedIdentity.includes("@")) {
+          identityPayload = { email: normalizedIdentity };
+        } else {
+          identityPayload = { value: normalizedIdentity };
+        }
+      }
+
       const response = await authAPI.signup({
-        isu,
+        username: username.trim(),
         full_name: fullName,
         password,
+        invite_code: inviteCode.trim() || undefined,
+        identity_payload: identityPayload,
         pd_consent: true,
         pd_consent_version: POLICY_VERSION,
         terms_version: POLICY_VERSION,
         privacy_version: POLICY_VERSION,
       });
       
-      const { access_token, user } = response.data;
-      
-      // Сохраняем токен и пользователя
-      setAuthToken(access_token);
-      setUser(user);
-      
-      // Убеждаемся, что токен действительно записался
-      const savedToken = localStorage.getItem('access_token');
-      if (!savedToken || savedToken !== access_token) {
-        throw new Error('Не удалось сохранить токен авторизации');
-      }
+      const { access_token, user, memberships, active_course_id } = response.data;
+
+      setAuthSession({
+        access_token,
+        user,
+        memberships: memberships ?? [],
+        active_course_id: active_course_id ?? null,
+      });
       
       setLoading(false);
       toast.success("Регистрация успешна");
-      
-      // Signup всегда создаёт student — редирект в панель студента
-      navigate("/student", { replace: true });
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || error.message || "Ошибка регистрации");
+
+      navigate(getDefaultAppPath(), { replace: true });
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Ошибка регистрации"));
       setLoading(false);
     }
   };
@@ -105,16 +117,40 @@ const Signup = () => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="isu">Номер ИСУ *</Label>
+            <Label htmlFor="username">Username *</Label>
             <Input
-              id="isu"
+              id="username"
               type="text"
-              placeholder="123456"
-              value={isu}
-              onChange={(e) => setIsu(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="petrov_2026"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               required
-              maxLength={6}
-              pattern="\d{6}"
+              minLength={3}
+              maxLength={64}
+              className="transition-all duration-300 focus:shadow-soft"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="inviteCode">Invite code (необязательно)</Label>
+            <Input
+              id="inviteCode"
+              type="text"
+              placeholder="CHEM-STUD-V1"
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value)}
+              className="transition-all duration-300 focus:shadow-soft"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="identityValue">Identity value (необязательно)</Label>
+            <Input
+              id="identityValue"
+              type="text"
+              placeholder="654321 или student@itmo.ru"
+              value={identityValue}
+              onChange={(e) => setIdentityValue(e.target.value)}
               className="transition-all duration-300 focus:shadow-soft"
             />
           </div>

@@ -1,182 +1,282 @@
-import axios from 'axios';
+import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://picrete.com/api/v1' : 'http://localhost:8000/api/v1');
-// Create axios instance with default config
+import { clearAuthSession, getActiveCourseId, getAuthToken } from "./auth";
+
+export interface ApiErrorBody {
+  detail?: string;
+  message?: string;
+}
+
+export const getApiErrorMessage = (error: unknown, fallback: string): string => {
+  if (axios.isAxiosError<ApiErrorBody>(error)) {
+    return error.response?.data?.detail ?? error.response?.data?.message ?? error.message ?? fallback;
+  }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+};
+
+export const getApiErrorStatus = (error: unknown): number | undefined => {
+  if (!axios.isAxiosError(error)) {
+    return undefined;
+  }
+  return error.response?.status;
+};
+
+export type JsonPrimitive = string | number | boolean | null;
+export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
+export type JsonObject = { [key: string]: JsonValue };
+
+interface ExamVariantPayload {
+  content: string;
+  parameters: JsonObject;
+  reference_solution: string;
+  reference_answer: string;
+  answer_tolerance: number;
+}
+
+export interface ExamTaskTypePayload {
+  title: string;
+  description: string;
+  order_index: number;
+  max_score: number;
+  rubric: JsonObject;
+  difficulty: "easy" | "medium" | "hard";
+  taxonomy_tags: string[];
+  formulas: string[];
+  units: string[];
+  validation_rules: JsonObject;
+  variants: ExamVariantPayload[];
+}
+
+export interface ExamCreatePayload {
+  title: string;
+  description: string;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  timezone: string;
+  max_attempts: number;
+  allow_breaks: boolean;
+  break_duration_minutes: number;
+  auto_save_interval?: number;
+  task_types: ExamTaskTypePayload[];
+}
+
+export interface ExamUpdatePayload {
+  title?: string;
+  description?: string;
+  start_time?: string;
+  end_time?: string;
+  duration_minutes?: number;
+  timezone?: string;
+  max_attempts?: number;
+  allow_breaks?: boolean;
+  break_duration_minutes?: number;
+  auto_save_interval?: number;
+  task_types?: ExamTaskTypePayload[];
+}
+
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD ? "https://picrete.com/api/v1" : "http://localhost:8000/api/v1");
+
 export const api = axios.create({
   baseURL: API_URL,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
 });
 
-// Add auth token to requests
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token');
+  const token = getAuthToken();
   if (token) {
-    // Убеждаемся, что headers объект существует
-    if (!config.headers) {
-      config.headers = {} as any;
-    }
+    config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
 
-// Handle auth errors
 let isRedirecting = false;
-let redirectTimeout: ReturnType<typeof setTimeout> | null = null;
-
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      const currentPath = window.location.pathname;
-      
-      // Не обрабатываем 401 на страницах авторизации
-      const isAuthPage = currentPath.includes('/login') || 
-                        currentPath.includes('/signup') || 
-                        currentPath === '/';
-      
-      if (isAuthPage) {
-        return Promise.reject(error);
+      const pathname = window.location.pathname;
+      const isPublic =
+        pathname === "/" || pathname.startsWith("/login") || pathname.startsWith("/signup");
+
+      if (!isPublic && !isRedirecting) {
+        isRedirecting = true;
+        clearAuthSession();
+        window.location.href = "/login";
       }
-      
-      // Проверяем, был ли токен отправлен в запросе
-      const tokenInRequest = error.config?.headers?.Authorization;
-      const hadTokenInRequest = !!tokenInRequest;
-      const tokenInStorage = localStorage.getItem('access_token');
-      
-      // Удаляем токен ТОЛЬКО если он был отправлен в запросе и был в localStorage
-      // Это означает, что токен был отправлен, но сервер его не принял (невалидный/устаревший)
-      if (hadTokenInRequest && tokenInStorage) {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('user');
-        
-        // Редиректим на логин ТОЛЬКО если токен был отправлен (значит должен быть валидным)
-        if (!isRedirecting) {
-          isRedirecting = true;
-          
-          // Очищаем предыдущий таймаут если был
-          if (redirectTimeout) {
-            clearTimeout(redirectTimeout);
-          }
-          
-          // Задержка перед редиректом для завершения других запросов
-          redirectTimeout = setTimeout(() => {
-            isRedirecting = false;
-            redirectTimeout = null;
-            window.location.href = '/login';
-          }, 200);
-        }
-      }
-      // Если токен НЕ был отправлен - просто реджектим ошибку
-      // Это означает, что запрос был без авторизации (например, после логина когда токен еще не применен)
-      // В этом случае НЕ удаляем токен и НЕ редиректим
     }
     return Promise.reject(error);
   }
 );
 
-// Auth API (signup always creates Student role - only admins can create teachers via /users)
+const resolveCourseId = (courseId?: string): string => {
+  const resolved = courseId ?? getActiveCourseId();
+  if (!resolved) {
+    throw new Error("Active course is not selected");
+  }
+  return resolved;
+};
+
+const coursePrefix = (courseId?: string) => `/courses/${resolveCourseId(courseId)}`;
+
 export const authAPI = {
-  signup: (data: { isu: string; full_name: string; password: string; pd_consent: boolean; pd_consent_version?: string; terms_version?: string; privacy_version?: string }) =>
-    api.post('/auth/signup', data),
-  
-  login: (data: { isu: string; password: string }) =>
-    api.post('/auth/login', data),
-  
-  me: () => api.get('/auth/me'),
+  signup: (data: {
+    username: string;
+    full_name: string;
+    password: string;
+    invite_code?: string;
+    identity_payload?: Record<string, unknown>;
+    pd_consent: boolean;
+    pd_consent_version?: string;
+    terms_version?: string;
+    privacy_version?: string;
+  }) => api.post("/auth/signup", data),
+
+  login: (data: { username: string; password: string }) => api.post("/auth/login", data),
+
+  me: () => api.get("/auth/me"),
 };
 
-// Exams API
+export const coursesAPI = {
+  list: () => api.get("/courses"),
+
+  create: (data: { slug: string; title: string; organization?: string }) => api.post("/courses", data),
+
+  update: (
+    courseId: string,
+    data: { title?: string; organization?: string; is_active?: boolean }
+  ) => api.patch(`/courses/${courseId}`, data),
+
+  rotateInviteCode: (courseId: string, data: { role: "teacher" | "student" }) =>
+    api.post(`/courses/${courseId}/invite-codes/rotate`, data),
+
+  updateIdentityPolicy: (
+    courseId: string,
+    data: {
+      rule_type: "none" | "isu_6_digits" | "email_domain" | "custom_text_validator";
+      rule_config?: Record<string, unknown>;
+    }
+  ) => api.patch(`/courses/${courseId}/identity-policy`, data),
+
+  join: (data: { invite_code: string; identity_payload?: Record<string, unknown> }) =>
+    api.post("/courses/join", data),
+};
+
 export const examsAPI = {
-  list: (params?: { status?: string; skip?: number; limit?: number }) =>
-    api.get('/exams', { params }),
-  
-  get: (examId: string) =>
-    api.get(`/exams/${examId}`),
-  
-  create: (data: any) =>
-    api.post('/exams', data),
-  
-  update: (examId: string, data: any) =>
-    api.patch(`/exams/${examId}`, data),
-  
-  delete: (examId: string, forceDelete: boolean = false) =>
-    api.delete(`/exams/${examId}`, { params: { force_delete: forceDelete } }),
-  
-  publish: (examId: string) =>
-    api.post(`/exams/${examId}/publish`),
-  
-  addTaskType: (examId: string, data: any) =>
-    api.post(`/exams/${examId}/task-types`, data),
-  
-  listSubmissions: (examId: string, params?: { status?: string; skip?: number; limit?: number }) =>
-    api.get(`/exams/${examId}/submissions`, { params }),
+  list: (courseId?: string, params?: { status?: string; skip?: number; limit?: number }) =>
+    api.get(`${coursePrefix(courseId)}/exams`, { params }),
+
+  get: (examId: string, courseId?: string) => api.get(`${coursePrefix(courseId)}/exams/${examId}`),
+
+  create: (data: ExamCreatePayload, courseId?: string) => api.post(`${coursePrefix(courseId)}/exams`, data),
+
+  update: (examId: string, data: ExamUpdatePayload, courseId?: string) =>
+    api.patch(`${coursePrefix(courseId)}/exams/${examId}`, data),
+
+  delete: (examId: string, forceDelete = false, courseId?: string) =>
+    api.delete(`${coursePrefix(courseId)}/exams/${examId}`, { params: { force_delete: forceDelete } }),
+
+  publish: (examId: string, courseId?: string) =>
+    api.post(`${coursePrefix(courseId)}/exams/${examId}/publish`),
+
+  addTaskType: (examId: string, data: ExamTaskTypePayload, courseId?: string) =>
+    api.post(`${coursePrefix(courseId)}/exams/${examId}/task-types`, data),
+
+  listSubmissions: (
+    examId: string,
+    courseId?: string,
+    params?: { status?: string; skip?: number; limit?: number }
+  ) => api.get(`${coursePrefix(courseId)}/exams/${examId}/submissions`, { params }),
 };
 
-// Submissions API
 export const submissionsAPI = {
-  mySubmissions: () =>
-    api.get('/submissions/my-submissions'),
-  
-  enterExam: (examId: string) =>
-    api.post(`/submissions/exams/${examId}/enter`),
-  
-  getSessionVariant: (sessionId: string) =>
-    api.get(`/submissions/sessions/${sessionId}/variant`),
-  
-  uploadImage: (sessionId: string, file: File, orderIndex: number) => {
+  mySubmissions: (courseId?: string) => api.get(`${coursePrefix(courseId)}/submissions/my-submissions`),
+
+  enterExam: (examId: string, courseId?: string) =>
+    api.post(`${coursePrefix(courseId)}/submissions/exams/${examId}/enter`),
+
+  getSessionVariant: (sessionId: string, courseId?: string) =>
+    api.get(`${coursePrefix(courseId)}/submissions/sessions/${sessionId}/variant`),
+
+  uploadImage: (sessionId: string, file: File, orderIndex: number, courseId?: string) => {
     const formData = new FormData();
-    formData.append('file', file);
-    formData.append('order_index', orderIndex.toString());
-    return api.post(`/submissions/sessions/${sessionId}/upload`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+    formData.append("file", file);
+    formData.append("order_index", orderIndex.toString());
+    return api.post(`${coursePrefix(courseId)}/submissions/sessions/${sessionId}/upload`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
     });
   },
-  
-  submit: (sessionId: string) =>
-    api.post(`/submissions/sessions/${sessionId}/submit`),
-  
-  getResult: (sessionId: string) =>
-    api.get(`/submissions/sessions/${sessionId}/result`),
-  
-  get: (submissionId: string) =>
-    api.get(`/submissions/${submissionId}`),
-  
-  getImageViewUrl: (imageId: string) =>
-    api.get(`/submissions/images/${imageId}/view-url`),
-  
-  approve: (submissionId: string, data?: { teacher_comments?: string }) =>
-    api.post(`/submissions/${submissionId}/approve`, data),
-  
-  overrideScore: (submissionId: string, data: { final_score: number; teacher_comments: string }) =>
-    api.post(`/submissions/${submissionId}/override-score`, data),
 
-  regrade: (submissionId: string) =>
-    api.post(`/submissions/${submissionId}/regrade`),
+  submit: (sessionId: string, courseId?: string) =>
+    api.post(`${coursePrefix(courseId)}/submissions/sessions/${sessionId}/submit`),
 
-  gradingStatus: (submissionId: string) =>
-    api.get(`/submissions/grading-status/${submissionId}`),
+  getResult: (sessionId: string, courseId?: string) =>
+    api.get(`${coursePrefix(courseId)}/submissions/sessions/${sessionId}/result`),
 
-  autoSave: (sessionId: string, data: Record<string, unknown>) =>
-    api.post(`/submissions/sessions/${sessionId}/auto-save`, data),
+  get: (submissionId: string, courseId?: string) =>
+    api.get(`${coursePrefix(courseId)}/submissions/${submissionId}`),
+
+  getImageViewUrl: (imageId: string, courseId?: string) =>
+    api.get(`${coursePrefix(courseId)}/submissions/images/${imageId}/view-url`),
+
+  approve: (submissionId: string, data?: { teacher_comments?: string }, courseId?: string) =>
+    api.post(`${coursePrefix(courseId)}/submissions/${submissionId}/approve`, data),
+
+  overrideScore: (
+    submissionId: string,
+    data: { final_score: number; teacher_comments: string },
+    courseId?: string
+  ) => api.post(`${coursePrefix(courseId)}/submissions/${submissionId}/override-score`, data),
+
+  regrade: (submissionId: string, courseId?: string) =>
+    api.post(`${coursePrefix(courseId)}/submissions/${submissionId}/regrade`),
+
+  gradingStatus: (submissionId: string, courseId?: string) =>
+    api.get(`${coursePrefix(courseId)}/submissions/grading-status/${submissionId}`),
+
+  autoSave: (sessionId: string, data: Record<string, unknown>, courseId?: string) =>
+    api.post(`${coursePrefix(courseId)}/submissions/sessions/${sessionId}/auto-save`, data),
 };
 
-// Users API
 export const usersAPI = {
-  me: () => api.get('/users/me'),
-  
-  list: (params?: { skip?: number; limit?: number; isu?: string; role?: string; is_active?: boolean; is_verified?: boolean }) =>
-    api.get('/users', { params }),
-  
-  create: (data: any) =>
-    api.post('/users', data),
+  me: () => api.get("/users/me"),
 
-  get: (userId: string) =>
-    api.get(`/users/${userId}`),
-  
-  update: (userId: string, data: any) =>
-    api.patch(`/users/${userId}`, data),
+  list: (params?: {
+    skip?: number;
+    limit?: number;
+    username?: string;
+    isPlatformAdmin?: boolean;
+    isActive?: boolean;
+    isVerified?: boolean;
+  }) => api.get("/users", { params }),
+
+  create: (data: {
+    username: string;
+    full_name: string;
+    password: string;
+    is_platform_admin?: boolean;
+    is_active?: boolean;
+    is_verified?: boolean;
+  }) => api.post("/users", data),
+
+  get: (userId: string) => api.get(`/users/${userId}`),
+
+  update: (
+    userId: string,
+    data: {
+      full_name?: string;
+      password?: string;
+      is_platform_admin?: boolean;
+      is_active?: boolean;
+      is_verified?: boolean;
+    }
+  ) => api.patch(`/users/${userId}`, data),
 };
-

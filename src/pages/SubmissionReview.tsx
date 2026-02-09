@@ -8,17 +8,51 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CheckCircle, XCircle, Edit3, AlertTriangle, RotateCcw, RotateCw, ZoomIn, ZoomOut, RefreshCw } from "lucide-react";
-import { submissionsAPI } from "@/lib/api";
+import { getApiErrorMessage, submissionsAPI } from "@/lib/api";
 import { toast } from "sonner";
 import ImageLightbox from "@/components/ImageLightbox";
 import AiAnalysis from "@/components/AiAnalysis";
 import { renderLatex } from "@/lib/renderLatex";
 
+interface SubmissionImage {
+  id: string;
+  ocr_text?: string | null;
+  quality_score?: number | null;
+}
+
+interface SubmissionScore {
+  criterion_name: string;
+  max_score: number;
+  ai_score: number | null;
+  ai_comment?: string | null;
+}
+
+interface SubmissionReviewData {
+  student_name?: string;
+  student_id: string;
+  student_username?: string;
+  submitted_at: string;
+  status: string;
+  max_score: number;
+  final_score: number | null;
+  ai_score: number | null;
+  teacher_comments?: string | null;
+  images: SubmissionImage[];
+  scores: SubmissionScore[];
+  ai_analysis?: Record<string, unknown> & {
+    full_transcription_md?: string;
+    recommendations?: string[];
+  };
+  ai_comments?: string | null;
+  is_flagged: boolean;
+  flag_reasons: string[];
+}
+
 const SubmissionReview = () => {
-  const { submissionId } = useParams<{ submissionId: string }>();
+  const { courseId, submissionId } = useParams<{ courseId: string; submissionId: string }>();
   const navigate = useNavigate();
 
-  const [submission, setSubmission] = useState<any>(null);
+  const [submission, setSubmission] = useState<SubmissionReviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [regrading, setRegrading] = useState(false);
@@ -34,8 +68,8 @@ const SubmissionReview = () => {
   useEffect(() => {
     const loadSubmission = async () => {
       try {
-        const response = await submissionsAPI.get(submissionId!);
-        const submissionData = response.data;
+        const response = await submissionsAPI.get(submissionId!, courseId);
+        const submissionData = response.data as SubmissionReviewData;
         setSubmission(submissionData);
         setOverrideScore(submissionData.final_score || submissionData.ai_score || 0);
         setTeacherComments(submissionData.teacher_comments || "");
@@ -45,7 +79,7 @@ const SubmissionReview = () => {
           const urls: Record<string, string> = {};
           for (const image of submissionData.images) {
             try {
-              const urlResponse = await submissionsAPI.getImageViewUrl(image.id);
+              const urlResponse = await submissionsAPI.getImageViewUrl(image.id, courseId);
               if (urlResponse.data.view_url) {
                 urls[image.id] = urlResponse.data.view_url;
               } else if (urlResponse.data.file_path) {
@@ -57,8 +91,8 @@ const SubmissionReview = () => {
           }
           setImageUrls(urls);
         }
-      } catch (error: any) {
-        toast.error(error.response?.data?.detail || "Ошибка при загрузке работы");
+      } catch (error: unknown) {
+        toast.error(getApiErrorMessage(error, "Ошибка при загрузке работы"));
         navigate(-1);
       } finally {
         setLoading(false);
@@ -68,7 +102,7 @@ const SubmissionReview = () => {
     if (submissionId) {
       loadSubmission();
     }
-  }, [submissionId, navigate]);
+  }, [courseId, submissionId, navigate]);
 
   const rotateImage = (id: string, delta: number) => {
     setImageAngles((prev) => ({ ...prev, [id]: ((prev[id] || 0) + delta) % 360 }));
@@ -83,11 +117,11 @@ const SubmissionReview = () => {
 
   const handleApprove = async () => {
     try {
-      await submissionsAPI.approve(submissionId!, { teacher_comments: teacherComments });
+      await submissionsAPI.approve(submissionId!, { teacher_comments: teacherComments }, courseId);
       toast.success("Работа утверждена");
       navigate(-1);
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Ошибка при утверждении");
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Ошибка при утверждении"));
     }
   };
 
@@ -96,26 +130,26 @@ const SubmissionReview = () => {
       await submissionsAPI.overrideScore(submissionId!, {
         final_score: overrideScore,
         teacher_comments: teacherComments || "", // backend требует строку
-      });
+      }, courseId);
       toast.success("Оценка изменена");
       setEditing(false);
-      const response = await submissionsAPI.get(submissionId!);
-      setSubmission(response.data);
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Ошибка при изменении оценки");
+      const response = await submissionsAPI.get(submissionId!, courseId);
+      setSubmission(response.data as SubmissionReviewData);
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Ошибка при изменении оценки"));
     }
   };
 
   const handleRegrade = async () => {
     try {
       setRegrading(true);
-      await submissionsAPI.regrade(submissionId!);
+      await submissionsAPI.regrade(submissionId!, courseId);
       toast.success("Работа отправлена на повторную проверку AI");
       // Reload submission to reflect new status
-      const response = await submissionsAPI.get(submissionId!);
-      setSubmission(response.data);
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Ошибка при запросе переоценки");
+      const response = await submissionsAPI.get(submissionId!, courseId);
+      setSubmission(response.data as SubmissionReviewData);
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Ошибка при запросе переоценки"));
     } finally {
       setRegrading(false);
     }
@@ -149,7 +183,7 @@ const SubmissionReview = () => {
           <div>
             <h1 className="text-4xl font-bold mb-2">Проверка работы</h1>
             <p className="text-muted-foreground">
-              Студент: {submission.student_name || submission.student_id} (ISU: {submission.student_isu || '—'}) | Сдано:{" "}
+              Студент: {submission.student_name || submission.student_id} (@{submission.student_username || "unknown"}) | Сдано:{" "}
               {new Date(submission.submitted_at).toLocaleString("ru-RU")}
             </p>
           </div>
@@ -167,7 +201,7 @@ const SubmissionReview = () => {
               <h2 className="text-2xl font-bold mb-4">Загруженные изображения</h2>
               {submission.images && submission.images.length > 0 ? (
                 <div className="grid md:grid-cols-2 gap-4">
-                  {submission.images.map((image: any, index: number) => (
+                  {submission.images.map((image, index) => (
                     <div key={image.id} className="border rounded-lg overflow-hidden">
                       {imageUrls[image.id] ? (
                         <div className="relative">
@@ -215,7 +249,9 @@ const SubmissionReview = () => {
 
             {lightboxOpen && (
               <ImageLightbox
-                images={submission.images.map((img: any) => imageUrls[img.id]).filter(Boolean)}
+                images={submission.images
+                  .map((img) => imageUrls[img.id])
+                  .filter((url): url is string => Boolean(url))}
                 startIndex={lightboxIndex}
                 onClose={() => setLightboxOpen(false)}
               />
@@ -255,7 +291,7 @@ const SubmissionReview = () => {
                 <TabsContent value="criteria">
                   {submission.scores && submission.scores.length > 0 ? (
                     <div className="space-y-4">
-                      {submission.scores.map((score: any, index: number) => (
+                      {submission.scores.map((score, index) => (
                         <div key={index} className="border-b pb-4 last:border-0">
                           <div className="flex items-center justify-between mb-2">
                             <h4 className="font-semibold">{score.criterion_name}</h4>

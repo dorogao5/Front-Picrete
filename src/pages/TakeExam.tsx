@@ -7,16 +7,49 @@ import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Clock, Upload, CheckCircle, AlertCircle, Image as ImageIcon } from "lucide-react";
-import { submissionsAPI } from "@/lib/api";
+import { getApiErrorMessage, getApiErrorStatus, submissionsAPI } from "@/lib/api";
 import { toast } from "sonner";
 import { renderLatex } from "@/lib/renderLatex";
 
+interface ExamSession {
+  id: string;
+}
+
+interface ExistingServerImage {
+  id: string;
+  filename: string;
+  order_index: number;
+}
+
+interface SessionTaskType {
+  id: string;
+  title: string;
+  description: string;
+  max_score: number;
+  formulas: string[];
+}
+
+interface SessionTaskVariant {
+  content: string;
+}
+
+interface SessionTask {
+  task_type: SessionTaskType;
+  variant: SessionTaskVariant;
+}
+
+interface SessionVariantResponse {
+  tasks: SessionTask[];
+  time_remaining: number;
+  existing_images?: ExistingServerImage[];
+}
+
 const TakeExam = () => {
-  const { examId } = useParams<{ examId: string }>();
+  const { courseId, examId } = useParams<{ courseId: string; examId: string }>();
   const navigate = useNavigate();
 
-  const [session, setSession] = useState<any>(null);
-  const [tasks, setTasks] = useState<any[]>([]);
+  const [session, setSession] = useState<ExamSession | null>(null);
+  const [tasks, setTasks] = useState<SessionTask[]>([]);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [uploadedImages, setUploadedImages] = useState<{ [key: number]: File[] }>({});
   /** Images already on server (e.g. after refresh) — not re-uploaded, shown as "загружено" */
@@ -27,6 +60,7 @@ const TakeExam = () => {
   const [submitting, setSubmitting] = useState(false);
   const [isTimeUp, setIsTimeUp] = useState(false);
   const [showTimeoutDialog, setShowTimeoutDialog] = useState(false);
+  const sessionId = session?.id;
   const initialRemainingRef = useRef<number | null>(null);
   /** Refs so timer/auto-submit always see latest state (avoids stale closure → no_images) */
   const uploadedImagesRef = useRef(uploadedImages);
@@ -68,7 +102,7 @@ const TakeExam = () => {
 
   // Upload images function (reads current files from ref so auto-submit always uploads latest)
   const uploadImages = useCallback(async () => {
-    if (!session || isTimeUp) return;
+    if (!sessionId || isTimeUp) return;
 
     const current = uploadedImagesRef.current;
     const totalNew = Object.values(current).reduce((sum, files) => sum + files.length, 0);
@@ -81,22 +115,22 @@ const TakeExam = () => {
       for (const taskIndex in current) {
         const files = current[taskIndex];
         for (const file of files) {
-          await submissionsAPI.uploadImage(session.id, file, orderIndex);
+          await submissionsAPI.uploadImage(sessionId, file, orderIndex, courseId);
           orderIndex++;
         }
       }
       toast.success("Все изображения загружены");
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Ошибка при загрузке изображений");
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Ошибка при загрузке изображений"));
       throw error;
     } finally {
       setUploading(false);
     }
-  }, [session?.id, isTimeUp]);
+  }, [courseId, sessionId, isTimeUp]);
 
   // Auto-submit: use refs so we always see latest images (avoids stale closure → no_images)
   const handleAutoSubmit = useCallback(async () => {
-    if (!session || submitting) return;
+    if (!sessionId || submitting) return;
 
     setSubmitting(true);
     try {
@@ -109,26 +143,24 @@ const TakeExam = () => {
         await uploadImages();
       }
       // Always submit (with or without images) so teacher sees the attempt
-      await submissionsAPI.submit(session.id);
+      await submissionsAPI.submit(sessionId, courseId);
       toast.success("Работа автоматически отправлена");
       // Navigate only on success (not in finally), so errors keep user on page
-      navigate(`/exam/${session.id}/result`);
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.detail || "Ошибка при автоматической отправке работы";
-      toast.error(errorMessage);
+      navigate(courseId ? `/c/${courseId}/exam/${sessionId}/result` : "/dashboard");
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Ошибка при автоматической отправке работы"));
     } finally {
       setSubmitting(false);
     }
-  }, [session?.id, submitting, uploadImages, navigate]);
+  }, [sessionId, submitting, uploadImages, navigate, courseId]);
 
   // Event handlers
   const handleTimeoutConfirm = useCallback(() => {
     setShowTimeoutDialog(false);
-    if (session) {
-      navigate(`/exam/${session.id}/result`);
+    if (sessionId) {
+      navigate(courseId ? `/c/${courseId}/exam/${sessionId}/result` : "/dashboard");
     }
-  }, [session?.id, navigate]);
+  }, [courseId, sessionId, navigate]);
 
   const handleImageSelect = useCallback((taskIndex: number, files: FileList | null) => {
     if (isTimeUp) {
@@ -173,7 +205,7 @@ const TakeExam = () => {
   }, [isTimeUp]);
 
   const handleSubmit = useCallback(async () => {
-    if (!session || isTimeUp) return;
+    if (!sessionId || isTimeUp) return;
 
     const totalNew = Object.values(uploadedImages).reduce(
       (sum, files) => sum + files.length,
@@ -186,42 +218,42 @@ const TakeExam = () => {
         await uploadImages();
       }
 
-      await submissionsAPI.submit(session.id);
+      await submissionsAPI.submit(sessionId, courseId);
       toast.success("Работа отправлена на проверку");
-      navigate(`/exam/${session.id}/result`);
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || "Ошибка при отправке работы";
-      toast.error(errorMessage);
+      navigate(courseId ? `/c/${courseId}/exam/${sessionId}/result` : "/dashboard");
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Ошибка при отправке работы"));
     } finally {
       setSubmitting(false);
     }
-  }, [session?.id, isTimeUp, uploadedImages, uploadImages, navigate]);
+  }, [sessionId, isTimeUp, uploadedImages, uploadImages, navigate, courseId]);
 
   // Load session and variant
   useEffect(() => {
     const enterExam = async () => {
       try {
-        const response = await submissionsAPI.enterExam(examId!);
-        const sessionData = response.data;
+        const response = await submissionsAPI.enterExam(examId!, courseId);
+        const sessionData = response.data as ExamSession;
         setSession(sessionData);
 
-        const variantResponse = await submissionsAPI.getSessionVariant(sessionData.id);
-        setTasks(variantResponse.data.tasks);
-        setTimeRemaining(variantResponse.data.time_remaining);
-        initialRemainingRef.current = variantResponse.data.time_remaining;
-        setExistingServerImages(variantResponse.data.existing_images ?? []);
-      } catch (error: any) {
-        if (error.response?.status !== 401) {
-          toast.error(error.response?.data?.detail || "Ошибка при входе в экзамен");
-          navigate("/student");
+        const variantResponse = await submissionsAPI.getSessionVariant(sessionData.id, courseId);
+        const variantData = variantResponse.data as SessionVariantResponse;
+        setTasks(variantData.tasks);
+        setTimeRemaining(variantData.time_remaining);
+        initialRemainingRef.current = variantData.time_remaining;
+        setExistingServerImages(variantData.existing_images ?? []);
+      } catch (error: unknown) {
+        if (getApiErrorStatus(error) !== 401) {
+          toast.error(getApiErrorMessage(error, "Ошибка при входе в экзамен"));
+          navigate(courseId ? `/c/${courseId}/student` : "/dashboard");
         }
       }
     };
 
-    if (examId) {
+    if (examId && courseId) {
       enterExam();
     }
-  }, [examId, navigate]);
+  }, [courseId, examId, navigate]);
 
   // Timer countdown with auto-submit
   useEffect(() => {
@@ -244,7 +276,7 @@ const TakeExam = () => {
 
   // Server-side auto-save every 30 seconds
   useEffect(() => {
-    if (!session?.id || isTimeUp) return;
+    if (!sessionId || isTimeUp) return;
 
     const interval = setInterval(async () => {
       const totalImages = Object.values(uploadedImages).reduce(
@@ -252,17 +284,17 @@ const TakeExam = () => {
         0
       );
       try {
-        await submissionsAPI.autoSave(session.id, {
+        await submissionsAPI.autoSave(sessionId, {
           imageCount: totalImages,
           savedAt: new Date().toISOString(),
-        });
+        }, courseId);
       } catch {
         // Auto-save is best-effort; failures are silent
       }
     }, 30_000);
 
     return () => clearInterval(interval);
-  }, [session?.id, uploadedImages, isTimeUp]);
+  }, [courseId, sessionId, uploadedImages, isTimeUp]);
 
   if (!session || tasks.length === 0) {
     return (

@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Navbar } from "@/components/Navbar";
 import { Calendar, Clock, CheckCircle, FileText } from "lucide-react";
-import { examsAPI, submissionsAPI } from "@/lib/api";
+import { examsAPI, getApiErrorStatus, submissionsAPI } from "@/lib/api";
 import { toast } from "sonner";
 
 interface ExamSummary {
@@ -30,22 +30,27 @@ interface StudentSubmission {
 }
 
 const StudentDashboard = () => {
+  const { courseId } = useParams<{ courseId: string }>();
   const [exams, setExams] = useState<ExamSummary[]>([]);
   const [submissions, setSubmissions] = useState<StudentSubmission[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
+      if (!courseId) {
+        setLoading(false);
+        return;
+      }
       try {
         const [examsResponse, submissionsResponse] = await Promise.all([
-          examsAPI.list(),
-          submissionsAPI.mySubmissions(),
+          examsAPI.list(courseId),
+          submissionsAPI.mySubmissions(courseId),
         ]);
         setExams(examsResponse.data.items);
         setSubmissions(submissionsResponse.data.items);
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Не показываем ошибку для 401 - interceptor сам обработает редирект
-        if (error.response?.status === 401) {
+        if (getApiErrorStatus(error) === 401) {
           setLoading(false);
           return;
         }
@@ -57,7 +62,11 @@ const StudentDashboard = () => {
     };
 
     fetchData();
-  }, []);
+  }, [courseId]);
+
+  if (!courseId) {
+    return null;
+  }
 
   // Separate exams into upcoming and completed based on submissions
   const submittedExamIds = new Set(submissions.map(s => s.exam_id));
@@ -184,7 +193,7 @@ const StudentDashboard = () => {
                         </div>
                       </div>
                       {isAvailable ? (
-                        <Link to={`/exam/${exam.id}`}>
+                        <Link to={`/c/${courseId}/exam/${exam.id}`}>
                           <Button className="shadow-soft">
                             Начать
                           </Button>
@@ -253,7 +262,7 @@ const StudentDashboard = () => {
                           )}
                         </div>
                       </div>
-                      <Link to={`/exam/${submission.session_id}/result`}>
+                      <Link to={`/c/${courseId}/exam/${submission.session_id}/result`}>
                         <Button variant="outline">
                           Посмотреть результат
                         </Button>

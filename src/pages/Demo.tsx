@@ -104,7 +104,7 @@ const Demo = () => {
                 <Link to="/signup">
                   <Button size="lg" className="w-full">Попробовать бесплатно</Button>
                 </Link>
-                <Link to="/teacher">
+                <Link to="/dashboard">
                   <Button size="lg" variant="outline" className="w-full">Перейти в кабинет</Button>
                 </Link>
               </div>
@@ -117,4 +117,3 @@ const Demo = () => {
 };
 
 export default Demo;
-

@@ -5,12 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import logo from "@/assets/logo.png";
-import { authAPI } from "@/lib/api";
-import { setAuthToken, setUser } from "@/lib/auth";
+import { authAPI, getApiErrorMessage } from "@/lib/api";
+import { getDefaultAppPath, setAuthSession } from "@/lib/auth";
 import { toast } from "sonner";
 
 const Login = () => {
-  const [isu, setIsu] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -20,32 +20,22 @@ const Login = () => {
     setLoading(true);
     
     try {
-      const response = await authAPI.login({ isu, password });
-      const { access_token, user } = response.data;
-      
-      // Сохраняем токен и пользователя
-      setAuthToken(access_token);
-      setUser(user);
-      
-      // Убеждаемся, что токен действительно записался
-      const savedToken = localStorage.getItem('access_token');
-      if (!savedToken || savedToken !== access_token) {
-        throw new Error('Не удалось сохранить токен авторизации');
-      }
+      const response = await authAPI.login({ username: username.trim(), password });
+      const { access_token, user, memberships, active_course_id } = response.data;
+
+      setAuthSession({
+        access_token,
+        user,
+        memberships: memberships ?? [],
+        active_course_id: active_course_id ?? null,
+      });
       
       setLoading(false);
       toast.success("Вход выполнен успешно");
-      
 
-      if (user.role === "admin") {
-        navigate("/admin", { replace: true });
-      } else if (user.role === "teacher") {
-        navigate("/teacher", { replace: true });
-      } else {
-        navigate("/student", { replace: true });
-      }
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || error.message || "Ошибка входа");
+      navigate(getDefaultAppPath(), { replace: true });
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Ошибка входа"));
       setLoading(false);
     }
   };
@@ -63,16 +53,16 @@ const Login = () => {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="isu">Номер ИСУ</Label>
+            <Label htmlFor="username">Username</Label>
             <Input
-              id="isu"
+              id="username"
               type="text"
-              placeholder="123456"
-              value={isu}
-              onChange={(e) => setIsu(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="petrov_2026"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               required
-              maxLength={6}
-              pattern="\d{6}"
+              minLength={3}
+              maxLength={64}
               className="transition-all duration-300 focus:shadow-soft"
             />
           </div>

@@ -1,13 +1,15 @@
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { getDefaultAppPath, isAuthenticated } from "@/lib/auth";
 import Landing from "./pages/Landing";
 import Demo from "./pages/Demo";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import JoinCourse from "./pages/JoinCourse";
 import TeacherDashboard from "./pages/TeacherDashboard";
 import StudentDashboard from "./pages/StudentDashboard";
 import CreateExam from "./pages/CreateExam";
@@ -31,6 +33,13 @@ const queryClient = new QueryClient({
   },
 });
 
+const DashboardRedirect = () => {
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" replace />;
+  }
+  return <Navigate to={getDefaultAppPath()} replace />;
+};
+
 const App = () => (
   <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
@@ -46,20 +55,29 @@ const App = () => (
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<TermsOfUse />} />
             <Route path="/consent" element={<DataProcessingConsent />} />
+            <Route path="/dashboard" element={<DashboardRedirect />} />
+            <Route path="/join-course" element={<ProtectedRoute><JoinCourse /></ProtectedRoute>} />
 
-            {/* Teacher / admin routes */}
-            <Route path="/teacher" element={<ProtectedRoute roles={["teacher", "admin"]}><TeacherDashboard /></ProtectedRoute>} />
-            <Route path="/create-exam" element={<ProtectedRoute roles={["teacher", "admin"]}><CreateExam /></ProtectedRoute>} />
-            <Route path="/exam/:examId/edit" element={<ProtectedRoute roles={["teacher", "admin"]}><CreateExam /></ProtectedRoute>} />
-            <Route path="/exam/:examId/submissions" element={<ProtectedRoute roles={["teacher", "admin"]}><ExamSubmissions /></ProtectedRoute>} />
-            <Route path="/submission/:submissionId" element={<ProtectedRoute roles={["teacher", "admin"]}><SubmissionReview /></ProtectedRoute>} />
+            {/* Legacy redirects */}
+            <Route path="/teacher" element={<DashboardRedirect />} />
+            <Route path="/student" element={<DashboardRedirect />} />
+            <Route path="/create-exam" element={<DashboardRedirect />} />
+            <Route path="/exam/:examId" element={<DashboardRedirect />} />
+            <Route path="/exam/:examId/edit" element={<DashboardRedirect />} />
+            <Route path="/exam/:examId/submissions" element={<DashboardRedirect />} />
+            <Route path="/submission/:submissionId" element={<DashboardRedirect />} />
+            <Route path="/exam/:sessionId/result" element={<DashboardRedirect />} />
 
-            {/* Student routes */}
-            <Route path="/student" element={<ProtectedRoute roles={["student"]}><StudentDashboard /></ProtectedRoute>} />
+            {/* Course routes */}
+            <Route path="/c/:courseId/teacher" element={<ProtectedRoute roles={["teacher", "admin"]}><TeacherDashboard /></ProtectedRoute>} />
+            <Route path="/c/:courseId/create-exam" element={<ProtectedRoute roles={["teacher", "admin"]}><CreateExam /></ProtectedRoute>} />
+            <Route path="/c/:courseId/exam/:examId/edit" element={<ProtectedRoute roles={["teacher", "admin"]}><CreateExam /></ProtectedRoute>} />
+            <Route path="/c/:courseId/exam/:examId/submissions" element={<ProtectedRoute roles={["teacher", "admin"]}><ExamSubmissions /></ProtectedRoute>} />
+            <Route path="/c/:courseId/submission/:submissionId" element={<ProtectedRoute roles={["teacher", "admin"]}><SubmissionReview /></ProtectedRoute>} />
 
-            {/* Any authenticated user */}
-            <Route path="/exam/:examId" element={<ProtectedRoute><TakeExam /></ProtectedRoute>} />
-            <Route path="/exam/:sessionId/result" element={<ProtectedRoute><ExamResult /></ProtectedRoute>} />
+            <Route path="/c/:courseId/student" element={<ProtectedRoute roles={["student", "admin"]}><StudentDashboard /></ProtectedRoute>} />
+            <Route path="/c/:courseId/exam/:examId" element={<ProtectedRoute roles={["student", "admin"]}><TakeExam /></ProtectedRoute>} />
+            <Route path="/c/:courseId/exam/:sessionId/result" element={<ProtectedRoute roles={["student", "admin"]}><ExamResult /></ProtectedRoute>} />
 
             {/* Admin only */}
             <Route path="/admin" element={<ProtectedRoute roles={["admin"]}><AdminDashboard /></ProtectedRoute>} />

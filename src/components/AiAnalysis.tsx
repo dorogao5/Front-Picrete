@@ -18,10 +18,10 @@ type AiAnalysisData = {
   units_and_dimensions?: string;
   chemical_rules?: string;
   errors_found?: string[];
-  detailed_analysis?: Record<string, any> | string;
+  detailed_analysis?: Record<string, unknown> | string;
   feedback?: string;
   recommendations?: string[];
-  [key: string]: any;
+  [key: string]: unknown;
 };
 
 export default function AiAnalysis({ data }: { data: AiAnalysisData }) {
@@ -148,5 +148,4 @@ export default function AiAnalysis({ data }: { data: AiAnalysisData }) {
     </div>
   );
 }
-
 

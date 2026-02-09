@@ -9,35 +9,62 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Plus, Trash2, Save } from "lucide-react";
-import { examsAPI } from "@/lib/api";
+import { examsAPI, getApiErrorMessage } from "@/lib/api";
+import type { ExamTaskTypePayload, JsonObject } from "@/lib/api";
 import { toast } from "sonner";
 
 interface TaskVariant {
   content: string;
-  parameters: Record<string, any>;
+  parameters: JsonObject;
   reference_solution: string;
   reference_answer: string;
   answer_tolerance: number;
 }
 
-interface TaskType {
+interface TaskType extends ExamTaskTypePayload {
   id?: string;
+  variants: TaskVariant[];
+}
+
+interface ExamVariantResponse {
+  content: string;
+  parameters?: JsonObject;
+  reference_solution?: string;
+  reference_answer?: string;
+  answer_tolerance?: number;
+}
+
+interface ExamTaskTypeResponse {
+  id: string;
   title: string;
   description: string;
   order_index: number;
   max_score: number;
-  rubric: Record<string, any>;
+  rubric: JsonObject;
   difficulty: "easy" | "medium" | "hard";
-  taxonomy_tags: string[];
-  formulas: string[];
-  units: string[];
-  validation_rules: Record<string, any>;
-  variants: TaskVariant[];
+  taxonomy_tags?: string[];
+  formulas?: string[];
+  units?: string[];
+  validation_rules?: JsonObject;
+  variants: ExamVariantResponse[];
+}
+
+interface ExamDetailsResponse {
+  title: string;
+  description?: string;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  timezone: string;
+  max_attempts: number;
+  allow_breaks: boolean;
+  break_duration_minutes?: number;
+  task_types?: ExamTaskTypeResponse[];
 }
 
 const CreateExam = () => {
   const navigate = useNavigate();
-  const { examId } = useParams<{ examId?: string }>();
+  const { courseId, examId } = useParams<{ courseId: string; examId?: string }>();
   const isEditMode = !!examId;
   
   const [loading, setLoading] = useState(false);
@@ -62,11 +89,11 @@ const CreateExam = () => {
   // Load exam data if editing
   useEffect(() => {
     const loadExam = async () => {
-      if (!examId) return;
+      if (!examId || !courseId) return;
       
       try {
-        const response = await examsAPI.get(examId);
-        const exam = response.data;
+        const response = await examsAPI.get(examId, courseId);
+        const exam = response.data as ExamDetailsResponse;
         
         // Backend returns RFC3339 UTC (e.g. "2025-01-02T10:20:30Z") — parse as-is
         const startTime = new Date(exam.start_time);
@@ -96,7 +123,7 @@ const CreateExam = () => {
         
         // Load task types (preserve id — backend не поддерживает обновление, только добавление)
         if (exam.task_types && exam.task_types.length > 0) {
-          setTaskTypes(exam.task_types.map((tt: any) => ({
+          setTaskTypes(exam.task_types.map((tt) => ({
             id: tt.id,
             title: tt.title,
             description: tt.description,
@@ -108,7 +135,7 @@ const CreateExam = () => {
             formulas: tt.formulas || [],
             units: tt.units || [],
             validation_rules: tt.validation_rules || {},
-            variants: tt.variants.map((v: any) => ({
+            variants: tt.variants.map((v) => ({
               content: v.content,
               parameters: v.parameters || {},
               reference_solution: v.reference_solution || "",
@@ -117,16 +144,16 @@ const CreateExam = () => {
             })),
           })));
         }
-      } catch (error: any) {
-        toast.error("Ошибка загрузки контрольной работы");
-        navigate("/teacher");
+      } catch (error: unknown) {
+        toast.error(getApiErrorMessage(error, "Ошибка загрузки контрольной работы"));
+        navigate(courseId ? `/c/${courseId}/teacher` : "/dashboard");
       } finally {
         setInitialLoading(false);
       }
     };
     
     loadExam();
-  }, [examId, navigate]);
+  }, [courseId, examId, navigate]);
 
   const addTaskType = () => {
     setTaskTypes([
@@ -166,7 +193,11 @@ const CreateExam = () => {
     setTaskTypes(taskTypes.filter((_, i) => i !== index));
   };
 
-  const updateTaskType = (index: number, field: keyof TaskType, value: any) => {
+  const updateTaskType = <K extends keyof TaskType>(
+    index: number,
+    field: K,
+    value: TaskType[K]
+  ) => {
     const updated = [...taskTypes];
     updated[index] = { ...updated[index], [field]: value };
     setTaskTypes(updated);
@@ -196,7 +227,7 @@ const CreateExam = () => {
     taskIndex: number,
     variantIndex: number,
     field: keyof TaskVariant,
-    value: any
+    value: TaskVariant[keyof TaskVariant]
   ) => {
     const updated = [...taskTypes];
     updated[taskIndex].variants[variantIndex] = {
@@ -207,6 +238,7 @@ const CreateExam = () => {
   };
 
   const handleSubmit = async (publish: boolean = false) => {
+    if (!courseId) return;
     setLoading(true);
     try {
       // Validate
@@ -254,11 +286,11 @@ const CreateExam = () => {
           ...examData,
           start_time: startTimeUTC,
           end_time: endTimeUTC,
-        });
+        }, courseId);
         // Добавляем только НОВЫЕ типы задач (без id) — backend не поддерживает обновление существующих
         const newTaskTypes = preparedTaskTypes.filter(tt => !tt.id);
         for (const tt of newTaskTypes) {
-          await examsAPI.addTaskType(examId!, tt);
+          await examsAPI.addTaskType(examId!, tt, courseId);
         }
         if (newTaskTypes.length > 0) {
           toast.success(`Контрольная работа обновлена. Добавлено задач: ${newTaskTypes.length}`);
@@ -272,34 +304,36 @@ const CreateExam = () => {
           start_time: startTimeUTC,
           end_time: endTimeUTC,
           task_types: preparedTaskTypes,
-        });
+        }, courseId);
         resultExamId = response.data.id;
         toast.success("Контрольная работа создана");
       }
 
       if (publish && resultExamId) {
-        await examsAPI.publish(resultExamId);
+        await examsAPI.publish(resultExamId, courseId);
         toast.success("Контрольная работа опубликована");
       }
 
-      navigate("/teacher");
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || `Ошибка при ${isEditMode ? 'обновлении' : 'создании'} КР`);
+      navigate(`/c/${courseId}/teacher`);
+    } catch (error: unknown) {
+      toast.error(
+        getApiErrorMessage(error, `Ошибка при ${isEditMode ? "обновлении" : "создании"} КР`)
+      );
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (forceDelete: boolean = false) => {
-    if (!examId) return;
+    if (!examId || !courseId) return;
     
     setLoading(true);
     try {
-      await examsAPI.delete(examId, forceDelete);
+      await examsAPI.delete(examId, forceDelete, courseId);
       toast.success("Контрольная работа удалена");
-      navigate("/teacher");
-    } catch (error: any) {
-      const errorDetail = error.response?.data?.detail;
+      navigate(`/c/${courseId}/teacher`);
+    } catch (error: unknown) {
+      const errorDetail = getApiErrorMessage(error, "Ошибка при удалении КР");
       
       // Check if error is about existing submissions
       if (errorDetail && errorDetail.includes("existing submission") && !forceDelete) {
@@ -585,7 +619,7 @@ const CreateExam = () => {
                                 updateTaskType(
                                   taskIndex,
                                   "difficulty",
-                                  e.target.value as any
+                                  e.target.value as TaskType["difficulty"]
                                 )
                               }
                             >
@@ -715,7 +749,7 @@ const CreateExam = () => {
 
           {/* Actions */}
           <div className="flex gap-4 justify-end">
-            <Button variant="outline" onClick={() => navigate("/teacher")} disabled={loading}>
+            <Button variant="outline" onClick={() => navigate(courseId ? `/c/${courseId}/teacher` : "/dashboard")} disabled={loading}>
               Отмена
             </Button>
             {!isEditMode && (
@@ -739,4 +773,3 @@ const CreateExam = () => {
 };
 
 export default CreateExam;
-

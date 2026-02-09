@@ -6,7 +6,7 @@ declare module 'react-katex' {
   interface MathProps {
     children: string;
     errorColor?: string;
-    renderError?: (error: any) => React.ReactNode;
+    renderError?: (error: unknown) => React.ReactNode;
   }
   
   export const InlineMath: ComponentType<MathProps>;

@@ -13,7 +13,7 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 .pnpm-debug.log*
-
+ARCHITECTURE.md
 # Build outputs
 dist/
 dist-ssr/
@@ -162,4 +162,3 @@ playwright/.cache/
 .vercel/
 .turbo/
 .astro/
-

@@ -1,8 +1,14 @@
-import { Navigate } from "react-router-dom";
-import { isAuthenticated, getUser } from "@/lib/auth";
-import type { User } from "@/lib/auth";
+import { Navigate, useParams } from "react-router-dom";
 
-type AllowedRole = User["role"];
+import {
+  getDefaultAppPath,
+  getMembershipForCourse,
+  hasCourseRole,
+  isAdmin,
+  isAuthenticated,
+} from "@/lib/auth";
+
+type AllowedRole = "admin" | "teacher" | "student";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -11,18 +17,35 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute = ({ children, roles }: ProtectedRouteProps) => {
+  const { courseId } = useParams<{ courseId?: string }>();
+
   if (!isAuthenticated()) {
     return <Navigate to="/login" replace />;
   }
 
-  if (roles && roles.length > 0) {
-    const user = getUser();
-    if (!user || !roles.includes(user.role)) {
-      // Redirect to appropriate dashboard based on role
-      if (user?.role === "admin") return <Navigate to="/admin" replace />;
-      if (user?.role === "teacher") return <Navigate to="/teacher" replace />;
-      return <Navigate to="/student" replace />;
+  if (!roles || roles.length === 0) {
+    return <>{children}</>;
+  }
+
+  if (!courseId) {
+    if (roles.includes("admin") && isAdmin()) {
+      return <>{children}</>;
     }
+    return <Navigate to={getDefaultAppPath()} replace />;
+  }
+
+  const membership = getMembershipForCourse(courseId);
+  if (!membership && !isAdmin()) {
+    return <Navigate to="/join-course" replace />;
+  }
+
+  const allowed = roles.some((role) => {
+    if (role === "admin") return isAdmin();
+    return hasCourseRole(courseId, role);
+  });
+
+  if (!allowed) {
+    return <Navigate to={getDefaultAppPath()} replace />;
   }
 
   return <>{children}</>;

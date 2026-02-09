@@ -5,12 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Clock, CheckCircle, AlertCircle, Eye } from "lucide-react";
-import { examsAPI } from "@/lib/api";
+import { examsAPI, getApiErrorMessage } from "@/lib/api";
 import { toast } from "sonner";
 
 interface Submission {
   id: string;
-  student_isu: string;
+  student_username: string;
   student_name: string;
   submitted_at: string;
   status: string;
@@ -19,9 +19,14 @@ interface Submission {
   max_score: number;
 }
 
+interface ExamDetails {
+  id: string;
+  title: string;
+}
+
 const ExamSubmissions = () => {
-  const { examId } = useParams<{ examId: string }>();
-  const [exam, setExam] = useState<any>(null);
+  const { courseId, examId } = useParams<{ courseId: string; examId: string }>();
+  const [exam, setExam] = useState<ExamDetails | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string | null>(null);
@@ -29,14 +34,17 @@ const ExamSubmissions = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const examResponse = await examsAPI.get(examId!);
+        const examResponse = await examsAPI.get(examId!, courseId);
         setExam(examResponse.data);
         
-        const submissionsResponse = await examsAPI.listSubmissions(examId!, filter ? { status: filter } : undefined);
+        const submissionsResponse = await examsAPI.listSubmissions(
+          examId!,
+          courseId,
+          filter ? { status: filter } : undefined
+        );
         setSubmissions(submissionsResponse.data.items);
-      } catch (error: any) {
-        const errorMessage = error.response?.data?.detail || error.message || "Ошибка загрузки данных";
-        toast.error(errorMessage);
+      } catch (error: unknown) {
+        toast.error(getApiErrorMessage(error, "Ошибка загрузки данных"));
       } finally {
         setLoading(false);
       }
@@ -45,7 +53,7 @@ const ExamSubmissions = () => {
     if (examId) {
       loadData();
     }
-  }, [examId, filter]);
+  }, [courseId, examId, filter]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -96,7 +104,7 @@ const ExamSubmissions = () => {
         <div className="container mx-auto px-6 pt-24 pb-12">
           <Card className="p-6">
             <p className="text-muted-foreground mb-4">Контрольная работа не найдена</p>
-            <Link to="/teacher" className="mt-4 inline-block">
+            <Link to={courseId ? `/c/${courseId}/teacher` : "/dashboard"} className="mt-4 inline-block">
               <Button>Вернуться к списку</Button>
             </Link>
           </Card>
@@ -115,7 +123,7 @@ const ExamSubmissions = () => {
       <div className="container mx-auto px-6 pt-24 pb-12">
         <div className="mb-8">
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-            <Link to="/teacher" className="hover:text-primary">
+            <Link to={courseId ? `/c/${courseId}/teacher` : "/dashboard"} className="hover:text-primary">
               Панель преподавателя
             </Link>
             <span>/</span>
@@ -188,7 +196,7 @@ const ExamSubmissions = () => {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-lg font-semibold">{submission.student_name}</h3>
-                        <span className="text-sm text-muted-foreground">ISU: {submission.student_isu}</span>
+                        <span className="text-sm text-muted-foreground">@{submission.student_username}</span>
                         {getStatusBadge(submission.status)}
                       </div>
                       <div className="flex items-center gap-6 text-sm text-muted-foreground">
@@ -207,7 +215,7 @@ const ExamSubmissions = () => {
                         )}
                       </div>
                     </div>
-                    <Link to={`/submission/${submission.id}`}>
+                    <Link to={courseId ? `/c/${courseId}/submission/${submission.id}` : "/dashboard"}>
                       <Button>
                         <Eye className="w-4 h-4 mr-2" />
                         Проверить
@@ -225,4 +233,3 @@ const ExamSubmissions = () => {
 };
 
 export default ExamSubmissions;
-

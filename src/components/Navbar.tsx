@@ -10,12 +10,24 @@ import {
 } from "./ui/dropdown-menu";
 import { User, LogOut } from "lucide-react";
 import logo from "@/assets/logo.png";
-import { isAuthenticated, getUser, isAdmin, logout } from "@/lib/auth";
+import {
+  getActiveCourseId,
+  getCourseHomePath,
+  getDefaultAppPath,
+  getMemberships,
+  getUser,
+  isAdmin,
+  isAuthenticated,
+  logout,
+  setActiveCourseId,
+} from "@/lib/auth";
 
 export const Navbar = () => {
   const navigate = useNavigate();
   const isAuth = isAuthenticated();
   const user = getUser();
+  const activeCourseId = getActiveCourseId();
+  const memberships = getMemberships().filter((membership) => membership.status === "active");
 
   const getInitials = (fullName: string) => {
     const names = fullName.split(' ');
@@ -30,10 +42,24 @@ export const Navbar = () => {
   };
 
   const handleProfile = () => {
-    if (user?.role === 'teacher' || user?.role === 'admin') {
-      navigate('/teacher');
-    } else if (user?.role === 'student') {
-      navigate('/student');
+    navigate(getDefaultAppPath());
+  };
+
+  const handleSwitchCourse = (courseId: string) => {
+    setActiveCourseId(courseId);
+    navigate(getCourseHomePath(courseId));
+  };
+
+  const activeCourseTitle =
+    memberships.find((membership) => membership.course_id === activeCourseId)?.course_title ?? null;
+
+  const roleLabel = user?.is_platform_admin ? "Platform Admin" : "User";
+
+  const displayUsername = user?.username ?? "";
+
+  const openAdmin = () => {
+    if (isAdmin()) {
+      navigate("/admin");
     }
   };
 
@@ -65,16 +91,43 @@ export const Navbar = () => {
                   <div className="flex items-center justify-start gap-2 p-2">
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-medium leading-none">{user.full_name}</p>
-                      <p className="text-xs leading-none text-muted-foreground">ISU: {user.isu}</p>
+                      <p className="text-xs leading-none text-muted-foreground">@{displayUsername}</p>
+                      <p className="text-xs leading-none text-muted-foreground">{roleLabel}</p>
                     </div>
                   </div>
                   <DropdownMenuSeparator />
+                  {memberships.length > 0 && (
+                    <>
+                      <div className="px-2 py-1 text-xs text-muted-foreground">Курс</div>
+                      {memberships.map((membership) => (
+                        <DropdownMenuItem
+                          key={membership.course_id}
+                          onClick={() => handleSwitchCourse(membership.course_id)}
+                          className="cursor-pointer"
+                        >
+                          <span className={membership.course_id === activeCourseId ? "font-semibold" : ""}>
+                            {membership.course_title}
+                          </span>
+                        </DropdownMenuItem>
+                      ))}
+                      {activeCourseTitle && (
+                        <div className="px-2 py-1 text-xs text-muted-foreground">
+                          Активный: {activeCourseTitle}
+                        </div>
+                      )}
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
                   <DropdownMenuItem onClick={handleProfile} className="cursor-pointer">
                     <User className="mr-2 h-4 w-4" />
                     <span>Профиль</span>
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/join-course")} className="cursor-pointer">
+                    <User className="mr-2 h-4 w-4" />
+                    <span>Присоединиться к курсу</span>
+                  </DropdownMenuItem>
                   {isAdmin() && (
-                    <DropdownMenuItem onClick={() => navigate('/admin')} className="cursor-pointer">
+                    <DropdownMenuItem onClick={openAdmin} className="cursor-pointer">
                       <User className="mr-2 h-4 w-4" />
                       <span>Админка</span>
                     </DropdownMenuItem>
