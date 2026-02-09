@@ -14,6 +14,16 @@ interface Submission {
   student_name: string;
   submitted_at: string;
   status: string;
+  ocr_overall_status?:
+    | "not_required"
+    | "pending"
+    | "processing"
+    | "in_review"
+    | "validated"
+    | "reported"
+    | "failed";
+  llm_precheck_status?: "skipped" | "queued" | "processing" | "completed" | "failed";
+  report_flag?: boolean;
   ai_score: number | null;
   final_score: number | null;
   max_score: number;
@@ -198,6 +208,21 @@ const ExamSubmissions = () => {
                         <h3 className="text-lg font-semibold">{submission.student_name}</h3>
                         <span className="text-sm text-muted-foreground">@{submission.student_username}</span>
                         {getStatusBadge(submission.status)}
+                        {submission.report_flag && (
+                          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                            REPORT
+                          </Badge>
+                        )}
+                        {submission.ocr_overall_status === "failed" && (
+                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                            OCR failed
+                          </Badge>
+                        )}
+                        {submission.llm_precheck_status === "skipped" && (
+                          <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-300">
+                            LLM skipped
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-6 text-sm text-muted-foreground">
                         <span>

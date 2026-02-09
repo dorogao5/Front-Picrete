@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Plus, Trash2, Save } from "lucide-react";
@@ -59,6 +60,8 @@ interface ExamDetailsResponse {
   max_attempts: number;
   allow_breaks: boolean;
   break_duration_minutes?: number;
+  ocr_enabled?: boolean;
+  llm_precheck_enabled?: boolean;
   task_types?: ExamTaskTypeResponse[];
 }
 
@@ -82,6 +85,8 @@ const CreateExam = () => {
     max_attempts: 1,
     allow_breaks: false,
     break_duration_minutes: 0,
+    ocr_enabled: true,
+    llm_precheck_enabled: true,
   });
 
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([]);
@@ -119,6 +124,8 @@ const CreateExam = () => {
           max_attempts: exam.max_attempts,
           allow_breaks: exam.allow_breaks,
           break_duration_minutes: exam.break_duration_minutes || 0,
+          ocr_enabled: exam.ocr_enabled ?? true,
+          llm_precheck_enabled: exam.llm_precheck_enabled ?? true,
         });
         
         // Load task types (preserve id — backend не поддерживает обновление, только добавление)
@@ -523,6 +530,46 @@ const CreateExam = () => {
                     })
                   }
                 />
+              </div>
+              <div className="md:col-span-2 space-y-4 rounded border p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="ocr-enabled">OCR (DataLab Marker)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Если выключено, работа сразу попадет преподавателю без OCR и без LLM-препроверки.
+                    </p>
+                  </div>
+                  <Switch
+                    id="ocr-enabled"
+                    checked={examData.ocr_enabled}
+                    onCheckedChange={(checked) =>
+                      setExamData((prev) => ({
+                        ...prev,
+                        ocr_enabled: checked,
+                        llm_precheck_enabled: checked ? prev.llm_precheck_enabled : false,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="llm-precheck-enabled">LLM препроверка</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Запускается после student OCR review и до показа работы преподавателю.
+                    </p>
+                  </div>
+                  <Switch
+                    id="llm-precheck-enabled"
+                    checked={examData.llm_precheck_enabled}
+                    disabled={!examData.ocr_enabled}
+                    onCheckedChange={(checked) =>
+                      setExamData((prev) => ({
+                        ...prev,
+                        llm_precheck_enabled: prev.ocr_enabled ? checked : false,
+                      }))
+                    }
+                  />
+                </div>
               </div>
             </div>
           </Card>

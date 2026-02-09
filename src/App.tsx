@@ -14,6 +14,7 @@ import TeacherDashboard from "./pages/TeacherDashboard";
 import StudentDashboard from "./pages/StudentDashboard";
 import CreateExam from "./pages/CreateExam";
 import TakeExam from "./pages/TakeExam";
+import OcrReview from "./pages/OcrReview";
 import ExamResult from "./pages/ExamResult";
 import ExamSubmissions from "./pages/ExamSubmissions";
 import SubmissionReview from "./pages/SubmissionReview";
@@ -67,6 +68,7 @@ const App = () => (
             <Route path="/exam/:examId/submissions" element={<DashboardRedirect />} />
             <Route path="/submission/:submissionId" element={<DashboardRedirect />} />
             <Route path="/exam/:sessionId/result" element={<DashboardRedirect />} />
+            <Route path="/exam/:sessionId/ocr-review" element={<DashboardRedirect />} />
 
             {/* Course routes */}
             <Route path="/c/:courseId/teacher" element={<ProtectedRoute roles={["teacher", "admin"]}><TeacherDashboard /></ProtectedRoute>} />
@@ -77,6 +79,7 @@ const App = () => (
 
             <Route path="/c/:courseId/student" element={<ProtectedRoute roles={["student", "admin"]}><StudentDashboard /></ProtectedRoute>} />
             <Route path="/c/:courseId/exam/:examId" element={<ProtectedRoute roles={["student", "admin"]}><TakeExam /></ProtectedRoute>} />
+            <Route path="/c/:courseId/exam/:sessionId/ocr-review" element={<ProtectedRoute roles={["student", "admin"]}><OcrReview /></ProtectedRoute>} />
             <Route path="/c/:courseId/exam/:sessionId/result" element={<ProtectedRoute roles={["student", "admin"]}><ExamResult /></ProtectedRoute>} />
 
             {/* Admin only */}

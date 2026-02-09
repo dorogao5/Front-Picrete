@@ -33,6 +33,19 @@ interface SubmissionSessionInfo {
 interface SubmissionResult {
   submitted_at: string;
   status: string;
+  ocr_overall_status:
+    | "not_required"
+    | "pending"
+    | "processing"
+    | "in_review"
+    | "validated"
+    | "reported"
+    | "failed";
+  llm_precheck_status: "skipped" | "queued" | "processing" | "completed" | "failed";
+  report_flag: boolean;
+  report_summary?: string | null;
+  ocr_error?: string | null;
+  llm_error?: string | null;
   ai_score: number | null;
   final_score: number | null;
   max_score: number;
@@ -125,6 +138,9 @@ const ExamResult = () => {
   const recommendations = submission.ai_analysis && Array.isArray(submission.ai_analysis.recommendations)
     ? submission.ai_analysis.recommendations.filter((item): item is string => typeof item === "string")
     : [];
+  const needsOcrReview = submission.ocr_overall_status === "in_review";
+  const waitingOcr =
+    submission.ocr_overall_status === "pending" || submission.ocr_overall_status === "processing";
 
   const handleRetake = () => {
     if (!retakeContext) return;
@@ -209,18 +225,49 @@ const ExamResult = () => {
           <Progress value={scorePercent} className="h-3" />
         </Card>
 
+        {/* OCR Review Required */}
+        {needsOcrReview && (
+          <Card className="p-6 mb-8 border-primary">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <Clock className="w-8 h-8 text-primary" />
+                <div>
+                  <h3 className="font-semibold text-lg">Требуется валидация OCR</h3>
+                  <p className="text-muted-foreground">
+                    Перед финальной отправкой нужно подтвердить OCR по каждой странице.
+                  </p>
+                </div>
+              </div>
+              <Link to={courseId ? `/c/${courseId}/exam/${sessionId}/ocr-review` : "/dashboard"}>
+                <Button>Перейти к OCR Review</Button>
+              </Link>
+            </div>
+          </Card>
+        )}
+
         {/* Processing Status */}
-        {submission.status === "processing" && (
+        {(submission.status === "processing" || waitingOcr) && (
           <Card className="p-6 mb-8 border-yellow-500">
             <div className="flex items-center gap-4">
               <Clock className="w-8 h-8 text-yellow-600 animate-pulse" />
               <div>
                 <h3 className="font-semibold text-lg">Работа обрабатывается</h3>
                 <p className="text-muted-foreground">
-                  Пожалуйста, подождите. AI анализирует ваше решение. Это может занять несколько минут.
+                  {waitingOcr
+                    ? "Пожалуйста, подождите. OCR обрабатывает загруженные изображения."
+                    : "Пожалуйста, подождите. LLM анализирует OCR-расшифровку. Это может занять несколько минут."}
                 </p>
               </div>
             </div>
+          </Card>
+        )}
+
+        {submission.report_flag && (
+          <Card className="p-6 mb-8 border-destructive/40">
+            <h3 className="text-xl font-bold mb-2">REPORT отправлен</h3>
+            <p className="text-sm text-muted-foreground">
+              {submission.report_summary || "Студент отметил OCR-проблемы для преподавателя."}
+            </p>
           </Card>
         )}
 

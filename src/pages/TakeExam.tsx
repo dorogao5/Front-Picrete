@@ -44,6 +44,10 @@ interface SessionVariantResponse {
   existing_images?: ExistingServerImage[];
 }
 
+interface SubmitResponse {
+  next_step?: "ocr_review" | "result";
+}
+
 const TakeExam = () => {
   const { courseId, examId } = useParams<{ courseId: string; examId: string }>();
   const navigate = useNavigate();
@@ -129,6 +133,17 @@ const TakeExam = () => {
   }, [courseId, sessionId, isTimeUp]);
 
   // Auto-submit: use refs so we always see latest images (avoids stale closure → no_images)
+  const navigateAfterSubmit = useCallback(
+    (submittedSessionId: string, nextStep?: "ocr_review" | "result") => {
+      if (nextStep === "ocr_review") {
+        navigate(courseId ? `/c/${courseId}/exam/${submittedSessionId}/ocr-review` : "/dashboard");
+        return;
+      }
+      navigate(courseId ? `/c/${courseId}/exam/${submittedSessionId}/result` : "/dashboard");
+    },
+    [courseId, navigate]
+  );
+
   const handleAutoSubmit = useCallback(async () => {
     if (!sessionId || submitting) return;
 
@@ -143,16 +158,16 @@ const TakeExam = () => {
         await uploadImages();
       }
       // Always submit (with or without images) so teacher sees the attempt
-      await submissionsAPI.submit(sessionId, courseId);
+      const response = await submissionsAPI.submit(sessionId, courseId);
+      const payload = response.data as SubmitResponse;
       toast.success("Работа автоматически отправлена");
-      // Navigate only on success (not in finally), so errors keep user on page
-      navigate(courseId ? `/c/${courseId}/exam/${sessionId}/result` : "/dashboard");
+      navigateAfterSubmit(sessionId, payload.next_step);
     } catch (error: unknown) {
       toast.error(getApiErrorMessage(error, "Ошибка при автоматической отправке работы"));
     } finally {
       setSubmitting(false);
     }
-  }, [sessionId, submitting, uploadImages, navigate, courseId]);
+  }, [sessionId, submitting, uploadImages, courseId, navigateAfterSubmit]);
 
   // Event handlers
   const handleTimeoutConfirm = useCallback(() => {
@@ -218,15 +233,16 @@ const TakeExam = () => {
         await uploadImages();
       }
 
-      await submissionsAPI.submit(sessionId, courseId);
+      const response = await submissionsAPI.submit(sessionId, courseId);
+      const payload = response.data as SubmitResponse;
       toast.success("Работа отправлена на проверку");
-      navigate(courseId ? `/c/${courseId}/exam/${sessionId}/result` : "/dashboard");
+      navigateAfterSubmit(sessionId, payload.next_step);
     } catch (error: unknown) {
       toast.error(getApiErrorMessage(error, "Ошибка при отправке работы"));
     } finally {
       setSubmitting(false);
     }
-  }, [sessionId, isTimeUp, uploadedImages, uploadImages, navigate, courseId]);
+  }, [sessionId, isTimeUp, uploadedImages, uploadImages, navigateAfterSubmit, courseId]);
 
   // Load session and variant
   useEffect(() => {

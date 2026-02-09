@@ -61,6 +61,8 @@ export interface ExamCreatePayload {
   allow_breaks: boolean;
   break_duration_minutes: number;
   auto_save_interval?: number;
+  ocr_enabled?: boolean;
+  llm_precheck_enabled?: boolean;
   task_types: ExamTaskTypePayload[];
 }
 
@@ -75,7 +77,17 @@ export interface ExamUpdatePayload {
   allow_breaks?: boolean;
   break_duration_minutes?: number;
   auto_save_interval?: number;
+  ocr_enabled?: boolean;
+  llm_precheck_enabled?: boolean;
   task_types?: ExamTaskTypePayload[];
+}
+
+export interface OcrIssueInput {
+  anchor: JsonObject;
+  original_text?: string | null;
+  suggested_text?: string | null;
+  note: string;
+  severity?: "minor" | "major" | "critical";
 }
 
 const API_URL =
@@ -219,6 +231,26 @@ export const submissionsAPI = {
 
   submit: (sessionId: string, courseId?: string) =>
     api.post(`${coursePrefix(courseId)}/submissions/sessions/${sessionId}/submit`),
+
+  getOcrPages: (sessionId: string, courseId?: string) =>
+    api.get(`${coursePrefix(courseId)}/submissions/sessions/${sessionId}/ocr-pages`),
+
+  reviewOcrPage: (
+    sessionId: string,
+    imageId: string,
+    data: { page_status: "approved" | "reported"; issues: OcrIssueInput[] },
+    courseId?: string
+  ) =>
+    api.post(
+      `${coursePrefix(courseId)}/submissions/sessions/${sessionId}/ocr-pages/${imageId}/review`,
+      data
+    ),
+
+  finalizeOcrReview: (
+    sessionId: string,
+    data: { action: "submit" | "report"; report_summary?: string },
+    courseId?: string
+  ) => api.post(`${coursePrefix(courseId)}/submissions/sessions/${sessionId}/ocr/finalize`, data),
 
   getResult: (sessionId: string, courseId?: string) =>
     api.get(`${coursePrefix(courseId)}/submissions/sessions/${sessionId}/result`),

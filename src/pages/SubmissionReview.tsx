@@ -16,7 +16,11 @@ import { renderLatex } from "@/lib/renderLatex";
 
 interface SubmissionImage {
   id: string;
+  order_index?: number;
+  ocr_status?: string;
   ocr_text?: string | null;
+  ocr_markdown?: string | null;
+  ocr_chunks?: unknown;
   quality_score?: number | null;
 }
 
@@ -33,6 +37,19 @@ interface SubmissionReviewData {
   student_username?: string;
   submitted_at: string;
   status: string;
+  ocr_overall_status?:
+    | "not_required"
+    | "pending"
+    | "processing"
+    | "in_review"
+    | "validated"
+    | "reported"
+    | "failed";
+  llm_precheck_status?: "skipped" | "queued" | "processing" | "completed" | "failed";
+  report_flag?: boolean;
+  report_summary?: string | null;
+  ocr_error?: string | null;
+  llm_error?: string | null;
   max_score: number;
   final_score: number | null;
   ai_score: number | null;
@@ -46,6 +63,34 @@ interface SubmissionReviewData {
   ai_comments?: string | null;
   is_flagged: boolean;
   flag_reasons: string[];
+  ocr_pages?: Array<{
+    image_id: string;
+    order_index?: number;
+    ocr_status?: string;
+    ocr_markdown?: string | null;
+    chunks?: unknown;
+    page_status?: "approved" | "reported" | null;
+    issues?: Array<{
+      id: string;
+      image_id: string;
+      anchor: Record<string, unknown>;
+      original_text?: string | null;
+      suggested_text?: string | null;
+      note: string;
+      severity: "minor" | "major" | "critical";
+      created_at: string;
+    }>;
+  }>;
+  report_issues?: Array<{
+    id: string;
+    image_id: string;
+    anchor: Record<string, unknown>;
+    original_text?: string | null;
+    suggested_text?: string | null;
+    note: string;
+    severity: "minor" | "major" | "critical";
+    created_at: string;
+  }>;
 }
 
 const SubmissionReview = () => {
@@ -190,6 +235,15 @@ const SubmissionReview = () => {
           <div className="text-right">
             <p className="text-sm text-muted-foreground">Статус</p>
             <p className="text-lg font-semibold">{submission.status}</p>
+            <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+              {submission.report_flag && <span className="rounded bg-red-100 px-2 py-1 text-xs text-red-700">REPORT</span>}
+              {submission.ocr_overall_status === "failed" && (
+                <span className="rounded bg-yellow-100 px-2 py-1 text-xs text-yellow-700">OCR failed</span>
+              )}
+              {submission.llm_precheck_status === "skipped" && (
+                <span className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-700">LLM skipped</span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -256,6 +310,97 @@ const SubmissionReview = () => {
                 onClose={() => setLightboxOpen(false)}
               />
             )}
+
+            {/* OCR + REPORT */}
+            <Card className="p-6">
+              <h2 className="text-2xl font-bold mb-4">OCR / REPORT</h2>
+              <Tabs defaultValue="ocr">
+                <TabsList>
+                  <TabsTrigger value="ocr">OCR (validated)</TabsTrigger>
+                  <TabsTrigger value="report">Student REPORT issues</TabsTrigger>
+                  <TabsTrigger value="originals">Original images</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="ocr" className="space-y-4">
+                  {submission.ocr_error && (
+                    <div className="rounded border border-yellow-400 bg-yellow-50 p-3 text-sm">
+                      OCR error: {submission.ocr_error}
+                    </div>
+                  )}
+                  {submission.ocr_pages && submission.ocr_pages.length > 0 ? (
+                    <div className="space-y-4">
+                      {submission.ocr_pages.map((page, idx) => (
+                        <div key={`${page.image_id}-${idx}`} className="rounded border p-3">
+                          <div className="mb-2 flex items-center justify-between text-sm">
+                            <span className="font-medium">Страница #{idx + 1}</span>
+                            <span className="text-muted-foreground">
+                              {page.ocr_status || "unknown"} / {page.page_status || "not_reviewed"}
+                            </span>
+                          </div>
+                          <div className="max-h-40 overflow-y-auto whitespace-pre-wrap text-sm">
+                            {page.ocr_markdown || "—"}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">OCR-данные не предоставлены</p>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="report" className="space-y-3">
+                  {submission.report_summary && (
+                    <div className="rounded border p-3 text-sm">
+                      <p className="font-semibold mb-1">Summary</p>
+                      <p className="text-muted-foreground">{submission.report_summary}</p>
+                    </div>
+                  )}
+                  {submission.report_issues && submission.report_issues.length > 0 ? (
+                    <div className="space-y-3">
+                      {submission.report_issues.map((issue) => (
+                        <div key={issue.id} className="rounded border p-3 text-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">Image: {issue.image_id}</span>
+                            <span className="text-xs uppercase text-muted-foreground">{issue.severity}</span>
+                          </div>
+                          <p className="mt-2">{issue.note}</p>
+                          {issue.suggested_text && (
+                            <p className="mt-1 text-muted-foreground">
+                              suggested: {issue.suggested_text}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">REPORT issues отсутствуют</p>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="originals">
+                  {submission.images && submission.images.length > 0 ? (
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {submission.images.map((image, index) => (
+                        <div key={`original-${image.id}`} className="rounded border p-2">
+                          <p className="mb-2 text-xs text-muted-foreground">Page #{index + 1}</p>
+                          {imageUrls[image.id] ? (
+                            <img
+                              src={imageUrls[image.id]}
+                              alt={`Original ${index + 1}`}
+                              className="w-full rounded"
+                            />
+                          ) : (
+                            <div className="h-32 rounded bg-secondary" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Изображений нет</p>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </Card>
 
             {/* AI Analysis */}
             <Card className="p-6">
@@ -442,7 +587,11 @@ const SubmissionReview = () => {
                   variant="outline"
                   className="w-full"
                   onClick={handleRegrade}
-                  disabled={regrading || submission.status === "processing"}
+                  disabled={
+                    regrading ||
+                    submission.status === "processing" ||
+                    submission.llm_precheck_status === "skipped"
+                  }
                 >
                   <RefreshCw className={`w-4 h-4 mr-2 ${regrading ? 'animate-spin' : ''}`} />
                   {regrading ? "Отправка..." : "Переоценить AI"}

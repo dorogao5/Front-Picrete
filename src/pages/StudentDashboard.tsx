@@ -23,6 +23,17 @@ interface StudentSubmission {
   exam_title: string;
   submitted_at: string;
   status: string;
+  ocr_overall_status?:
+    | "not_required"
+    | "pending"
+    | "processing"
+    | "in_review"
+    | "validated"
+    | "reported"
+    | "failed"
+    | null;
+  llm_precheck_status?: "skipped" | "queued" | "processing" | "completed" | "failed" | null;
+  report_flag?: boolean;
   ai_score: number | null;
   final_score: number | null;
   max_score: number;
@@ -242,6 +253,10 @@ const StudentDashboard = () => {
                     default: return status;
                   }
                 };
+                const detailsHref =
+                  submission.ocr_overall_status === "in_review"
+                    ? `/c/${courseId}/exam/${submission.session_id}/ocr-review`
+                    : `/c/${courseId}/exam/${submission.session_id}/result`;
                 
                 return (
                   <Card key={submission.id} className="p-6 hover:shadow-elegant transition-all duration-300 border-border/50 bg-gradient-card">
@@ -262,9 +277,11 @@ const StudentDashboard = () => {
                           )}
                         </div>
                       </div>
-                      <Link to={`/c/${courseId}/exam/${submission.session_id}/result`}>
+                      <Link to={detailsHref}>
                         <Button variant="outline">
-                          Посмотреть результат
+                          {submission.ocr_overall_status === "in_review"
+                            ? "Продолжить OCR review"
+                            : "Посмотреть результат"}
                         </Button>
                       </Link>
                     </div>
