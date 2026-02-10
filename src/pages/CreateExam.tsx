@@ -297,12 +297,59 @@ const CreateExam = () => {
     }
   };
 
+  const prepareTaskTypesForSubmit = () =>
+    taskTypes.map((tt) => ({
+      ...tt,
+      variants: tt.variants.map((v) => ({
+        ...v,
+        content: (v.content || "").trim() || (tt.description || "").trim(),
+      })),
+    }));
+
+  const buildExamPayload = (options?: { requireTaskTypes?: boolean }) => {
+    const requireTaskTypes = options?.requireTaskTypes ?? false;
+
+    if (!examData.title || !examData.start_time || !examData.end_time) {
+      toast.error("Заполните все обязательные поля");
+      return null;
+    }
+
+    if (examData.kind === "control") {
+      if (!examData.duration_minutes || examData.duration_minutes <= 0) {
+        toast.error("Для контрольной нужно указать положительную длительность");
+        return null;
+      }
+    }
+
+    const preparedTaskTypes = prepareTaskTypesForSubmit();
+
+    if (requireTaskTypes && preparedTaskTypes.length === 0) {
+      toast.error("Добавьте хотя бы один тип задачи");
+      return null;
+    }
+
+    const emptyContent = preparedTaskTypes.some((tt) =>
+      tt.variants.some((v) => !(v.content || "").trim())
+    );
+    if (emptyContent) {
+      toast.error("Заполните условие задачи (хотя бы для одного варианта)");
+      return null;
+    }
+
+    const startTimeUTC = new Date(examData.start_time + ":00+03:00").toISOString();
+    const endTimeUTC = new Date(examData.end_time + ":00+03:00").toISOString();
+    const payload = {
+      ...examData,
+      duration_minutes: examData.kind === "control" ? examData.duration_minutes : null,
+      start_time: startTimeUTC,
+      end_time: endTimeUTC,
+    };
+
+    return { payload, preparedTaskTypes };
+  };
+
   const addSelectedBankTasks = async () => {
     if (!courseId) return;
-    if (!isEditMode || !examId) {
-      toast.error("Сначала сохраните работу, затем добавляйте задачи из банка");
-      return;
-    }
     const selected = Object.values(selectedBankItems);
     if (selected.length === 0) {
       toast.error("Выберите хотя бы одну задачу в банке");
@@ -310,18 +357,50 @@ const CreateExam = () => {
     }
 
     setLoading(true);
+    let targetExamId = examId;
+    let createdDraftForBank = false;
     try {
+      if (!targetExamId) {
+        const prepared = buildExamPayload({ requireTaskTypes: false });
+        if (!prepared) {
+          return;
+        }
+        const created = await examsAPI.create(
+          {
+            ...prepared.payload,
+            task_types: prepared.preparedTaskTypes,
+          },
+          courseId
+        );
+        targetExamId = created.data.id as string;
+        createdDraftForBank = true;
+      }
+
+      if (!targetExamId) {
+        throw new Error("Не удалось определить id работы");
+      }
+
       await examsAPI.addTaskTypesFromBank(
-        examId,
+        targetExamId,
         { bank_item_ids: selected.map((item) => item.id) },
         courseId
       );
-      const refreshed = await examsAPI.get(examId, courseId);
+      const refreshed = await examsAPI.get(targetExamId, courseId);
       applyExamTaskTypesFromResponse(refreshed.data as ExamDetailsResponse);
-      toast.success(`Добавлено задач из банка: ${selected.length}`);
+      if (createdDraftForBank) {
+        toast.success(
+          `Создан черновик и добавлено задач из банка: ${selected.length}`
+        );
+        navigate(`/c/${courseId}/exam/${targetExamId}/edit`, { replace: true });
+      } else {
+        toast.success(`Добавлено задач из банка: ${selected.length}`);
+      }
       setSelectedBankItems({});
     } catch (error: unknown) {
       toast.error(getApiErrorMessage(error, "Ошибка добавления задач из банка"));
+      if (createdDraftForBank && targetExamId) {
+        navigate(`/c/${courseId}/exam/${targetExamId}/edit`, { replace: true });
+      }
     } finally {
       setLoading(false);
     }
@@ -331,56 +410,12 @@ const CreateExam = () => {
     if (!courseId) return;
     setLoading(true);
     try {
-      // Validate
-      if (!examData.title || !examData.start_time || !examData.end_time) {
-        toast.error("Заполните все обязательные поля");
-        setLoading(false);
+      const prepared = buildExamPayload({ requireTaskTypes: true });
+      if (!prepared) {
         return;
       }
 
-      if (examData.kind === "control") {
-        if (!examData.duration_minutes || examData.duration_minutes <= 0) {
-          toast.error("Для контрольной нужно указать положительную длительность");
-          setLoading(false);
-          return;
-        }
-      }
-
-      if (taskTypes.length === 0) {
-        toast.error("Добавьте хотя бы один тип задачи");
-        setLoading(false);
-        return;
-      }
-
-      // Для варианта с пустым content: используем description (одно поле «Условие» = и описание, и текст варианта)
-      const preparedTaskTypes = taskTypes.map(tt => ({
-        ...tt,
-        variants: tt.variants.map(v => ({
-          ...v,
-          content: (v.content || "").trim() || (tt.description || "").trim(),
-        })),
-      }));
-
-      const emptyContent = preparedTaskTypes.some(tt =>
-        tt.variants.some(v => !(v.content || "").trim())
-      );
-      if (emptyContent) {
-        toast.error("Заполните условие задачи (хотя бы для одного варианта)");
-        setLoading(false);
-        return;
-      }
-
-      // Convert Moscow time (GMT+3) to UTC for storage
-      // datetime-local input gives us naive datetime, interpret it as Moscow time (GMT+3)
-      // by appending +03:00 timezone offset
-      const startTimeUTC = new Date(examData.start_time + ':00+03:00').toISOString();
-      const endTimeUTC = new Date(examData.end_time + ':00+03:00').toISOString();
-      const payload = {
-        ...examData,
-        duration_minutes: examData.kind === "control" ? examData.duration_minutes : null,
-        start_time: startTimeUTC,
-        end_time: endTimeUTC,
-      };
+      const { payload, preparedTaskTypes } = prepared;
 
       let resultExamId = examId;
 
@@ -922,13 +957,13 @@ const CreateExam = () => {
                 </p>
                 {!isEditMode && (
                   <p className="text-xs text-amber-700 mt-1">
-                    Для добавления из банка сначала сохраните работу.
+                    Если работа еще не сохранена, черновик создастся автоматически.
                   </p>
                 )}
               </div>
               <Button
                 onClick={addSelectedBankTasks}
-                disabled={!isEditMode || loading || Object.keys(selectedBankItems).length === 0}
+                disabled={loading || Object.keys(selectedBankItems).length === 0}
               >
                 Добавить в работу ({Object.keys(selectedBankItems).length})
               </Button>
