@@ -111,7 +111,7 @@ const TrainerSetView = () => {
                     </span>
                     <span className="text-xs text-muted-foreground">§ {item.paragraph}</span>
                   </div>
-                  <h2 className="font-semibold mb-2">{item.topic}</h2>
+                  <h2 className="font-semibold mb-2">{renderLatex(item.topic)}</h2>
                   <div className="whitespace-pre-wrap text-sm text-muted-foreground">
                     {renderLatex(item.text)}
                   </div>

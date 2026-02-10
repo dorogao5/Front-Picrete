@@ -290,7 +290,7 @@ const TaskBank = () => {
                         </Badge>
                       )}
                     </div>
-                    <h3 className="font-semibold mb-2">{item.topic}</h3>
+                    <h3 className="font-semibold mb-2">{renderLatex(item.topic)}</h3>
                     <div className="text-sm text-muted-foreground whitespace-pre-wrap">
                       {renderLatex(item.text)}
                     </div>

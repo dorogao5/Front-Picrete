@@ -1038,7 +1038,7 @@ const CreateExam = () => {
                         <p className="text-sm text-muted-foreground mb-1">
                           № {item.number} • § {item.paragraph}
                         </p>
-                        <p className="font-semibold mb-1">{item.topic}</p>
+                        <p className="font-semibold mb-1">{renderLatex(item.topic)}</p>
                         <div className="text-sm text-muted-foreground line-clamp-3">
                           {renderLatex(item.text)}
                         </div>
