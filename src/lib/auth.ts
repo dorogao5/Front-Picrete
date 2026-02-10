@@ -17,7 +17,6 @@ export interface User {
   full_name: string;
   is_platform_admin: boolean;
   is_active: boolean;
-  is_verified: boolean;
   pd_consent?: boolean;
   pd_consent_at?: string | null;
   pd_consent_version?: string | null;

@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import { User, LogOut } from "lucide-react";
+import { BookOpen, Dumbbell, LogOut, User } from "lucide-react";
 import logo from "@/assets/logo.png";
 import {
   getActiveCourseId,
@@ -122,6 +122,24 @@ export const Navbar = () => {
                     <User className="mr-2 h-4 w-4" />
                     <span>Профиль</span>
                   </DropdownMenuItem>
+                  {activeCourseId && (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() => navigate(`/c/${activeCourseId}/task-bank`)}
+                        className="cursor-pointer"
+                      >
+                        <BookOpen className="mr-2 h-4 w-4" />
+                        <span>Банк задач</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => navigate(`/c/${activeCourseId}/trainer`)}
+                        className="cursor-pointer"
+                      >
+                        <Dumbbell className="mr-2 h-4 w-4" />
+                        <span>Тренажеры</span>
+                      </DropdownMenuItem>
+                    </>
+                  )}
                   <DropdownMenuItem onClick={() => navigate("/join-course")} className="cursor-pointer">
                     <User className="mr-2 h-4 w-4" />
                     <span>Присоединиться к курсу</span>

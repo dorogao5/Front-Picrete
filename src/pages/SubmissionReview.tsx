@@ -1,6 +1,8 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
+import OcrImageOverlay from "@/components/OcrImageOverlay";
+import OcrMarkdownPanel from "@/components/OcrMarkdownPanel";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,6 +15,7 @@ import { toast } from "sonner";
 import ImageLightbox from "@/components/ImageLightbox";
 import AiAnalysis from "@/components/AiAnalysis";
 import { renderLatex } from "@/lib/renderLatex";
+import { anchorSummary, cleanOcrMarkdown, extractOcrBlocks, OcrChunkBlock } from "@/lib/ocr";
 
 interface SubmissionImage {
   id: string;
@@ -91,7 +94,26 @@ interface SubmissionReviewData {
     severity: "minor" | "major" | "critical";
     created_at: string;
   }>;
+  exam?: {
+    id: string;
+    title: string;
+    kind?: "control" | "homework";
+  };
 }
+
+const chunkTitle = (block: OcrChunkBlock, index: number) => {
+  const kind = typeof block.block_type === "string" && block.block_type.trim() ? block.block_type : "chunk";
+  const page = typeof block.page === "number" ? ` • page ${block.page}` : "";
+  return `${kind} #${index + 1}${page}`;
+};
+
+const chunkPreview = (block: OcrChunkBlock) => {
+  if (typeof block.text !== "string") {
+    return "(пустой OCR блок)";
+  }
+  const normalized = block.text.replace(/\s+/g, " ").trim();
+  return normalized.length > 200 ? `${normalized.slice(0, 197)}...` : normalized;
+};
 
 const SubmissionReview = () => {
   const { courseId, submissionId } = useParams<{ courseId: string; submissionId: string }>();
@@ -104,6 +126,8 @@ const SubmissionReview = () => {
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
   const [imageAngles, setImageAngles] = useState<Record<string, number>>({});
   const [imageScales, setImageScales] = useState<Record<string, number>>({});
+  const [selectedChunkByImage, setSelectedChunkByImage] = useState<Record<string, number | null>>({});
+  const [hideOcrImageByImage, setHideOcrImageByImage] = useState<Record<string, boolean>>({});
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
@@ -122,6 +146,7 @@ const SubmissionReview = () => {
         // Load presigned URLs for all images
         if (submissionData.images && submissionData.images.length > 0) {
           const urls: Record<string, string> = {};
+          const failedImageIds: string[] = [];
           for (const image of submissionData.images) {
             try {
               const urlResponse = await submissionsAPI.getImageViewUrl(image.id, courseId);
@@ -129,12 +154,17 @@ const SubmissionReview = () => {
                 urls[image.id] = urlResponse.data.view_url;
               } else if (urlResponse.data.file_path) {
                 urls[image.id] = `/api/uploads/${urlResponse.data.file_path}`;
+              } else {
+                failedImageIds.push(image.id);
               }
             } catch {
-              // Image URL load failures are non-critical
+              failedImageIds.push(image.id);
             }
           }
           setImageUrls(urls);
+          if (failedImageIds.length > 0) {
+            toast.error(`Не удалось получить URL для ${failedImageIds.length} изображений`);
+          }
         }
       } catch (error: unknown) {
         toast.error(getApiErrorMessage(error, "Ошибка при загрузке работы"));
@@ -219,6 +249,11 @@ const SubmissionReview = () => {
     ? ((submission.final_score || submission.ai_score || 0) / submission.max_score) * 100
     : 0;
 
+  const imageOrderById = new Map<string, number>();
+  submission.images.forEach((image, index) => {
+    imageOrderById.set(image.id, (image.order_index ?? index) + 1);
+  });
+
   return (
     <div className="min-h-screen bg-gradient-subtle">
       <Navbar />
@@ -231,6 +266,22 @@ const SubmissionReview = () => {
               Студент: {submission.student_name || submission.student_id} (@{submission.student_username || "unknown"}) | Сдано:{" "}
               {new Date(submission.submitted_at).toLocaleString("ru-RU")}
             </p>
+            {submission.exam && (
+              <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                <span>{submission.exam.title}</span>
+                {submission.exam.kind && (
+                  <span
+                    className={`rounded px-2 py-1 text-xs ${
+                      submission.exam.kind === "homework"
+                        ? "bg-orange-100 text-orange-700"
+                        : "bg-blue-100 text-blue-700"
+                    }`}
+                  >
+                    {submission.exam.kind === "homework" ? "Домашняя" : "Контрольная"}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <div className="text-right">
             <p className="text-sm text-muted-foreground">Статус</p>
@@ -286,8 +337,10 @@ const SubmissionReview = () => {
                       )}
                       <div className="p-2 bg-secondary text-xs">
                         <p>Страница {index + 1}</p>
-                        {image.ocr_text && (
-                          <p className="mt-1 text-[10px] line-clamp-2 text-muted-foreground">OCR: {image.ocr_text.slice(0, 120)}...</p>
+                        {(image.ocr_markdown || image.ocr_text) && (
+                          <p className="mt-1 text-[10px] line-clamp-2 text-muted-foreground">
+                            OCR: {cleanOcrMarkdown(image.ocr_markdown || image.ocr_text).slice(0, 120)}
+                          </p>
                         )}
                         {image.quality_score && (
                           <p>Качество: {(image.quality_score * 100).toFixed(0)}%</p>
@@ -318,7 +371,6 @@ const SubmissionReview = () => {
                 <TabsList>
                   <TabsTrigger value="ocr">OCR (validated)</TabsTrigger>
                   <TabsTrigger value="report">Student REPORT issues</TabsTrigger>
-                  <TabsTrigger value="originals">Original images</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="ocr" className="space-y-4">
@@ -329,19 +381,88 @@ const SubmissionReview = () => {
                   )}
                   {submission.ocr_pages && submission.ocr_pages.length > 0 ? (
                     <div className="space-y-4">
-                      {submission.ocr_pages.map((page, idx) => (
-                        <div key={`${page.image_id}-${idx}`} className="rounded border p-3">
-                          <div className="mb-2 flex items-center justify-between text-sm">
-                            <span className="font-medium">Страница #{idx + 1}</span>
-                            <span className="text-muted-foreground">
-                              {page.ocr_status || "unknown"} / {page.page_status || "not_reviewed"}
-                            </span>
+                      {submission.ocr_pages.map((page, idx) => {
+                        const blocks = extractOcrBlocks(page.chunks);
+                        const selectedChunkIndex =
+                          selectedChunkByImage[page.image_id] ?? (blocks.length > 0 ? 0 : null);
+                        const hideImage = hideOcrImageByImage[page.image_id] ?? false;
+
+                        return (
+                          <div key={`${page.image_id}-${idx}`} className="rounded border p-3 space-y-3">
+                            <div className="flex items-center justify-between text-sm gap-2">
+                              <span className="font-medium">Страница #{idx + 1}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-muted-foreground">
+                                  {page.ocr_status || "unknown"} / {page.page_status || "not_reviewed"}
+                                </span>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    setHideOcrImageByImage((prev) => ({
+                                      ...prev,
+                                      [page.image_id]: !hideImage,
+                                    }))
+                                  }
+                                >
+                                  {hideImage ? "Показать изображение" : "Скрыть изображение"}
+                                </Button>
+                              </div>
+                            </div>
+
+                            <div className={`grid gap-4 ${hideImage ? "grid-cols-1" : "lg:grid-cols-2"}`}>
+                              {!hideImage && (
+                                <OcrImageOverlay
+                                  imageUrl={imageUrls[page.image_id]}
+                                  blocks={blocks}
+                                  selectedChunkIndex={selectedChunkIndex}
+                                  alt={`OCR page ${idx + 1}`}
+                                  className="max-h-[70vh]"
+                                />
+                              )}
+                              <div className="space-y-3">
+                                <OcrMarkdownPanel markdown={page.ocr_markdown} previewLines={10} />
+
+                                <div className="space-y-2">
+                                  <p className="text-xs font-semibold text-muted-foreground">
+                                    OCR chunks с привязкой геометрии
+                                  </p>
+                                  <div className="max-h-44 overflow-y-auto rounded border p-2 space-y-2">
+                                    {blocks.map((block, blockIndex) => (
+                                      <button
+                                        key={`${page.image_id}-chunk-${blockIndex}`}
+                                        type="button"
+                                        className={`w-full rounded border p-2 text-left text-xs ${
+                                          selectedChunkIndex === blockIndex
+                                            ? "border-primary bg-primary/10"
+                                            : "border-border hover:bg-muted/50"
+                                        }`}
+                                        onClick={() =>
+                                          setSelectedChunkByImage((prev) => ({
+                                            ...prev,
+                                            [page.image_id]: blockIndex,
+                                          }))
+                                        }
+                                      >
+                                        <div className="font-medium">{chunkTitle(block, blockIndex)}</div>
+                                        <div className="text-muted-foreground line-clamp-2">
+                                          {chunkPreview(block)}
+                                        </div>
+                                      </button>
+                                    ))}
+                                    {blocks.length === 0 && (
+                                      <p className="text-xs text-muted-foreground">
+                                        OCR chunks отсутствуют в ответе.
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                          <div className="max-h-40 overflow-y-auto whitespace-pre-wrap text-sm">
-                            {page.ocr_markdown || "—"}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">OCR-данные не предоставлены</p>
@@ -360,13 +481,23 @@ const SubmissionReview = () => {
                       {submission.report_issues.map((issue) => (
                         <div key={issue.id} className="rounded border p-3 text-sm">
                           <div className="flex items-center justify-between">
-                            <span className="font-medium">Image: {issue.image_id}</span>
+                            <span className="font-medium">
+                              Страница #{imageOrderById.get(issue.image_id) ?? "?"}
+                            </span>
                             <span className="text-xs uppercase text-muted-foreground">{issue.severity}</span>
                           </div>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {anchorSummary(issue.anchor)}
+                          </p>
                           <p className="mt-2">{issue.note}</p>
+                          {issue.original_text && (
+                            <p className="mt-1 text-muted-foreground">
+                              OCR: {cleanOcrMarkdown(issue.original_text)}
+                            </p>
+                          )}
                           {issue.suggested_text && (
                             <p className="mt-1 text-muted-foreground">
-                              suggested: {issue.suggested_text}
+                              corrected: {issue.suggested_text}
                             </p>
                           )}
                         </div>
@@ -374,29 +505,6 @@ const SubmissionReview = () => {
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">REPORT issues отсутствуют</p>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="originals">
-                  {submission.images && submission.images.length > 0 ? (
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {submission.images.map((image, index) => (
-                        <div key={`original-${image.id}`} className="rounded border p-2">
-                          <p className="mb-2 text-xs text-muted-foreground">Page #{index + 1}</p>
-                          {imageUrls[image.id] ? (
-                            <img
-                              src={imageUrls[image.id]}
-                              alt={`Original ${index + 1}`}
-                              className="w-full rounded"
-                            />
-                          ) : (
-                            <div className="h-32 rounded bg-secondary" />
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Изображений нет</p>
                   )}
                 </TabsContent>
               </Tabs>

@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Flag, Loader2 } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Flag,
+  Loader2,
+  ScanText,
+} from "lucide-react";
 
+import OcrImageOverlay from "@/components/OcrImageOverlay";
+import OcrMarkdownPanel from "@/components/OcrMarkdownPanel";
 import { Navbar } from "@/components/Navbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
+import { anchorSummary, extractOcrBlocks, OcrChunkBlock } from "@/lib/ocr";
 import { getApiErrorMessage, JsonObject, OcrIssueInput, submissionsAPI } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -53,15 +64,6 @@ interface OcrPagesResponse {
   pages: OcrPageData[];
 }
 
-interface ChunkBlock {
-  id?: string;
-  text?: string;
-  block_type?: string;
-  page?: number;
-  bbox?: number[];
-  polygon?: number[][];
-}
-
 interface PageDraft {
   page_status?: "approved" | "reported";
   issues: OcrIssueInput[];
@@ -81,20 +83,6 @@ const EMPTY_ISSUE_FORM: IssueDraftForm = {
   severity: "major",
 };
 
-const extractBlocks = (chunks: unknown): ChunkBlock[] => {
-  if (!chunks) return [];
-  if (typeof chunks === "object" && chunks !== null && "blocks" in chunks) {
-    const blocks = (chunks as { blocks?: unknown }).blocks;
-    if (Array.isArray(blocks)) {
-      return blocks.filter((item): item is ChunkBlock => typeof item === "object" && item !== null);
-    }
-  }
-  if (Array.isArray(chunks)) {
-    return chunks.filter((item): item is ChunkBlock => typeof item === "object" && item !== null);
-  }
-  return [];
-};
-
 const toDraftIssue = (issue: OcrIssueResponse): OcrIssueInput => ({
   anchor: (issue.anchor ?? {}) as JsonObject,
   original_text: issue.original_text,
@@ -102,6 +90,20 @@ const toDraftIssue = (issue: OcrIssueResponse): OcrIssueInput => ({
   note: issue.note,
   severity: issue.severity,
 });
+
+const chunkTitle = (block: OcrChunkBlock, index: number) => {
+  const kind = typeof block.block_type === "string" && block.block_type.trim() ? block.block_type : "chunk";
+  const page = typeof block.page === "number" ? ` • page ${block.page}` : "";
+  return `${kind} #${index + 1}${page}`;
+};
+
+const chunkPreview = (block: OcrChunkBlock) => {
+  if (typeof block.text !== "string") {
+    return "(пустой OCR блок)";
+  }
+  const normalized = block.text.replace(/\s+/g, " ").trim();
+  return normalized.length > 220 ? `${normalized.slice(0, 217)}...` : normalized;
+};
 
 const OcrReview = () => {
   const { courseId, sessionId } = useParams<{ courseId: string; sessionId: string }>();
@@ -125,12 +127,10 @@ const OcrReview = () => {
     setDrafts((prev) => {
       const next = { ...prev };
       for (const page of payload.pages) {
-        if (!next[page.image_id]) {
-          next[page.image_id] = {
-            page_status: page.page_status ?? undefined,
-            issues: page.issues.map(toDraftIssue),
-          };
-        }
+        next[page.image_id] = {
+          page_status: next[page.image_id]?.page_status ?? page.page_status ?? undefined,
+          issues: next[page.image_id]?.issues ?? page.issues.map(toDraftIssue),
+        };
       }
       return next;
     });
@@ -153,18 +153,30 @@ const OcrReview = () => {
   useEffect(() => {
     if (!data) return;
     if (data.ocr_status !== "pending" && data.ocr_status !== "processing") return;
-    const interval = setInterval(() => {
+    const intervalId = setInterval(() => {
       loadPages().catch(() => {
-        // keep polling silently
+        // keep polling
       });
     }, 2500);
-    return () => clearInterval(interval);
+    return () => clearInterval(intervalId);
   }, [data, loadPages]);
 
   const pages = useMemo(() => data?.pages ?? [], [data]);
   const currentPage = pages[currentPageIndex];
+  const currentImageId = currentPage?.image_id;
   const currentDraft = currentPage ? drafts[currentPage.image_id] ?? { issues: [] } : { issues: [] };
-  const blocks = useMemo(() => extractBlocks(currentPage?.chunks), [currentPage]);
+  const blocks = useMemo(() => extractOcrBlocks(currentPage?.chunks), [currentPage?.chunks]);
+
+  useEffect(() => {
+    if (!currentImageId) return;
+    setIssueForm((prev) => ({
+      ...prev,
+      selectedChunkIndex: blocks.length > 0 ? 0 : null,
+      suggestedText: "",
+      note: "",
+      severity: "major",
+    }));
+  }, [blocks.length, currentImageId]);
 
   const reviewedPagesCount = useMemo(
     () =>
@@ -174,6 +186,7 @@ const OcrReview = () => {
       }).length,
     [drafts, pages]
   );
+
   const totalIssuesCount = useMemo(
     () => pages.reduce((acc, page) => acc + (drafts[page.image_id]?.issues.length ?? 0), 0),
     [drafts, pages]
@@ -197,7 +210,7 @@ const OcrReview = () => {
   const addIssue = () => {
     if (!currentPage) return;
     if (issueForm.selectedChunkIndex === null || !blocks[issueForm.selectedChunkIndex]) {
-      toast.error("Выберите OCR-блок с геометрией");
+      toast.error("Выберите OCR chunk");
       return;
     }
     if (!issueForm.note.trim()) {
@@ -211,17 +224,23 @@ const OcrReview = () => {
       return;
     }
 
-    const anchor: JsonObject = {};
-    if (typeof block.id === "string") anchor.chunk_id = block.id;
-    anchor.block_type =
-      typeof block.block_type === "string" && block.block_type.trim().length > 0
-        ? block.block_type
-        : "text";
-    anchor.page = typeof block.page === "number" ? block.page : currentPageIndex + 1;
-    if (Array.isArray(block.bbox)) anchor.bbox = block.bbox as unknown as JsonObject[keyof JsonObject];
+    const anchor: JsonObject = {
+      block_type:
+        typeof block.block_type === "string" && block.block_type.trim().length > 0
+          ? block.block_type
+          : "text",
+      page: typeof block.page === "number" ? block.page : currentPageIndex + 1,
+    };
+    if (typeof block.id === "string" && block.id.trim().length > 0) {
+      anchor.chunk_id = block.id;
+    }
+    if (Array.isArray(block.bbox)) {
+      anchor.bbox = block.bbox as unknown as JsonObject[keyof JsonObject];
+    }
     if (Array.isArray(block.polygon)) {
       anchor.polygon = block.polygon as unknown as JsonObject[keyof JsonObject];
     }
+
     const issue: OcrIssueInput = {
       anchor,
       original_text: block.text ?? "",
@@ -240,14 +259,15 @@ const OcrReview = () => {
         },
       };
     });
-    setIssueForm(EMPTY_ISSUE_FORM);
+
+    setIssueForm((prev) => ({ ...prev, suggestedText: "", note: "" }));
   };
 
   const removeIssue = (index: number) => {
     if (!currentPage) return;
     setDrafts((prev) => {
       const pageDraft = prev[currentPage.image_id] ?? { issues: [] };
-      const issues = pageDraft.issues.filter((_, idx) => idx !== index);
+      const issues = pageDraft.issues.filter((_, issueIndex) => issueIndex !== index);
       return {
         ...prev,
         [currentPage.image_id]: {
@@ -429,25 +449,25 @@ const OcrReview = () => {
               <h2 className="font-semibold">Оригинал страницы #{currentPageIndex + 1}</h2>
               <Badge variant="outline">{currentPage.ocr_status}</Badge>
             </div>
-            {currentPage.image_view_url ? (
-              <img
-                src={currentPage.image_view_url}
-                alt={`OCR page ${currentPageIndex + 1}`}
-                className="w-full rounded border max-h-[65vh] object-contain"
-              />
-            ) : (
-              <div className="rounded border p-6 text-sm text-muted-foreground">
-                Не удалось получить URL изображения
-              </div>
-            )}
+            <OcrImageOverlay
+              imageUrl={currentPage.image_view_url}
+              blocks={blocks}
+              selectedChunkIndex={issueForm.selectedChunkIndex}
+              alt={`OCR page ${currentPageIndex + 1}`}
+              className="max-h-[72vh]"
+            />
+            <p className="text-xs text-muted-foreground">
+              Выделенный chunk подсвечен на изображении, чтобы было понятно, какой фрагмент вы исправляете.
+            </p>
           </Card>
 
           <Card className="p-4 space-y-4">
             <div className="space-y-2">
-              <h2 className="font-semibold">OCR Markdown</h2>
-              <div className="h-56 rounded border p-3 text-sm overflow-y-auto">
-                <pre className="whitespace-pre-wrap">{currentPage.ocr_markdown || "—"}</pre>
+              <div className="flex items-center gap-2">
+                <ScanText className="h-4 w-4" />
+                <h2 className="font-semibold">OCR Markdown</h2>
               </div>
+              <OcrMarkdownPanel markdown={currentPage.ocr_markdown} previewLines={12} />
             </div>
 
             <div className="space-y-2">
@@ -471,24 +491,26 @@ const OcrReview = () => {
             </div>
 
             <div className="space-y-2">
-              <h3 className="font-semibold text-sm">OCR Chunks (anchor geometry)</h3>
-              <div className="h-28 rounded border p-2 overflow-y-auto">
+              <h3 className="font-semibold text-sm">OCR chunks (anchor geometry)</h3>
+              <div className="max-h-52 rounded border p-2 overflow-y-auto">
                 <div className="space-y-2">
                   {blocks.map((block, idx) => (
                     <button
                       key={`${block.id ?? "chunk"}-${idx}`}
                       type="button"
                       className={`w-full rounded border p-2 text-left text-xs ${
-                        issueForm.selectedChunkIndex === idx ? "border-primary bg-primary/5" : "border-border"
+                        issueForm.selectedChunkIndex === idx
+                          ? "border-primary bg-primary/10"
+                          : "border-border hover:bg-muted/50"
                       }`}
                       onClick={() => setIssueForm((prev) => ({ ...prev, selectedChunkIndex: idx }))}
                     >
-                      <div className="font-medium">{block.block_type ?? "block"} #{idx + 1}</div>
-                      <div className="text-muted-foreground line-clamp-2">{block.text ?? "(empty)"}</div>
+                      <div className="font-medium">{chunkTitle(block, idx)}</div>
+                      <div className="text-muted-foreground line-clamp-2">{chunkPreview(block)}</div>
                     </button>
                   ))}
                   {blocks.length === 0 && (
-                    <p className="text-xs text-muted-foreground">Нет chunk-блоков.</p>
+                    <p className="text-xs text-muted-foreground">Нет chunk-блоков для выбора.</p>
                   )}
                 </div>
               </div>
@@ -532,8 +554,9 @@ const OcrReview = () => {
               <div className="space-y-2">
                 {currentDraft.issues.map((issue, idx) => (
                   <div key={`${idx}-${issue.note}`} className="rounded border p-2 text-xs">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <Badge variant="outline">{issue.severity ?? "major"}</Badge>
+                      <span className="text-muted-foreground">{anchorSummary(issue.anchor as Record<string, unknown>)}</span>
                       <Button
                         type="button"
                         variant="ghost"
@@ -564,7 +587,11 @@ const OcrReview = () => {
                 Предыдущая
               </Button>
               <Button onClick={saveCurrentPage} disabled={savingPage}>
-                {savingPage ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
+                {savingPage ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 mr-1" />
+                )}
                 Сохранить страницу
               </Button>
               <Button

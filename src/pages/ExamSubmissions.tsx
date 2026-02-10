@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Clock, CheckCircle, AlertCircle, Eye } from "lucide-react";
 import { examsAPI, getApiErrorMessage } from "@/lib/api";
+import type { WorkKind } from "@/lib/api";
 import { toast } from "sonner";
 
 interface Submission {
@@ -32,6 +33,7 @@ interface Submission {
 interface ExamDetails {
   id: string;
   title: string;
+  kind?: WorkKind;
 }
 
 const ExamSubmissions = () => {
@@ -65,17 +67,35 @@ const ExamSubmissions = () => {
     }
   }, [courseId, examId, filter]);
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (submission: Submission) => {
+    const { status, ocr_overall_status, llm_precheck_status } = submission;
     switch (status) {
+      case "uploaded":
+        if (ocr_overall_status === "in_review") {
+          return <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+            <Clock className="w-3 h-3 mr-1" />
+            OCR review студентом
+          </Badge>;
+        }
+        return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+          <Clock className="w-3 h-3 mr-1" />
+          OCR обрабатывается
+        </Badge>;
+      case "processing":
+        if (llm_precheck_status === "queued") {
+          return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+            <AlertCircle className="w-3 h-3 mr-1" />
+            LLM в очереди
+          </Badge>;
+        }
+        return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+          <AlertCircle className="w-3 h-3 mr-1" />
+          Проверяется ИИ
+        </Badge>;
       case "preliminary":
         return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
           <Clock className="w-3 h-3 mr-1" />
           Требует проверки
-        </Badge>;
-      case "processing":
-        return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-          <AlertCircle className="w-3 h-3 mr-1" />
-          Проверяется ИИ
         </Badge>;
       case "approved":
         return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
@@ -140,7 +160,21 @@ const ExamSubmissions = () => {
             <span>{exam.title}</span>
           </div>
           <h1 className="text-4xl font-bold mb-2">Проверка работ</h1>
-          <p className="text-muted-foreground">{exam.title}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-muted-foreground">{exam.title}</p>
+            {exam.kind && (
+              <Badge
+                variant="outline"
+                className={
+                  exam.kind === "homework"
+                    ? "bg-orange-50 text-orange-700 border-orange-200"
+                    : "bg-blue-50 text-blue-700 border-blue-200"
+                }
+              >
+                {exam.kind === "homework" ? "Домашняя" : "Контрольная"}
+              </Badge>
+            )}
+          </div>
         </div>
 
         {/* Stats */}
@@ -207,7 +241,7 @@ const ExamSubmissions = () => {
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="text-lg font-semibold">{submission.student_name}</h3>
                         <span className="text-sm text-muted-foreground">@{submission.student_username}</span>
-                        {getStatusBadge(submission.status)}
+                        {getStatusBadge(submission)}
                         {submission.report_flag && (
                           <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
                             REPORT
@@ -240,12 +274,18 @@ const ExamSubmissions = () => {
                         )}
                       </div>
                     </div>
-                    <Link to={courseId ? `/c/${courseId}/submission/${submission.id}` : "/dashboard"}>
-                      <Button>
-                        <Eye className="w-4 h-4 mr-2" />
-                        Проверить
+                    {["preliminary", "approved", "flagged", "rejected"].includes(submission.status) ? (
+                      <Link to={courseId ? `/c/${courseId}/submission/${submission.id}` : "/dashboard"}>
+                        <Button>
+                          <Eye className="w-4 h-4 mr-2" />
+                          Проверить
+                        </Button>
+                      </Link>
+                    ) : (
+                      <Button disabled variant="outline">
+                        Ожидается pipeline
                       </Button>
-                    </Link>
+                    )}
                   </div>
                 </Card>
               ))}

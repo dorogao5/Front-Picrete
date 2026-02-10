@@ -23,6 +23,8 @@ interface SubmissionScore {
 interface SubmissionExamInfo {
   id: string;
   max_attempts: number;
+  kind?: "control" | "homework";
+  end_time?: string;
 }
 
 interface SubmissionSessionInfo {
@@ -65,6 +67,8 @@ const ExamResult = () => {
   const [submission, setSubmission] = useState<SubmissionResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [retaking, setRetaking] = useState(false);
+  const submissionStatus = submission?.status;
+  const submissionOcrStatus = submission?.ocr_overall_status;
 
   useEffect(() => {
     const loadResult = async () => {
@@ -82,6 +86,44 @@ const ExamResult = () => {
       loadResult();
     }
   }, [courseId, sessionId]);
+
+  useEffect(() => {
+    if (!sessionId || !submissionStatus || !submissionOcrStatus) {
+      return;
+    }
+
+    const ocrReviewPath = courseId
+      ? `/c/${courseId}/exam/${sessionId}/ocr-review`
+      : "/dashboard";
+
+    if (submissionOcrStatus === "in_review") {
+      navigate(ocrReviewPath, { replace: true });
+      return;
+    }
+
+    const shouldPoll =
+      submissionStatus === "processing" ||
+      submissionOcrStatus === "pending" ||
+      submissionOcrStatus === "processing";
+    if (!shouldPoll) {
+      return;
+    }
+
+    const interval = setInterval(async () => {
+      try {
+        const response = await submissionsAPI.getResult(sessionId, courseId);
+        const next = response.data as SubmissionResult;
+        setSubmission(next);
+        if (next.ocr_overall_status === "in_review") {
+          navigate(ocrReviewPath, { replace: true });
+        }
+      } catch {
+        // keep polling silently until processing settles
+      }
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [courseId, navigate, sessionId, submissionOcrStatus, submissionStatus]);
 
   if (loading) {
     return (
@@ -186,6 +228,11 @@ const ExamResult = () => {
               {submission.exam && submission.session && (
                 <p className="text-sm text-muted-foreground mt-1">
                   Попытка {submission.session.attempt_number} из {submission.exam.max_attempts}
+                </p>
+              )}
+              {submission.exam?.kind && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  Тип: {submission.exam.kind === "homework" ? "Домашняя работа" : "Контрольная"}
                 </p>
               )}
             </div>
@@ -420,7 +467,7 @@ const ExamResult = () => {
 
         <div className="text-center">
           <Link to={courseId ? `/c/${courseId}/student` : "/dashboard"}>
-            <Button size="lg" variant="outline">Вернуться к списку экзаменов</Button>
+            <Button size="lg" variant="outline">Вернуться к списку работ</Button>
           </Link>
         </div>
       </div>

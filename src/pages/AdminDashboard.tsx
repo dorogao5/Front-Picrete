@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { coursesAPI, getApiErrorMessage, usersAPI } from "@/lib/api";
 import type { Membership } from "@/lib/auth";
 import { toast } from "sonner";
-import { RefreshCw, ShieldCheck, ShieldHalf, Trash2 } from "lucide-react";
+import { RefreshCw, Trash2 } from "lucide-react";
 
 interface AdminUser {
   id: string;
@@ -20,7 +20,6 @@ interface AdminUser {
   full_name: string;
   is_platform_admin: boolean;
   is_active: boolean;
-  is_verified: boolean;
 }
 
 type PolicyType = "none" | "isu_6_digits" | "email_domain" | "custom_text_validator";
@@ -34,12 +33,10 @@ const AdminDashboard = () => {
     username: string;
     isPlatformAdmin: "all" | "true" | "false";
     isActive: "all" | "true" | "false";
-    isVerified: "all" | "true" | "false";
   }>({
     username: "",
     isPlatformAdmin: "all",
     isActive: "all",
-    isVerified: "all",
   });
   const [createUserForm, setCreateUserForm] = useState({
     username: "",
@@ -47,7 +44,6 @@ const AdminDashboard = () => {
     password: "",
     is_platform_admin: false,
     is_active: true,
-    is_verified: false,
   });
   const [courseForm, setCourseForm] = useState({
     slug: "",
@@ -68,7 +64,6 @@ const AdminDashboard = () => {
       isPlatformAdmin:
         filters.isPlatformAdmin === "all" ? undefined : filters.isPlatformAdmin === "true",
       isActive: filters.isActive === "all" ? undefined : filters.isActive === "true",
-      isVerified: filters.isVerified === "all" ? undefined : filters.isVerified === "true",
     };
   }, [filters]);
 
@@ -105,7 +100,7 @@ const AdminDashboard = () => {
     fetchCourses();
   }, []);
 
-  const handleToggle = async (user: AdminUser, field: "is_active" | "is_verified") => {
+  const handleToggle = async (user: AdminUser, field: "is_active") => {
     try {
       const next = { [field]: !user[field] };
       await usersAPI.update(user.id, next);
@@ -154,7 +149,6 @@ const AdminDashboard = () => {
         password: "",
         is_platform_admin: false,
         is_active: true,
-        is_verified: false,
       });
       fetchUsers();
     } catch (error: unknown) {
@@ -302,7 +296,7 @@ const AdminDashboard = () => {
 
         <Card className="p-6 space-y-4">
           <h2 className="text-xl font-semibold">Фильтр пользователей</h2>
-          <div className="grid md:grid-cols-4 gap-4">
+          <div className="grid md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label>Username</Label>
               <Input
@@ -344,24 +338,6 @@ const AdminDashboard = () => {
                   <SelectItem value="all">Все</SelectItem>
                   <SelectItem value="true">Активные</SelectItem>
                   <SelectItem value="false">Заблокированные</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Верификация</Label>
-              <Select
-                value={filters.isVerified}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({ ...prev, isVerified: value as "all" | "true" | "false" }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Все</SelectItem>
-                  <SelectItem value="true">Верифицированные</SelectItem>
-                  <SelectItem value="false">Неверифицированные</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -423,15 +399,6 @@ const AdminDashboard = () => {
               />
               <Label>Активен</Label>
             </div>
-            <div className="flex items-center gap-3">
-              <Switch
-                checked={createUserForm.is_verified}
-                onCheckedChange={(value) =>
-                  setCreateUserForm((prev) => ({ ...prev, is_verified: value }))
-                }
-              />
-              <Label>Верифицирован</Label>
-            </div>
             <div className="md:col-span-3">
               <Button type="submit">Создать</Button>
             </div>
@@ -455,11 +422,6 @@ const AdminDashboard = () => {
                         <Badge variant={user.is_platform_admin ? "default" : "secondary"}>
                           {user.is_platform_admin ? "Platform Admin" : "User"}
                         </Badge>
-                        {user.is_verified ? (
-                          <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                        ) : (
-                          <ShieldHalf className="w-4 h-4 text-amber-500" />
-                        )}
                       </div>
                       <p className="text-sm text-muted-foreground">@{user.username}</p>
                     </div>
@@ -474,13 +436,6 @@ const AdminDashboard = () => {
                       <div className="flex items-center gap-2">
                         <Label className="text-sm">Активен</Label>
                         <Switch checked={user.is_active} onCheckedChange={() => handleToggle(user, "is_active")} />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Label className="text-sm">Верифицирован</Label>
-                        <Switch
-                          checked={user.is_verified}
-                          onCheckedChange={() => handleToggle(user, "is_verified")}
-                        />
                       </div>
                     </div>
                   </div>

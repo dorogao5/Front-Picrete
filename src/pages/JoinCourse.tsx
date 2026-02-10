@@ -44,7 +44,7 @@ const JoinCourse = () => {
         } else if (normalizedIdentity.includes("@")) {
           identityPayload = { email: normalizedIdentity };
         } else {
-          identityPayload = { value: normalizedIdentity };
+          identityPayload = { text: normalizedIdentity };
         }
       }
 

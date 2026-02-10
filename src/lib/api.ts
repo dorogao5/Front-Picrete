@@ -27,6 +27,54 @@ export const getApiErrorStatus = (error: unknown): number | undefined => {
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 export type JsonObject = { [key: string]: JsonValue };
+export type WorkKind = "control" | "homework";
+
+export interface TaskBankSource {
+  id: string;
+  code: string;
+  title: string;
+  version: string;
+}
+
+export interface TaskBankItemImage {
+  id: string;
+  thumbnail_url: string;
+  full_url: string;
+}
+
+export interface TaskBankItem {
+  id: string;
+  source: string;
+  number: string;
+  paragraph: string;
+  topic: string;
+  text: string;
+  has_answer: boolean;
+  answer?: string | null;
+  images: TaskBankItemImage[];
+}
+
+export interface TrainerSetSummary {
+  id: string;
+  title: string;
+  source: string;
+  source_title: string;
+  filters: JsonObject;
+  item_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TrainerSet {
+  id: string;
+  title: string;
+  source: string;
+  source_title: string;
+  filters: JsonObject;
+  created_at: string;
+  updated_at: string;
+  items: TaskBankItem[];
+}
 
 interface ExamVariantPayload {
   content: string;
@@ -53,9 +101,10 @@ export interface ExamTaskTypePayload {
 export interface ExamCreatePayload {
   title: string;
   description: string;
+  kind: WorkKind;
   start_time: string;
   end_time: string;
-  duration_minutes: number;
+  duration_minutes?: number | null;
   timezone: string;
   max_attempts: number;
   allow_breaks: boolean;
@@ -69,9 +118,10 @@ export interface ExamCreatePayload {
 export interface ExamUpdatePayload {
   title?: string;
   description?: string;
+  kind?: WorkKind;
   start_time?: string;
   end_time?: string;
-  duration_minutes?: number;
+  duration_minutes?: number | null;
   timezone?: string;
   max_attempts?: number;
   allow_breaks?: boolean;
@@ -204,11 +254,82 @@ export const examsAPI = {
   addTaskType: (examId: string, data: ExamTaskTypePayload, courseId?: string) =>
     api.post(`${coursePrefix(courseId)}/exams/${examId}/task-types`, data),
 
+  addTaskTypesFromBank: (examId: string, data: { bank_item_ids: string[] }, courseId?: string) =>
+    api.post(`${coursePrefix(courseId)}/exams/${examId}/task-types/from-bank`, data),
+
   listSubmissions: (
     examId: string,
     courseId?: string,
     params?: { status?: string; skip?: number; limit?: number }
   ) => api.get(`${coursePrefix(courseId)}/exams/${examId}/submissions`, { params }),
+};
+
+export const taskBankAPI = {
+  sources: (courseId?: string) => api.get(`${coursePrefix(courseId)}/task-bank/sources`),
+
+  listItems: (
+    courseId?: string,
+    params?: {
+      source?: string;
+      paragraph?: string;
+      topic?: string;
+      has_answer?: boolean;
+      skip?: number;
+      limit?: number;
+    }
+  ) => api.get(`${coursePrefix(courseId)}/task-bank/items`, { params }),
+};
+
+export const trainerAPI = {
+  generateSet: (
+    data: {
+      source: string;
+      filters?: { paragraph?: string; topic?: string; has_answer?: boolean };
+      count: number;
+      title?: string;
+      seed?: number;
+    },
+    courseId?: string
+  ) => api.post(`${coursePrefix(courseId)}/trainer/sets/generate`, data),
+
+  createManualSet: (
+    data: { source: string; numbers: string[]; title?: string },
+    courseId?: string
+  ) => api.post(`${coursePrefix(courseId)}/trainer/sets/manual`, data),
+
+  listSets: (courseId?: string, params?: { skip?: number; limit?: number }) =>
+    api.get(`${coursePrefix(courseId)}/trainer/sets`, { params }),
+
+  getSet: (setId: string, courseId?: string) =>
+    api.get(`${coursePrefix(courseId)}/trainer/sets/${setId}`),
+
+  deleteSet: (setId: string, courseId?: string) =>
+    api.delete(`${coursePrefix(courseId)}/trainer/sets/${setId}`),
+};
+
+export const materialsAPI = {
+  additionPdfUrl: (courseId?: string) => api.get(`${coursePrefix(courseId)}/materials/addition-pdf-url`),
+
+  openAdditionPdf: async (courseId?: string) => {
+    const resolvedCourseId = resolveCourseId(courseId);
+    const popup = window.open("", "_blank", "noopener,noreferrer");
+    if (!popup) {
+      throw new Error("Браузер заблокировал открытие новой вкладки");
+    }
+
+    try {
+      const response = await api.get(`/courses/${resolvedCourseId}/materials/addition-pdf/view`, {
+        responseType: "blob",
+      });
+      const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: "application/pdf" });
+      const blobUrl = URL.createObjectURL(blob);
+      popup.location.href = blobUrl;
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    } catch (error) {
+      popup.close();
+      throw error;
+    }
+  },
 };
 
 export const submissionsAPI = {
@@ -289,7 +410,6 @@ export const usersAPI = {
     username?: string;
     isPlatformAdmin?: boolean;
     isActive?: boolean;
-    isVerified?: boolean;
   }) => api.get("/users", { params }),
 
   create: (data: {
@@ -298,7 +418,6 @@ export const usersAPI = {
     password: string;
     is_platform_admin?: boolean;
     is_active?: boolean;
-    is_verified?: boolean;
   }) => api.post("/users", data),
 
   get: (userId: string) => api.get(`/users/${userId}`),
@@ -310,7 +429,6 @@ export const usersAPI = {
       password?: string;
       is_platform_admin?: boolean;
       is_active?: boolean;
-      is_verified?: boolean;
     }
   ) => api.patch(`/users/${userId}`, data),
 

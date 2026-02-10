@@ -1,126 +1,83 @@
 # Front-Picrete
 
-**Frontend приложение для платформы Picrete**
+Frontend для платформы Picrete (React + TypeScript + Vite).
 
-Front-Picrete — это React + TypeScript frontend приложение для платформы автоматизированной проверки контрольных работ по химии с использованием искусственного интеллекта.
+## Что реализовано
 
-## Технологический стек
+- Course-scoped routing (`/c/:courseId/...`) с membership-based доступом.
+- Auth flow: signup/login + join-course по invite.
+- Teacher workflow: создание/редактирование работ, проверка submissions.
+- Student workflow: прохождение работ, OCR review, просмотр результатов.
+- Типы работ: `control` и `homework`.
+- Task bank + trainer sets.
+- Кнопка “Дополнительные материалы” (PDF в новой вкладке через авторизованный blob-open).
 
-- **React 18** + **TypeScript** — пользовательский интерфейс
-- **Vite** — сборщик и dev-сервер
-- **React Router** — маршрутизация
-- **shadcn/ui** — компоненты UI
-- **Tailwind CSS** — стилизация
-- **TanStack Query** — управление состоянием и кэширование запросов
-- **KaTeX** — отображение математических формул (LaTeX)
+## Технологии
 
-## Структура проекта
-
-```
-Front-Picrete/
-├── src/
-│   ├── components/      # React компоненты
-│   ├── pages/           # Страницы приложения
-│   ├── lib/             # Утилиты и API клиент
-│   └── hooks/           # React хуки
-├── public/              # Статические файлы
-├── package.json
-└── vite.config.ts
-```
+- React 18 + TypeScript
+- Vite
+- React Router
+- TanStack Query
+- Axios
+- shadcn/ui + Tailwind
+- Sonner
+- KaTeX
 
 ## Быстрый старт
 
-### Предварительные требования
-
-- Node.js 18+
-- npm или yarn
-
-### Установка
-
 ```bash
-# Клонировать репозиторий
-git clone https://github.com/dorogao5/Front-Picrete.git
-cd Front-Picrete
-
-# Установить зависимости
 npm install
+npm run dev
 ```
 
-### Настройка переменных окружения
+## Переменные окружения
 
-Создайте файл `.env` в корне проекта:
+Минимум:
 
 ```env
 VITE_API_URL=http://localhost:8000/api/v1
 ```
 
-Для production используйте файл `env.production`:
+Если `VITE_API_URL` не задан:
+- dev: `http://localhost:8000/api/v1`
+- prod: `https://picrete.com/api/v1`
 
-```env
-VITE_API_URL=https://picrete.com/api/v1
-```
-
-### Запуск в режиме разработки
+## Команды
 
 ```bash
 npm run dev
-```
-
-Приложение будет доступно по адресу `http://localhost:5173`
-
-### Сборка для production
-
-```bash
 npm run build
+npm run lint
 ```
 
-Собранные файлы будут в директории `dist/`
+## Главные директории
 
-### Предпросмотр production сборки
-
-```bash
-npm run preview
+```text
+src/
+  pages/
+  components/
+  lib/
 ```
 
-## Разработка
+- `src/lib/auth.ts` — client auth/session + membership helpers.
+- `src/lib/api.ts` — API contracts и axios wrappers.
+- `src/App.tsx` — маршрутизация и protected routes.
 
-### Основные команды
+## Основные страницы
 
-- `npm run dev` — запуск dev-сервера
-- `npm run build` — сборка для production
-- `npm run preview` — предпросмотр production сборки
-- `npm run lint` — проверка кода линтером
+- Auth: `Login`, `Signup`, `JoinCourse`
+- Teacher: `TeacherDashboard`, `CreateExam`, `ExamSubmissions`, `SubmissionReview`
+- Student: `StudentDashboard`, `TakeExam`, `OcrReview`, `ExamResult`
+- Task Bank/Trainer: `TaskBank`, `TrainerSets`, `TrainerSetView`
+- Admin: `AdminDashboard`
 
-### Структура компонентов
+## Связь с backend
 
-- `src/components/ui/` — базовые UI компоненты (shadcn/ui)
-- `src/components/` — специфичные компоненты приложения
-- `src/pages/` — страницы приложения
-- `src/lib/` — утилиты и API клиент
+Ожидается backend Picrete c API `/api/v1` и course-scoped endpoints:
+- `/courses/:course_id/exams`
+- `/courses/:course_id/submissions`
+- `/courses/:course_id/task-bank`
+- `/courses/:course_id/trainer`
+- `/courses/:course_id/materials`
 
-### API клиент
-
-API клиент находится в `src/lib/api.ts` и автоматически использует переменную окружения `VITE_API_URL` для подключения к backend.
-
-## Деплой
-
-Для production деплоя:
-
-1. Убедитесь, что `env.production` содержит правильный API URL
-2. Соберите приложение: `npm run build`
-3. Скопируйте содержимое `dist/` в директорию `/srv/picrete/landing/` на сервере
-
-Подробные инструкции по деплою см. в `DEPLOYMENT_FRONTEND.md`
-
-## Связь с Backend
-
-Frontend подключается к backend API через переменную окружения `VITE_API_URL`:
-- Development: `http://localhost:8000/api/v1`
-- Production: `https://picrete.com/api/v1`
-
-Backend репозиторий: https://github.com/dorogao5/Picrete
-
-## Лицензия
-
-Copyright (c) 2025
-
+Подробнее по архитектуре: `ARCHITECTURE.md`.

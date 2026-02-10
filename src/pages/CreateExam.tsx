@@ -10,8 +10,8 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Plus, Trash2, Save } from "lucide-react";
-import { examsAPI, getApiErrorMessage } from "@/lib/api";
-import type { ExamTaskTypePayload, JsonObject } from "@/lib/api";
+import { examsAPI, getApiErrorMessage, taskBankAPI } from "@/lib/api";
+import type { ExamTaskTypePayload, JsonObject, TaskBankItem, WorkKind } from "@/lib/api";
 import { toast } from "sonner";
 
 interface TaskVariant {
@@ -53,9 +53,10 @@ interface ExamTaskTypeResponse {
 interface ExamDetailsResponse {
   title: string;
   description?: string;
+  kind: WorkKind;
   start_time: string;
   end_time: string;
-  duration_minutes: number;
+  duration_minutes: number | null;
   timezone: string;
   max_attempts: number;
   allow_breaks: boolean;
@@ -78,9 +79,10 @@ const CreateExam = () => {
   const [examData, setExamData] = useState({
     title: "",
     description: "",
+    kind: "control" as WorkKind,
     start_time: "",
     end_time: "",
-    duration_minutes: 90,
+    duration_minutes: 90 as number | null,
     timezone: "Europe/Moscow", // GMT+3
     max_attempts: 1,
     allow_breaks: false,
@@ -90,6 +92,14 @@ const CreateExam = () => {
   });
 
   const [taskTypes, setTaskTypes] = useState<TaskType[]>([]);
+  const [bankItems, setBankItems] = useState<TaskBankItem[]>([]);
+  const [bankTotalCount, setBankTotalCount] = useState(0);
+  const [bankLoading, setBankLoading] = useState(false);
+  const [bankSkip, setBankSkip] = useState(0);
+  const [bankParagraph, setBankParagraph] = useState("");
+  const [bankTopic, setBankTopic] = useState("");
+  const [bankHasAnswer, setBankHasAnswer] = useState<"all" | "yes" | "no">("all");
+  const [selectedBankItems, setSelectedBankItems] = useState<Record<string, TaskBankItem>>({});
 
   // Load exam data if editing
   useEffect(() => {
@@ -100,7 +110,7 @@ const CreateExam = () => {
         const response = await examsAPI.get(examId, courseId);
         const exam = response.data as ExamDetailsResponse;
         
-        // Backend returns RFC3339 UTC (e.g. "2025-01-02T10:20:30Z") — parse as-is
+        // Backend returns RFC3339 UTC (e.g. "2025-01-02T10:20:30Z") - parse as-is
         const startTime = new Date(exam.start_time);
         const endTime = new Date(exam.end_time);
         
@@ -117,9 +127,10 @@ const CreateExam = () => {
         setExamData({
           title: exam.title,
           description: exam.description || "",
+          kind: exam.kind ?? "control",
           start_time: formatForInput(startTime),
           end_time: formatForInput(endTime),
-          duration_minutes: exam.duration_minutes,
+          duration_minutes: exam.kind === "homework" ? null : (exam.duration_minutes ?? 90),
           timezone: exam.timezone,
           max_attempts: exam.max_attempts,
           allow_breaks: exam.allow_breaks,
@@ -129,30 +140,9 @@ const CreateExam = () => {
         });
         
         // Load task types (preserve id — backend не поддерживает обновление, только добавление)
-        if (exam.task_types && exam.task_types.length > 0) {
-          setTaskTypes(exam.task_types.map((tt) => ({
-            id: tt.id,
-            title: tt.title,
-            description: tt.description,
-            order_index: tt.order_index,
-            max_score: tt.max_score,
-            rubric: tt.rubric,
-            difficulty: tt.difficulty,
-            taxonomy_tags: tt.taxonomy_tags || [],
-            formulas: tt.formulas || [],
-            units: tt.units || [],
-            validation_rules: tt.validation_rules || {},
-            variants: tt.variants.map((v) => ({
-              content: v.content,
-              parameters: v.parameters || {},
-              reference_solution: v.reference_solution || "",
-              reference_answer: v.reference_answer || "",
-              answer_tolerance: v.answer_tolerance || 0.01,
-            })),
-          })));
-        }
+        applyExamTaskTypesFromResponse(exam);
       } catch (error: unknown) {
-        toast.error(getApiErrorMessage(error, "Ошибка загрузки контрольной работы"));
+        toast.error(getApiErrorMessage(error, "Ошибка загрузки работы"));
         navigate(courseId ? `/c/${courseId}/teacher` : "/dashboard");
       } finally {
         setInitialLoading(false);
@@ -161,6 +151,30 @@ const CreateExam = () => {
     
     loadExam();
   }, [courseId, examId, navigate]);
+
+  useEffect(() => {
+    const loadBankItems = async () => {
+      if (!courseId) return;
+      setBankLoading(true);
+      try {
+        const response = await taskBankAPI.listItems(courseId, {
+          source: "sviridov",
+          paragraph: bankParagraph || undefined,
+          topic: bankTopic || undefined,
+          has_answer: bankHasAnswer === "all" ? undefined : bankHasAnswer === "yes",
+          skip: bankSkip,
+          limit: 20,
+        });
+        setBankItems((response.data.items ?? []) as TaskBankItem[]);
+        setBankTotalCount(response.data.total_count ?? 0);
+      } catch (error: unknown) {
+        toast.error(getApiErrorMessage(error, "Ошибка загрузки банка задач"));
+      } finally {
+        setBankLoading(false);
+      }
+    };
+    loadBankItems();
+  }, [courseId, bankParagraph, bankTopic, bankHasAnswer, bankSkip]);
 
   const addTaskType = () => {
     setTaskTypes([
@@ -244,6 +258,75 @@ const CreateExam = () => {
     setTaskTypes(updated);
   };
 
+  const toggleBankSelection = (item: TaskBankItem) => {
+    setSelectedBankItems((prev) => {
+      const next = { ...prev };
+      if (next[item.id]) {
+        delete next[item.id];
+      } else {
+        next[item.id] = item;
+      }
+      return next;
+    });
+  };
+
+  const applyExamTaskTypesFromResponse = (exam: ExamDetailsResponse) => {
+    if (exam.task_types && exam.task_types.length > 0) {
+      setTaskTypes(exam.task_types.map((tt) => ({
+        id: tt.id,
+        title: tt.title,
+        description: tt.description,
+        order_index: tt.order_index,
+        max_score: tt.max_score,
+        rubric: tt.rubric,
+        difficulty: tt.difficulty,
+        taxonomy_tags: tt.taxonomy_tags || [],
+        formulas: tt.formulas || [],
+        units: tt.units || [],
+        validation_rules: tt.validation_rules || {},
+        variants: tt.variants.map((v) => ({
+          content: v.content,
+          parameters: v.parameters || {},
+          reference_solution: v.reference_solution || "",
+          reference_answer: v.reference_answer || "",
+          answer_tolerance: v.answer_tolerance || 0.01,
+        })),
+      })));
+    } else {
+      setTaskTypes([]);
+    }
+  };
+
+  const addSelectedBankTasks = async () => {
+    if (!courseId) return;
+    if (!isEditMode || !examId) {
+      toast.error("Сначала сохраните работу, затем добавляйте задачи из банка");
+      return;
+    }
+    const selected = Object.values(selectedBankItems);
+    if (selected.length === 0) {
+      toast.error("Выберите хотя бы одну задачу в банке");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await examsAPI.addTaskTypesFromBank(
+        examId,
+        { bank_item_ids: selected.map((item) => item.id) },
+        courseId
+      );
+      const refreshed = await examsAPI.get(examId, courseId);
+      applyExamTaskTypesFromResponse(refreshed.data as ExamDetailsResponse);
+      toast.success(`Добавлено задач из банка: ${selected.length}`);
+      setSelectedBankItems({});
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Ошибка добавления задач из банка"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (publish: boolean = false) => {
     if (!courseId) return;
     setLoading(true);
@@ -253,6 +336,14 @@ const CreateExam = () => {
         toast.error("Заполните все обязательные поля");
         setLoading(false);
         return;
+      }
+
+      if (examData.kind === "control") {
+        if (!examData.duration_minutes || examData.duration_minutes <= 0) {
+          toast.error("Для контрольной нужно указать положительную длительность");
+          setLoading(false);
+          return;
+        }
       }
 
       if (taskTypes.length === 0) {
@@ -284,47 +375,47 @@ const CreateExam = () => {
       // by appending +03:00 timezone offset
       const startTimeUTC = new Date(examData.start_time + ':00+03:00').toISOString();
       const endTimeUTC = new Date(examData.end_time + ':00+03:00').toISOString();
+      const payload = {
+        ...examData,
+        duration_minutes: examData.kind === "control" ? examData.duration_minutes : null,
+        start_time: startTimeUTC,
+        end_time: endTimeUTC,
+      };
 
       let resultExamId = examId;
 
       if (isEditMode) {
         // Update exam metadata (backend ignores task_types in PATCH)
-        await examsAPI.update(examId!, {
-          ...examData,
-          start_time: startTimeUTC,
-          end_time: endTimeUTC,
-        }, courseId);
+        await examsAPI.update(examId!, payload, courseId);
         // Добавляем только НОВЫЕ типы задач (без id) — backend не поддерживает обновление существующих
         const newTaskTypes = preparedTaskTypes.filter(tt => !tt.id);
         for (const tt of newTaskTypes) {
           await examsAPI.addTaskType(examId!, tt, courseId);
         }
         if (newTaskTypes.length > 0) {
-          toast.success(`Контрольная работа обновлена. Добавлено задач: ${newTaskTypes.length}`);
+          toast.success(`Работа обновлена. Добавлено задач: ${newTaskTypes.length}`);
         } else {
-          toast.success("Контрольная работа обновлена");
+          toast.success("Работа обновлена");
         }
       } else {
         // Create new exam
         const response = await examsAPI.create({
-          ...examData,
-          start_time: startTimeUTC,
-          end_time: endTimeUTC,
+          ...payload,
           task_types: preparedTaskTypes,
         }, courseId);
         resultExamId = response.data.id;
-        toast.success("Контрольная работа создана");
+        toast.success("Работа создана");
       }
 
       if (publish && resultExamId) {
         await examsAPI.publish(resultExamId, courseId);
-        toast.success("Контрольная работа опубликована");
+        toast.success("Работа опубликована");
       }
 
       navigate(`/c/${courseId}/teacher`);
     } catch (error: unknown) {
       toast.error(
-        getApiErrorMessage(error, `Ошибка при ${isEditMode ? "обновлении" : "создании"} КР`)
+        getApiErrorMessage(error, `Ошибка при ${isEditMode ? "обновлении" : "создании"} работы`)
       );
     } finally {
       setLoading(false);
@@ -337,10 +428,10 @@ const CreateExam = () => {
     setLoading(true);
     try {
       await examsAPI.delete(examId, forceDelete, courseId);
-      toast.success("Контрольная работа удалена");
+      toast.success("Работа удалена");
       navigate(`/c/${courseId}/teacher`);
     } catch (error: unknown) {
-      const errorDetail = getApiErrorMessage(error, "Ошибка при удалении КР");
+      const errorDetail = getApiErrorMessage(error, "Ошибка при удалении работы");
       
       // Check if error is about existing submissions
       if (errorDetail && errorDetail.includes("existing submission") && !forceDelete) {
@@ -350,7 +441,7 @@ const CreateExam = () => {
         setSubmissionCount(count);
         setShowForceDeleteDialog(true);
       } else {
-        toast.error(errorDetail || "Ошибка при удалении КР");
+        toast.error(errorDetail || "Ошибка при удалении работы");
       }
     } finally {
       setLoading(false);
@@ -383,10 +474,10 @@ const CreateExam = () => {
         <div className="mb-8 flex items-start justify-between">
           <div>
             <h1 className="text-4xl font-bold mb-2">
-              {isEditMode ? "Редактирование контрольной работы" : "Создание контрольной работы"}
+              {isEditMode ? "Редактирование работы" : "Создание работы"}
             </h1>
             <p className="text-muted-foreground">
-              Настройте параметры КР и добавьте задачи
+              Настройте параметры и добавьте задачи
             </p>
           </div>
           {isEditMode && (
@@ -395,14 +486,14 @@ const CreateExam = () => {
                 <AlertDialogTrigger asChild>
                   <Button variant="destructive" disabled={loading}>
                     <Trash2 className="w-4 h-4 mr-2" />
-                    Удалить КР
+                    Удалить работу
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>Вы уверены?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Это действие нельзя отменить. Контрольная работа будет удалена навсегда.
+                      Это действие нельзя отменить. Работа будет удалена навсегда.
                       {examData.title && ` Будет удалена: "${examData.title}"`}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
@@ -422,7 +513,7 @@ const CreateExam = () => {
                     <AlertDialogTitle className="text-destructive">⚠️ Внимание! Существуют работы студентов</AlertDialogTitle>
                     <AlertDialogDescription className="space-y-3">
                       <p className="font-semibold">
-                        У этой контрольной работы есть {submissionCount} {submissionCount === 1 ? 'работа студента' : 'работы студентов'}.
+                        У этой работы есть {submissionCount} {submissionCount === 1 ? 'работа студента' : 'работы студентов'}.
                       </p>
                       <p>
                         При удалении будут безвозвратно удалены:
@@ -459,7 +550,7 @@ const CreateExam = () => {
             <h2 className="text-2xl font-bold mb-4">Основная информация</h2>
             <div className="grid md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <Label htmlFor="title">Название КР *</Label>
+                <Label htmlFor="title">Название работы *</Label>
                 <Input
                   id="title"
                   value={examData.title}
@@ -477,9 +568,30 @@ const CreateExam = () => {
                   onChange={(e) =>
                     setExamData({ ...examData, description: e.target.value })
                   }
-                  placeholder="Краткое описание контрольной работы..."
+                  placeholder="Краткое описание работы..."
                   rows={3}
                 />
+              </div>
+              <div>
+                <Label htmlFor="kind">Тип работы *</Label>
+                <select
+                  id="kind"
+                  className="w-full border rounded-md p-2"
+                  value={examData.kind}
+                  onChange={(e) =>
+                    setExamData((prev) => ({
+                      ...prev,
+                      kind: e.target.value as WorkKind,
+                      duration_minutes:
+                        e.target.value === "homework"
+                          ? null
+                          : (prev.duration_minutes ?? 90),
+                    }))
+                  }
+                >
+                  <option value="control">Контрольная</option>
+                  <option value="homework">Домашняя работа</option>
+                </select>
               </div>
               <div>
                 <Label htmlFor="start_time">Дата и время начала *</Label>
@@ -503,20 +615,26 @@ const CreateExam = () => {
                   }
                 />
               </div>
-              <div>
-                <Label htmlFor="duration">Длительность (минут) *</Label>
-                <Input
-                  id="duration"
-                  type="number"
-                  value={examData.duration_minutes}
-                  onChange={(e) =>
-                    setExamData({
-                      ...examData,
-                      duration_minutes: parseInt(e.target.value) || 90,
-                    })
-                  }
-                />
-              </div>
+              {examData.kind === "control" ? (
+                <div>
+                  <Label htmlFor="duration">Длительность (минут) *</Label>
+                  <Input
+                    id="duration"
+                    type="number"
+                    value={examData.duration_minutes ?? 90}
+                    onChange={(e) =>
+                      setExamData({
+                        ...examData,
+                        duration_minutes: parseInt(e.target.value, 10) || 90,
+                      })
+                    }
+                  />
+                </div>
+              ) : (
+                <div className="rounded border p-3 text-sm text-muted-foreground">
+                  Для домашней работы таймер не используется: действует только окно между start/end.
+                </div>
+              )}
               <div>
                 <Label htmlFor="max_attempts">Максимум попыток</Label>
                 <Input
@@ -792,6 +910,124 @@ const CreateExam = () => {
                 ))}
               </div>
             )}
+          </Card>
+
+          {/* Task bank integration */}
+          <Card className="p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Банк задач</h2>
+                <p className="text-sm text-muted-foreground">
+                  Добавление задач из источника Свиpидова в работу как snapshot
+                </p>
+                {!isEditMode && (
+                  <p className="text-xs text-amber-700 mt-1">
+                    Для добавления из банка сначала сохраните работу.
+                  </p>
+                )}
+              </div>
+              <Button
+                onClick={addSelectedBankTasks}
+                disabled={!isEditMode || loading || Object.keys(selectedBankItems).length === 0}
+              >
+                Добавить в работу ({Object.keys(selectedBankItems).length})
+              </Button>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-3 mb-4">
+              <div>
+                <Label htmlFor="bank-paragraph">Параграф</Label>
+                <Input
+                  id="bank-paragraph"
+                  value={bankParagraph}
+                  onChange={(event) => {
+                    setBankParagraph(event.target.value);
+                    setBankSkip(0);
+                  }}
+                  placeholder="Например: 7"
+                />
+              </div>
+              <div>
+                <Label htmlFor="bank-topic">Тема</Label>
+                <Input
+                  id="bank-topic"
+                  value={bankTopic}
+                  onChange={(event) => {
+                    setBankTopic(event.target.value);
+                    setBankSkip(0);
+                  }}
+                  placeholder="Поиск по теме"
+                />
+              </div>
+              <div>
+                <Label htmlFor="bank-answer">Ответ</Label>
+                <select
+                  id="bank-answer"
+                  className="w-full border rounded-md p-2"
+                  value={bankHasAnswer}
+                  onChange={(event) => {
+                    setBankHasAnswer(event.target.value as "all" | "yes" | "no");
+                    setBankSkip(0);
+                  }}
+                >
+                  <option value="all">Все задачи</option>
+                  <option value="yes">Только с ответом</option>
+                  <option value="no">Только без ответа</option>
+                </select>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground mb-3">
+              Найдено задач: {bankTotalCount}
+            </p>
+
+            {bankLoading ? (
+              <p className="text-muted-foreground">Загрузка банка задач...</p>
+            ) : bankItems.length === 0 ? (
+              <p className="text-muted-foreground">По выбранным фильтрам задач не найдено</p>
+            ) : (
+              <div className="space-y-3">
+                {bankItems.map((item) => (
+                  <Card key={item.id} className="p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-1">
+                          № {item.number} • § {item.paragraph}
+                        </p>
+                        <p className="font-semibold mb-1">{item.topic}</p>
+                        <p className="text-sm text-muted-foreground line-clamp-3">{item.text}</p>
+                      </div>
+                      <Button
+                        variant={selectedBankItems[item.id] ? "default" : "outline"}
+                        onClick={() => toggleBankSelection(item)}
+                      >
+                        {selectedBankItems[item.id] ? "Выбрано" : "Выбрать"}
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-4 flex items-center justify-between">
+              <Button
+                variant="outline"
+                disabled={bankSkip === 0}
+                onClick={() => setBankSkip((prev) => Math.max(0, prev - 20))}
+              >
+                Предыдущая страница
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Страница {Math.floor(bankSkip / 20) + 1}
+              </span>
+              <Button
+                variant="outline"
+                disabled={bankSkip + 20 >= bankTotalCount}
+                onClick={() => setBankSkip((prev) => prev + 20)}
+              >
+                Следующая страница
+              </Button>
+            </div>
           </Card>
 
           {/* Actions */}

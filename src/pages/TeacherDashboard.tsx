@@ -5,14 +5,16 @@ import { Card } from "@/components/ui/card";
 import { Navbar } from "@/components/Navbar";
 import { Plus, FileText, CheckCircle, Clock, AlertCircle } from "lucide-react";
 import { examsAPI, getApiErrorStatus } from "@/lib/api";
+import type { WorkKind } from "@/lib/api";
 import { toast } from "sonner";
 
 interface ExamSummary {
   id: string;
   title: string;
+  kind: WorkKind;
   start_time: string;
   end_time: string;
-  duration_minutes: number;
+  duration_minutes: number | null;
   status: string;
   task_count: number;
   student_count: number;
@@ -23,6 +25,7 @@ const TeacherDashboard = () => {
   const { courseId } = useParams<{ courseId: string }>();
   const [exams, setExams] = useState<ExamSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [kindFilter, setKindFilter] = useState<"all" | WorkKind>("all");
 
   useEffect(() => {
     const fetchExams = async () => {
@@ -40,7 +43,7 @@ const TeacherDashboard = () => {
           return;
         }
         // Для других ошибок показываем уведомление
-        toast.error("Ошибка загрузки контрольных работ");
+        toast.error("Ошибка загрузки работ");
       } finally {
         setLoading(false);
       }
@@ -53,12 +56,17 @@ const TeacherDashboard = () => {
     return null;
   }
 
+  const filteredExams =
+    kindFilter === "all" ? exams : exams.filter((exam) => exam.kind === kindFilter);
+
   // Calculate statistics
   const stats = {
-    total: exams.length,
-    active: exams.filter(e => e.status === 'active' || e.status === 'published').length,
-    pendingReview: exams.reduce((sum, e) => sum + e.pending_count, 0),
-    completed: exams.reduce((sum, e) => sum + (e.student_count - e.pending_count), 0),
+    total: filteredExams.length,
+    active: filteredExams.filter(e => e.status === 'active' || e.status === 'published').length,
+    pendingReview: filteredExams.reduce((sum, e) => sum + e.pending_count, 0),
+    completed: filteredExams.reduce((sum, e) => sum + (e.student_count - e.pending_count), 0),
+    control: filteredExams.filter((e) => e.kind === "control").length,
+    homework: filteredExams.filter((e) => e.kind === "homework").length,
   };
 
   return (
@@ -69,14 +77,45 @@ const TeacherDashboard = () => {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-4xl font-bold mb-2">Панель преподавателя</h1>
-            <p className="text-muted-foreground">Управление контрольными работами и проверка решений</p>
+            <p className="text-muted-foreground">Управление работами и проверка решений</p>
           </div>
-          <Link to={`/c/${courseId}/create-exam`}>
-            <Button size="lg" className="shadow-elegant">
-              <Plus className="w-5 h-5 mr-2" />
-              Создать КР
-            </Button>
-          </Link>
+          <div className="flex gap-2">
+            <Link to={`/c/${courseId}/task-bank`}>
+              <Button variant="outline" size="lg">
+                Банк задач
+              </Button>
+            </Link>
+            <Link to={`/c/${courseId}/create-exam`}>
+              <Button size="lg" className="shadow-elegant">
+                <Plus className="w-5 h-5 mr-2" />
+                Создать работу
+              </Button>
+            </Link>
+          </div>
+        </div>
+
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          <Button
+            variant={kindFilter === "all" ? "default" : "outline"}
+            onClick={() => setKindFilter("all")}
+          >
+            Все
+          </Button>
+          <Button
+            variant={kindFilter === "control" ? "default" : "outline"}
+            onClick={() => setKindFilter("control")}
+          >
+            Контрольные
+          </Button>
+          <Button
+            variant={kindFilter === "homework" ? "default" : "outline"}
+            onClick={() => setKindFilter("homework")}
+          >
+            Домашние
+          </Button>
+          <span className="ml-2 text-sm text-muted-foreground">
+            Контрольных: {stats.control}, домашних: {stats.homework}
+          </span>
         </div>
 
         {/* Stats Overview */}
@@ -88,7 +127,7 @@ const TeacherDashboard = () => {
               </div>
               <div>
                 <p className="text-2xl font-bold">{loading ? "..." : stats.total}</p>
-                <p className="text-sm text-muted-foreground">Всего КР</p>
+                <p className="text-sm text-muted-foreground">Всего работ</p>
               </div>
             </div>
           </Card>
@@ -132,26 +171,26 @@ const TeacherDashboard = () => {
 
         {/* Exams List */}
         <div>
-          <h2 className="text-2xl font-bold mb-6">Контрольные работы</h2>
+          <h2 className="text-2xl font-bold mb-6">Работы</h2>
           {loading ? (
             <div className="text-center py-12">
               <p className="text-muted-foreground">Загрузка...</p>
             </div>
-          ) : exams.length === 0 ? (
+          ) : filteredExams.length === 0 ? (
             <Card className="p-12 text-center bg-gradient-card border-border/50">
               <FileText className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-              <h3 className="text-xl font-semibold mb-2">Контрольных работ пока нет</h3>
-              <p className="text-muted-foreground mb-6">Создайте первую контрольную работу</p>
+              <h3 className="text-xl font-semibold mb-2">Работ пока нет</h3>
+              <p className="text-muted-foreground mb-6">Создайте первую работу</p>
               <Link to={`/c/${courseId}/create-exam`}>
                 <Button>
                   <Plus className="w-5 h-5 mr-2" />
-                  Создать КР
+                  Создать работу
                 </Button>
               </Link>
             </Card>
           ) : (
             <div className="space-y-4">
-              {exams.map((exam) => {
+              {filteredExams.map((exam) => {
                 const getStatusLabel = (status: string) => {
                   switch (status) {
                     case 'active': return 'Активна';
@@ -161,6 +200,11 @@ const TeacherDashboard = () => {
                     default: return status;
                   }
                 };
+                const kindLabel = exam.kind === "homework" ? "Домашняя" : "Контрольная";
+                const kindClass =
+                  exam.kind === "homework"
+                    ? "bg-orange-50 text-orange-700 border-orange-200"
+                    : "bg-blue-50 text-blue-700 border-blue-200";
 
                 const isActive = exam.status === 'active' || exam.status === 'published';
 
@@ -170,6 +214,9 @@ const TeacherDashboard = () => {
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
                           <h3 className="text-xl font-semibold">{exam.title}</h3>
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium border ${kindClass}`}>
+                            {kindLabel}
+                          </span>
                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                             isActive
                               ? "bg-primary/10 text-primary border border-primary/20" 

@@ -7,7 +7,8 @@ import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Clock, Upload, CheckCircle, AlertCircle, Image as ImageIcon } from "lucide-react";
-import { getApiErrorMessage, getApiErrorStatus, submissionsAPI } from "@/lib/api";
+import { getApiErrorMessage, getApiErrorStatus, materialsAPI, submissionsAPI } from "@/lib/api";
+import type { WorkKind } from "@/lib/api";
 import { toast } from "sonner";
 import { renderLatex } from "@/lib/renderLatex";
 
@@ -39,8 +40,10 @@ interface SessionTask {
 }
 
 interface SessionVariantResponse {
+  work_kind: WorkKind;
+  hard_deadline: string;
   tasks: SessionTask[];
-  time_remaining: number;
+  time_remaining: number | null;
   existing_images?: ExistingServerImage[];
 }
 
@@ -54,7 +57,9 @@ const TakeExam = () => {
 
   const [session, setSession] = useState<ExamSession | null>(null);
   const [tasks, setTasks] = useState<SessionTask[]>([]);
-  const [timeRemaining, setTimeRemaining] = useState(0);
+  const [workKind, setWorkKind] = useState<WorkKind>("control");
+  const [hardDeadline, setHardDeadline] = useState<string | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [uploadedImages, setUploadedImages] = useState<{ [key: number]: File[] }>({});
   /** Images already on server (e.g. after refresh) — not re-uploaded, shown as "загружено" */
   const [existingServerImages, setExistingServerImages] = useState<
@@ -64,6 +69,7 @@ const TakeExam = () => {
   const [submitting, setSubmitting] = useState(false);
   const [isTimeUp, setIsTimeUp] = useState(false);
   const [showTimeoutDialog, setShowTimeoutDialog] = useState(false);
+  const [openingMaterials, setOpeningMaterials] = useState(false);
   const sessionId = session?.id;
   const initialRemainingRef = useRef<number | null>(null);
   /** Refs so timer/auto-submit always see latest state (avoids stale closure → no_images) */
@@ -103,6 +109,7 @@ const TakeExam = () => {
       .toString()
       .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
+  const isTimedWork = workKind === "control";
 
   // Upload images function (reads current files from ref so auto-submit always uploads latest)
   const uploadImages = useCallback(async () => {
@@ -144,6 +151,30 @@ const TakeExam = () => {
     [courseId, navigate]
   );
 
+  const resolveSubmitNextStep = useCallback(
+    async (
+      submittedSessionId: string,
+      nextStep?: "ocr_review" | "result"
+    ): Promise<"ocr_review" | "result"> => {
+      if (nextStep) {
+        return nextStep;
+      }
+
+      try {
+        const resultResponse = await submissionsAPI.getResult(submittedSessionId, courseId);
+        const ocrStatus = (resultResponse.data as { ocr_overall_status?: string }).ocr_overall_status;
+        if (ocrStatus && ocrStatus !== "not_required") {
+          return "ocr_review";
+        }
+      } catch {
+        // fallback to result route when server-side status cannot be resolved
+      }
+
+      return "result";
+    },
+    [courseId]
+  );
+
   const handleAutoSubmit = useCallback(async () => {
     if (!sessionId || submitting) return;
 
@@ -160,19 +191,30 @@ const TakeExam = () => {
       // Always submit (with or without images) so teacher sees the attempt
       const response = await submissionsAPI.submit(sessionId, courseId);
       const payload = response.data as SubmitResponse;
+      const nextStep = await resolveSubmitNextStep(sessionId, payload.next_step);
       toast.success("Работа автоматически отправлена");
-      navigateAfterSubmit(sessionId, payload.next_step);
+      navigateAfterSubmit(sessionId, nextStep);
     } catch (error: unknown) {
       toast.error(getApiErrorMessage(error, "Ошибка при автоматической отправке работы"));
     } finally {
       setSubmitting(false);
     }
-  }, [sessionId, submitting, uploadImages, courseId, navigateAfterSubmit]);
+  }, [sessionId, submitting, uploadImages, courseId, navigateAfterSubmit, resolveSubmitNextStep]);
 
   // Event handlers
-  const handleTimeoutConfirm = useCallback(() => {
+  const handleTimeoutConfirm = useCallback(async () => {
     setShowTimeoutDialog(false);
     if (sessionId) {
+      try {
+        const resultResponse = await submissionsAPI.getResult(sessionId, courseId);
+        const ocrStatus = (resultResponse.data as { ocr_overall_status?: string }).ocr_overall_status;
+        if (ocrStatus && ocrStatus !== "not_required") {
+          navigate(courseId ? `/c/${courseId}/exam/${sessionId}/ocr-review` : "/dashboard");
+          return;
+        }
+      } catch {
+        // ignore and fall back to result page
+      }
       navigate(courseId ? `/c/${courseId}/exam/${sessionId}/result` : "/dashboard");
     }
   }, [courseId, sessionId, navigate]);
@@ -235,14 +277,35 @@ const TakeExam = () => {
 
       const response = await submissionsAPI.submit(sessionId, courseId);
       const payload = response.data as SubmitResponse;
+      const nextStep = await resolveSubmitNextStep(sessionId, payload.next_step);
       toast.success("Работа отправлена на проверку");
-      navigateAfterSubmit(sessionId, payload.next_step);
+      navigateAfterSubmit(sessionId, nextStep);
     } catch (error: unknown) {
       toast.error(getApiErrorMessage(error, "Ошибка при отправке работы"));
     } finally {
       setSubmitting(false);
     }
-  }, [sessionId, isTimeUp, uploadedImages, uploadImages, navigateAfterSubmit, courseId]);
+  }, [
+    sessionId,
+    isTimeUp,
+    uploadedImages,
+    uploadImages,
+    navigateAfterSubmit,
+    courseId,
+    resolveSubmitNextStep,
+  ]);
+
+  const handleOpenMaterials = useCallback(async () => {
+    if (!courseId) return;
+    setOpeningMaterials(true);
+    try {
+      await materialsAPI.openAdditionPdf(courseId);
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Не удалось открыть дополнительные материалы"));
+    } finally {
+      setOpeningMaterials(false);
+    }
+  }, [courseId]);
 
   // Load session and variant
   useEffect(() => {
@@ -255,8 +318,12 @@ const TakeExam = () => {
         const variantResponse = await submissionsAPI.getSessionVariant(sessionData.id, courseId);
         const variantData = variantResponse.data as SessionVariantResponse;
         setTasks(variantData.tasks);
+        setWorkKind(variantData.work_kind ?? "control");
+        setHardDeadline(variantData.hard_deadline ?? null);
         setTimeRemaining(variantData.time_remaining);
         initialRemainingRef.current = variantData.time_remaining;
+        setIsTimeUp(false);
+        setShowTimeoutDialog(false);
         setExistingServerImages(variantData.existing_images ?? []);
       } catch (error: unknown) {
         if (getApiErrorStatus(error) !== 401) {
@@ -273,11 +340,14 @@ const TakeExam = () => {
 
   // Timer countdown with auto-submit
   useEffect(() => {
-    if (timeRemaining <= 0 || isTimeUp) {
+    if (!isTimedWork || timeRemaining === null || timeRemaining <= 0 || isTimeUp) {
       return;
     }
     const interval = setInterval(() => {
       setTimeRemaining((prev) => {
+        if (prev === null) {
+          return null;
+        }
         if (prev <= 1) {
           handleAutoSubmit();
           setIsTimeUp(true);
@@ -288,7 +358,7 @@ const TakeExam = () => {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [timeRemaining, isTimeUp, handleAutoSubmit]);
+  }, [timeRemaining, isTimeUp, handleAutoSubmit, isTimedWork]);
 
   // Server-side auto-save every 30 seconds
   useEffect(() => {
@@ -323,42 +393,54 @@ const TakeExam = () => {
     );
   }
 
-  const total = initialRemainingRef.current ?? timeRemaining;
-  const progressPercent = total > 0 ? (timeRemaining / total) * 100 : 0;
+  const total = initialRemainingRef.current ?? timeRemaining ?? 0;
+  const progressPercent =
+    total > 0 && timeRemaining !== null ? (timeRemaining / total) * 100 : 0;
 
   return (
     <div className="min-h-screen bg-gradient-subtle">
       <Navbar />
 
-      {/* Timer Bar */}
-      <div className="fixed top-16 left-0 right-0 z-40 bg-background border-b shadow-md">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <Clock className="w-5 h-5" />
-              <span className="font-semibold">Оставшееся время:</span>
-              <span
-                className={`text-2xl font-mono ${
-                  timeRemaining < 600 ? "text-red-500" : "text-primary"
-                }`}
+      {isTimedWork && (
+        <div className="fixed top-16 left-0 right-0 z-40 bg-background border-b shadow-md">
+          <div className="container mx-auto px-6 py-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5" />
+                <span className="font-semibold">Оставшееся время:</span>
+                <span
+                  className={`text-2xl font-mono ${
+                    (timeRemaining ?? 0) < 600 ? "text-red-500" : "text-primary"
+                  }`}
+                >
+                  {timeRemaining !== null ? formatTime(timeRemaining) : "--:--:--"}
+                </span>
+              </div>
+              <Button
+                onClick={handleSubmit}
+                disabled={submitting || uploading || isTimeUp}
+                variant="default"
               >
-                {formatTime(timeRemaining)}
-              </span>
+                <CheckCircle className="w-4 h-4 mr-2" />
+                {isTimeUp ? "Время истекло" : "Завершить работу"}
+              </Button>
             </div>
-            <Button
-              onClick={handleSubmit}
-              disabled={submitting || uploading || isTimeUp}
-              variant="default"
-            >
-              <CheckCircle className="w-4 h-4 mr-2" />
-              {isTimeUp ? "Время истекло" : "Завершить работу"}
-            </Button>
+            <Progress value={progressPercent} className="h-2" />
           </div>
-          <Progress value={progressPercent} className="h-2" />
         </div>
-      </div>
+      )}
 
-      <div className="container mx-auto px-6 pt-40 pb-12">
+      <div className={`container mx-auto px-6 pb-12 ${isTimedWork ? "pt-40" : "pt-24"}`}>
+        {!isTimedWork && hardDeadline && (
+          <Alert className="mb-6 border-blue-400 bg-blue-50 dark:bg-blue-950">
+            <Clock className="h-4 w-4" />
+            <AlertDescription>
+              Домашняя работа без таймера. Жесткий дедлайн:{" "}
+              {new Date(hardDeadline).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })}.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Warning if low time */}
         {existingServerImages.length > 0 && (
           <Alert className="mb-6 border-green-500 bg-green-50 dark:bg-green-950">
@@ -370,7 +452,7 @@ const TakeExam = () => {
           </Alert>
         )}
 
-        {timeRemaining < 600 && timeRemaining > 0 && !isTimeUp && (
+        {isTimedWork && timeRemaining !== null && timeRemaining < 600 && timeRemaining > 0 && !isTimeUp && (
           <Alert className="mb-6 border-red-500">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
@@ -388,6 +470,21 @@ const TakeExam = () => {
             </AlertDescription>
           </Alert>
         )}
+
+        {!isTimedWork && (
+          <div className="mb-6 flex justify-end">
+            <Button onClick={handleSubmit} disabled={submitting || uploading}>
+              <CheckCircle className="w-4 h-4 mr-2" />
+              Сдать домашнюю работу
+            </Button>
+          </div>
+        )}
+
+        <div className="mb-6 flex justify-end">
+          <Button variant="outline" onClick={handleOpenMaterials} disabled={openingMaterials}>
+            {openingMaterials ? "Открытие..." : "Дополнительные материалы"}
+          </Button>
+        </div>
 
         {/* Tasks */}
         <div className="space-y-8">
@@ -505,25 +602,26 @@ const TakeExam = () => {
         </div>
       </div>
 
-      {/* Timeout Dialog */}
-      <Dialog open={showTimeoutDialog} onOpenChange={setShowTimeoutDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-red-500" />
-              Время истекло
-            </DialogTitle>
-            <DialogDescription>
-              Время экзамена закончилось. Работа будет автоматически отправлена на проверку.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-2 mt-4">
-            <Button onClick={handleTimeoutConfirm} className="w-full">
-              Понятно
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {isTimedWork && (
+        <Dialog open={showTimeoutDialog} onOpenChange={setShowTimeoutDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-red-500" />
+                Время истекло
+              </DialogTitle>
+              <DialogDescription>
+                Время экзамена закончилось. Работа будет автоматически отправлена на проверку.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end gap-2 mt-4">
+              <Button onClick={handleTimeoutConfirm} className="w-full">
+                Понятно
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };
