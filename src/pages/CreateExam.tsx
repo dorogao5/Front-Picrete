@@ -54,6 +54,7 @@ interface ExamDetailsResponse {
   title: string;
   description?: string;
   kind: WorkKind;
+  status?: "draft" | "published" | "active" | "completed";
   start_time: string;
   end_time: string;
   duration_minutes: number | null;
@@ -75,6 +76,9 @@ const CreateExam = () => {
   const [initialLoading, setInitialLoading] = useState(isEditMode);
   const [showForceDeleteDialog, setShowForceDeleteDialog] = useState(false);
   const [submissionCount, setSubmissionCount] = useState(0);
+  const [examStatus, setExamStatus] = useState<"draft" | "published" | "active" | "completed">(
+    "draft"
+  );
   
   const [examData, setExamData] = useState({
     title: "",
@@ -138,6 +142,7 @@ const CreateExam = () => {
           ocr_enabled: exam.ocr_enabled ?? true,
           llm_precheck_enabled: exam.llm_precheck_enabled ?? true,
         });
+        setExamStatus(exam.status ?? "draft");
         
         // Load task types (preserve id — backend не поддерживает обновление, только добавление)
         applyExamTaskTypesFromResponse(exam);
@@ -386,7 +391,9 @@ const CreateExam = () => {
         courseId
       );
       const refreshed = await examsAPI.get(targetExamId, courseId);
-      applyExamTaskTypesFromResponse(refreshed.data as ExamDetailsResponse);
+      const refreshedExam = refreshed.data as ExamDetailsResponse;
+      applyExamTaskTypesFromResponse(refreshedExam);
+      setExamStatus(refreshedExam.status ?? "draft");
       if (createdDraftForBank) {
         toast.success(
           `Создан черновик и добавлено задач из банка: ${selected.length}`
@@ -444,6 +451,7 @@ const CreateExam = () => {
 
       if (publish && resultExamId) {
         await examsAPI.publish(resultExamId, courseId);
+        setExamStatus("published");
         toast.success("Работа опубликована");
       }
 
@@ -1070,19 +1078,32 @@ const CreateExam = () => {
             <Button variant="outline" onClick={() => navigate(courseId ? `/c/${courseId}/teacher` : "/dashboard")} disabled={loading}>
               Отмена
             </Button>
-            {!isEditMode && (
-              <Button
-                variant="outline"
-                onClick={() => handleSubmit(false)}
-                disabled={loading}
-              >
-                <Save className="w-4 h-4 mr-2" />
-                Сохранить черновик
-              </Button>
+            {!isEditMode ? (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => handleSubmit(false)}
+                  disabled={loading}
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Сохранить черновик
+                </Button>
+                <Button onClick={() => handleSubmit(true)} disabled={loading}>
+                  Опубликовать
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => handleSubmit(false)} disabled={loading}>
+                  Сохранить изменения
+                </Button>
+                {examStatus === "draft" && (
+                  <Button onClick={() => handleSubmit(true)} disabled={loading}>
+                    Сохранить и опубликовать
+                  </Button>
+                )}
+              </>
             )}
-            <Button onClick={() => handleSubmit(isEditMode ? false : true)} disabled={loading}>
-              {isEditMode ? "Сохранить изменения" : "Опубликовать"}
-            </Button>
           </div>
         </div>
       </div>

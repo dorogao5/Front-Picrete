@@ -26,6 +26,7 @@ const TeacherDashboard = () => {
   const [exams, setExams] = useState<ExamSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [kindFilter, setKindFilter] = useState<"all" | WorkKind>("all");
+  const [publishingExamId, setPublishingExamId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchExams = async () => {
@@ -55,6 +56,21 @@ const TeacherDashboard = () => {
   if (!courseId) {
     return null;
   }
+
+  const handlePublishExam = async (examId: string) => {
+    if (!courseId) return;
+    setPublishingExamId(examId);
+    try {
+      await examsAPI.publish(examId, courseId);
+      const response = await examsAPI.list(courseId);
+      setExams(response.data.items);
+      toast.success("Работа опубликована");
+    } catch {
+      toast.error("Не удалось опубликовать работу");
+    } finally {
+      setPublishingExamId(null);
+    }
+  };
 
   const filteredExams =
     kindFilter === "all" ? exams : exams.filter((exam) => exam.kind === kindFilter);
@@ -237,6 +253,15 @@ const TeacherDashboard = () => {
                         </div>
                       </div>
                       <div className="flex gap-2">
+                        {exam.status === "draft" && (
+                          <Button
+                            variant="outline"
+                            onClick={() => handlePublishExam(exam.id)}
+                            disabled={publishingExamId === exam.id}
+                          >
+                            {publishingExamId === exam.id ? "Публикация..." : "Опубликовать"}
+                          </Button>
+                        )}
                         <Link to={`/c/${courseId}/exam/${exam.id}/submissions`}>
                           <Button variant="outline">Проверка</Button>
                         </Link>
