@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getApiErrorMessage, taskBankAPI, trainerAPI } from "@/lib/api";
 import type { TaskBankItem, TaskBankSource, TrainerSet } from "@/lib/api";
+import { renderLatex } from "@/lib/renderLatex";
 import { toast } from "sonner";
 
 const PAGE_SIZE = 40;
@@ -290,7 +291,9 @@ const TaskBank = () => {
                       )}
                     </div>
                     <h3 className="font-semibold mb-2">{item.topic}</h3>
-                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{item.text}</p>
+                    <div className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {renderLatex(item.text)}
+                    </div>
                     {item.images.length > 0 && (
                       <div className="mt-4 flex flex-wrap gap-2">
                         {item.images.map((image, index) => (

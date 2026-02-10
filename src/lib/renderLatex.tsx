@@ -2,37 +2,47 @@ import 'katex/dist/katex.min.css';
 import { InlineMath, BlockMath } from 'react-katex';
 
 /**
- * Renders a string that may contain LaTeX markup ($..$ for inline, $$...$$ for block).
- * Splits by newlines so each line is rendered independently.
+ * Renders text with mixed plain content and LaTeX.
+ * Supported delimiters:
+ * - Inline: $...$, \(...\)
+ * - Block: $$...$$, \[...\]
  */
 export function renderLatex(text: string): React.ReactNode {
   if (!text) return text;
 
-  try {
-    const lines = text.split('\n');
+  const tokenRegex = /(\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$\$[\s\S]*?\$\$|\$[^$\n]+\$)/g;
+  const tokens = text.split(tokenRegex);
 
-    return lines.map((line, lineIndex) => {
-      const parts = line.split(/(\$\$[\s\S]+?\$\$|\$[\s\S]+?\$)/);
+  const renderPlainText = (value: string, keyPrefix: string) => {
+    const lines = value.split('\n');
+    return (
+      <span key={keyPrefix}>
+        {lines.map((line, lineIndex) => (
+          <span key={`${keyPrefix}-${lineIndex}`}>
+            {line}
+            {lineIndex < lines.length - 1 && <br />}
+          </span>
+        ))}
+      </span>
+    );
+  };
 
-      const lineContent = parts.map((part, partIndex) => {
-        if (part.startsWith("$$") && part.endsWith("$$")) {
-          const mathContent = part.slice(2, -2).trim();
-          return <BlockMath key={partIndex}>{mathContent}</BlockMath>;
-        } else if (part.startsWith("$") && part.endsWith("$")) {
-          const mathContent = part.slice(1, -1).trim();
-          return <InlineMath key={partIndex}>{mathContent}</InlineMath>;
-        }
-        return <span key={partIndex}>{part}</span>;
-      });
+  return tokens.map((token, index) => {
+    if (!token) return null;
 
-      return (
-        <span key={lineIndex}>
-          {lineContent}
-          {lineIndex < lines.length - 1 && <br />}
-        </span>
-      );
-    });
-  } catch {
-    return <span>{text}</span>;
-  }
+    if (token.startsWith('$$') && token.endsWith('$$')) {
+      return <BlockMath key={`block-dollar-${index}`}>{token.slice(2, -2).trim()}</BlockMath>;
+    }
+    if (token.startsWith('\\[') && token.endsWith('\\]')) {
+      return <BlockMath key={`block-bracket-${index}`}>{token.slice(2, -2).trim()}</BlockMath>;
+    }
+    if (token.startsWith('\\(') && token.endsWith('\\)')) {
+      return <InlineMath key={`inline-paren-${index}`}>{token.slice(2, -2).trim()}</InlineMath>;
+    }
+    if (token.startsWith('$') && token.endsWith('$')) {
+      return <InlineMath key={`inline-dollar-${index}`}>{token.slice(1, -1).trim()}</InlineMath>;
+    }
+
+    return renderPlainText(token, `text-${index}`);
+  });
 }

@@ -488,107 +488,116 @@ const TakeExam = () => {
 
         {/* Tasks */}
         <div className="space-y-8">
-          {tasks.map((task, index) => (
-            <Card key={task.task_type.id} className="p-6">
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-2xl font-bold">
-                    Задача {index + 1}. {task.task_type.title}
-                  </h2>
-                  <span className="text-sm font-semibold px-3 py-1 rounded-full bg-primary/10 text-primary">
-                    {task.task_type.max_score} баллов
-                  </span>
-                </div>
+          {tasks.map((task, index) => {
+            const descriptionText = (task.task_type.description || "").trim();
+            const variantText = (task.variant.content || "").trim();
+            const showVariantBlock = variantText.length > 0 && variantText !== descriptionText;
 
-                <div className="prose max-w-none">
-                  <p className="text-muted-foreground mb-4">
-                    {renderLatex(task.task_type.description)}
-                  </p>
-
-                  <div className="bg-secondary/50 p-4 rounded-lg mb-4">
-                    <h3 className="font-semibold mb-2">Ваш вариант:</h3>
-                    <div>{renderLatex(task.variant.content)}</div>
+            return (
+              <Card key={task.task_type.id} className="p-6">
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-2xl font-bold">
+                      Задача {index + 1}. {task.task_type.title}
+                    </h2>
+                    <span className="text-sm font-semibold px-3 py-1 rounded-full bg-primary/10 text-primary">
+                      {task.task_type.max_score} баллов
+                    </span>
                   </div>
+
+                  <div className="prose max-w-none">
+                    <p className="text-muted-foreground mb-4">
+                      {renderLatex(task.task_type.description)}
+                    </p>
+
+                    {showVariantBlock && (
+                      <div className="bg-secondary/50 p-4 rounded-lg mb-4">
+                        <h3 className="font-semibold mb-2">Ваш вариант:</h3>
+                        <div>{renderLatex(task.variant.content)}</div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Formulas reference */}
+                  {task.task_type.formulas.length > 0 && (
+                    <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg mb-4">
+                      <h4 className="font-semibold mb-2">Формулы:</h4>
+                      <div className="space-y-1">
+                        {task.task_type.formulas.map((formula: string, i: number) => (
+                          <div key={i}>{renderLatex(formula)}</div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Formulas reference */}
-                {task.task_type.formulas.length > 0 && (
-                  <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg mb-4">
-                    <h4 className="font-semibold mb-2">Формулы:</h4>
-                    <div className="space-y-1">
-                      {task.task_type.formulas.map((formula: string, i: number) => (
-                        <div key={i}>{renderLatex(formula)}</div>
+                {/* Image Upload */}
+                <div className="border-t pt-4">
+                  <h3 className="font-semibold mb-3 flex items-center gap-2">
+                    <ImageIcon className="w-5 h-5" />
+                    Загрузите фото решения
+                  </h3>
+
+                  <div className="mb-4">
+                    <label className="block">
+                      <div
+                        className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                          isTimeUp
+                            ? 'cursor-not-allowed opacity-50 bg-gray-100 dark:bg-gray-800'
+                            : 'cursor-pointer hover:border-primary'
+                        }`}
+                      >
+                        <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">
+                          {isTimeUp
+                            ? "Время истекло - загрузка заблокирована"
+                            : "Нажмите или перетащите изображения (JPEG, PNG)"}
+                        </p>
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/jpeg,image/png"
+                          onChange={(e) => handleImageSelect(index, e.target.files)}
+                          disabled={isTimeUp}
+                          className="hidden"
+                        />
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Preview uploaded images */}
+                  {uploadedImages[index] && uploadedImages[index].length > 0 && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {uploadedImages[index].map((file, imgIndex) => (
+                        <div
+                          key={imgIndex}
+                          className="relative border rounded-lg overflow-hidden group"
+                        >
+                          <img
+                            src={getObjectUrl(file)}
+                            alt={`Uploaded ${imgIndex + 1}`}
+                            className="w-full h-32 object-cover"
+                          />
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => removeImage(index, imgIndex)}
+                            disabled={isTimeUp}
+                          >
+                            Удалить
+                          </Button>
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 text-center">
+                            {file.name}
+                          </div>
+                        </div>
                       ))}
                     </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Image Upload */}
-              <div className="border-t pt-4">
-                <h3 className="font-semibold mb-3 flex items-center gap-2">
-                  <ImageIcon className="w-5 h-5" />
-                  Загрузите фото решения
-                </h3>
-
-                <div className="mb-4">
-                  <label className="block">
-                    <div className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                      isTimeUp
-                        ? 'cursor-not-allowed opacity-50 bg-gray-100 dark:bg-gray-800'
-                        : 'cursor-pointer hover:border-primary'
-                    }`}>
-                      <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">
-                        {isTimeUp
-                          ? "Время истекло - загрузка заблокирована"
-                          : "Нажмите или перетащите изображения (JPEG, PNG)"
-                        }
-                      </p>
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/jpeg,image/png"
-                        onChange={(e) => handleImageSelect(index, e.target.files)}
-                        disabled={isTimeUp}
-                        className="hidden"
-                      />
-                    </div>
-                  </label>
+                  )}
                 </div>
-
-                {/* Preview uploaded images */}
-                {uploadedImages[index] && uploadedImages[index].length > 0 && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {uploadedImages[index].map((file, imgIndex) => (
-                      <div
-                        key={imgIndex}
-                        className="relative border rounded-lg overflow-hidden group"
-                      >
-                        <img
-                          src={getObjectUrl(file)}
-                          alt={`Uploaded ${imgIndex + 1}`}
-                          className="w-full h-32 object-cover"
-                        />
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => removeImage(index, imgIndex)}
-                          disabled={isTimeUp}
-                        >
-                          Удалить
-                        </Button>
-                        <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 text-center">
-                          {file.name}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
 
         {/* Auto-save indicator */}

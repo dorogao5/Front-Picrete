@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { getApiErrorMessage, materialsAPI, trainerAPI } from "@/lib/api";
 import type { TrainerSet } from "@/lib/api";
+import { renderLatex } from "@/lib/renderLatex";
 import { toast } from "sonner";
 
 const TrainerSetView = () => {
@@ -105,7 +106,9 @@ const TrainerSetView = () => {
                     <span className="text-xs text-muted-foreground">§ {item.paragraph}</span>
                   </div>
                   <h2 className="font-semibold mb-2">{item.topic}</h2>
-                  <p className="whitespace-pre-wrap text-sm text-muted-foreground">{item.text}</p>
+                  <div className="whitespace-pre-wrap text-sm text-muted-foreground">
+                    {renderLatex(item.text)}
+                  </div>
                   {item.images.length > 0 && (
                     <div className="mt-4 flex flex-wrap gap-2">
                       {item.images.map((image, imageIndex) => (
