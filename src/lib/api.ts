@@ -144,6 +144,15 @@ const API_URL =
   import.meta.env.VITE_API_URL ||
   (import.meta.env.PROD ? "https://picrete.com/api/v1" : "http://localhost:8000/api/v1");
 
+/** Origin of the API (e.g. https://example.com). Used to build full URLs and avoid double /api/v1 when backend returns paths. */
+function getApiOrigin(): string {
+  try {
+    return new URL(API_URL).origin;
+  } catch {
+    return "";
+  }
+}
+
 export const api = axios.create({
   baseURL: API_URL,
   headers: {
@@ -159,6 +168,17 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+/**
+ * Fetches an image URL with auth (Bearer) and returns a blob URL for use in img src.
+ * Backend returns paths like /api/v1/courses/...; we build full URL from origin to avoid baseURL doubling the prefix.
+ * Caller must revoke the returned URL with URL.revokeObjectURL when done (e.g. on unmount or when no longer needed).
+ */
+export async function fetchImageAsBlobUrl(url: string): Promise<string> {
+  const requestUrl = url.startsWith("http") ? url : `${getApiOrigin()}${url}`;
+  const res = await api.get<Blob>(requestUrl, { responseType: "blob" });
+  return URL.createObjectURL(res.data);
+}
 
 let isRedirecting = false;
 api.interceptors.response.use(

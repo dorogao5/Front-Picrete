@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
+import AuthImage from "@/components/AuthImage";
 import ImageLightbox from "@/components/ImageLightbox";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { getApiErrorMessage, materialsAPI, trainerAPI } from "@/lib/api";
+import { fetchImageAsBlobUrl, getApiErrorMessage, materialsAPI, trainerAPI } from "@/lib/api";
 import type { TrainerSet } from "@/lib/api";
 import { renderLatex } from "@/lib/renderLatex";
 import { toast } from "sonner";
@@ -52,15 +53,29 @@ const TrainerSetView = () => {
     }
   };
 
-  const allImages = useMemo(
+  const allImageUrls = useMemo(
     () => (setData ? setData.items.flatMap((item) => item.images.map((image) => image.full_url)) : []),
     [setData]
   );
 
-  const openLightbox = (globalIndex: number) => {
-    setLightboxImages(allImages);
-    setLightboxIndex(globalIndex);
-    setLightboxOpen(true);
+  const openLightbox = async (globalIndex: number) => {
+    if (allImageUrls.length === 0) return;
+    try {
+      const blobUrls = await Promise.all(allImageUrls.map((url) => fetchImageAsBlobUrl(url)));
+      setLightboxImages(blobUrls);
+      setLightboxIndex(globalIndex);
+      setLightboxOpen(true);
+    } catch {
+      toast.error("Не удалось загрузить изображения");
+    }
+  };
+
+  const closeLightbox = () => {
+    setLightboxImages((prev) => {
+      prev.forEach((u) => u.startsWith("blob:") && URL.revokeObjectURL(u));
+      return [];
+    });
+    setLightboxOpen(false);
   };
 
   const toggleAnswer = (itemId: string) => {
@@ -147,7 +162,7 @@ const TrainerSetView = () => {
                           onClick={() => openLightbox(imageOffset + imageIndex)}
                           className="border rounded overflow-hidden"
                         >
-                          <img
+                          <AuthImage
                             src={image.thumbnail_url}
                             alt={`Иллюстрация ${item.number}`}
                             className="h-20 w-20 object-cover"
@@ -167,7 +182,7 @@ const TrainerSetView = () => {
         <ImageLightbox
           images={lightboxImages}
           startIndex={lightboxIndex}
-          onClose={() => setLightboxOpen(false)}
+          onClose={closeLightbox}
         />
       )}
     </div>

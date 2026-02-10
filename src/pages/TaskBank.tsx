@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
+import AuthImage from "@/components/AuthImage";
 import ImageLightbox from "@/components/ImageLightbox";
 import { Navbar } from "@/components/Navbar";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getApiErrorMessage, taskBankAPI, trainerAPI } from "@/lib/api";
+import { fetchImageAsBlobUrl, getApiErrorMessage, taskBankAPI, trainerAPI } from "@/lib/api";
 import type { TaskBankItem, TaskBankSource, TrainerSet } from "@/lib/api";
 import { renderLatex } from "@/lib/renderLatex";
 import { toast } from "sonner";
@@ -149,11 +150,24 @@ const TaskBank = () => {
     }
   };
 
-  const openLightbox = (item: TaskBankItem, index: number) => {
-    const images = item.images.map((image) => image.full_url);
-    setLightboxImages(images);
-    setLightboxIndex(index);
-    setLightboxOpen(true);
+  const openLightbox = async (item: TaskBankItem, index: number) => {
+    const urls = item.images.map((image) => image.full_url);
+    try {
+      const blobUrls = await Promise.all(urls.map((url) => fetchImageAsBlobUrl(url)));
+      setLightboxImages(blobUrls);
+      setLightboxIndex(index);
+      setLightboxOpen(true);
+    } catch {
+      toast.error("Не удалось загрузить изображения");
+    }
+  };
+
+  const closeLightbox = () => {
+    setLightboxImages((prev) => {
+      prev.forEach((u) => u.startsWith("blob:") && URL.revokeObjectURL(u));
+      return [];
+    });
+    setLightboxOpen(false);
   };
 
   if (!courseId) {
@@ -303,7 +317,7 @@ const TaskBank = () => {
                             onClick={() => openLightbox(item, index)}
                             className="border rounded overflow-hidden"
                           >
-                            <img
+                            <AuthImage
                               src={image.thumbnail_url}
                               alt={`Задача ${item.number}`}
                               className="h-20 w-20 object-cover"
@@ -350,7 +364,7 @@ const TaskBank = () => {
         <ImageLightbox
           images={lightboxImages}
           startIndex={lightboxIndex}
-          onClose={() => setLightboxOpen(false)}
+          onClose={closeLightbox}
         />
       )}
     </div>
