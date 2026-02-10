@@ -312,10 +312,7 @@ export const materialsAPI = {
 
   openAdditionPdf: async (courseId?: string) => {
     const resolvedCourseId = resolveCourseId(courseId);
-    const popup = window.open("", "_blank", "noopener,noreferrer");
-    if (!popup) {
-      throw new Error("Браузер заблокировал открытие новой вкладки");
-    }
+    const popup = window.open("about:blank", "_blank");
 
     try {
       const response = await api.get(`/courses/${resolvedCourseId}/materials/addition-pdf/view`, {
@@ -323,10 +320,17 @@ export const materialsAPI = {
       });
       const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: "application/pdf" });
       const blobUrl = URL.createObjectURL(blob);
-      popup.location.href = blobUrl;
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+      if (popup) {
+        popup.location.href = blobUrl;
+      } else {
+        // Popup can be blocked by browser/CSP; fallback to current tab.
+        window.location.href = blobUrl;
+      }
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 300_000);
     } catch (error) {
-      popup.close();
+      if (popup) {
+        popup.close();
+      }
       throw error;
     }
   },
