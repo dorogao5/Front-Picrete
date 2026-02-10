@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RefreshCcw } from "lucide-react";
 
 type ImageLightboxProps = {
@@ -84,10 +85,14 @@ export function ImageLightbox({ images, startIndex = 0, onClose }: ImageLightbox
   const zoomIn = () => setScale((s) => clampScale(s + ZOOM_STEP));
   const zoomOut = () => setScale((s) => clampScale(s - ZOOM_STEP));
 
-  return (
+  if (images.length === 0) {
+    return null;
+  }
+
+  const overlay = (
     <div
       ref={containerRef}
-      className="fixed inset-0 z-50 bg-black/90 text-white flex items-center justify-center select-none"
+      className="fixed inset-0 z-[120] bg-black/90 text-white flex items-center justify-center select-none"
       onWheel={onWheel}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
@@ -149,8 +154,8 @@ export function ImageLightbox({ images, startIndex = 0, onClose }: ImageLightbox
       </div>
     </div>
   );
+
+  return createPortal(overlay, document.body);
 }
 
 export default ImageLightbox;
-
-

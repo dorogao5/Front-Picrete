@@ -15,6 +15,7 @@ const TrainerSetView = () => {
   const [loading, setLoading] = useState(true);
   const [setData, setSetData] = useState<TrainerSet | null>(null);
   const [openingMaterials, setOpeningMaterials] = useState(false);
+  const [openedAnswers, setOpenedAnswers] = useState<Record<string, boolean>>({});
 
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -29,6 +30,7 @@ const TrainerSetView = () => {
       try {
         const [setResponse] = await Promise.all([trainerAPI.getSet(setId, courseId)]);
         setSetData(setResponse.data as TrainerSet);
+        setOpenedAnswers({});
       } catch (error: unknown) {
         toast.error(getApiErrorMessage(error, "Ошибка загрузки тренажера"));
       } finally {
@@ -59,6 +61,10 @@ const TrainerSetView = () => {
     setLightboxImages(allImages);
     setLightboxIndex(globalIndex);
     setLightboxOpen(true);
+  };
+
+  const toggleAnswer = (itemId: string) => {
+    setOpenedAnswers((prev) => ({ ...prev, [itemId]: !prev[itemId] }));
   };
 
   if (!courseId) {
@@ -109,6 +115,29 @@ const TrainerSetView = () => {
                   <div className="whitespace-pre-wrap text-sm text-muted-foreground">
                     {renderLatex(item.text)}
                   </div>
+                  {item.has_answer && (
+                    <div className="mt-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleAnswer(item.id)}
+                      >
+                        {openedAnswers[item.id] ? "Скрыть ответ" : "Показать ответ"}
+                      </Button>
+                    </div>
+                  )}
+                  {item.has_answer && openedAnswers[item.id] && (
+                    <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50/60 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                        Ответ
+                      </p>
+                      <div className="mt-1 whitespace-pre-wrap text-sm text-emerald-900">
+                        {item.answer && item.answer.trim().length > 0
+                          ? renderLatex(item.answer)
+                          : "Ответ в источнике не заполнен"}
+                      </div>
+                    </div>
+                  )}
                   {item.images.length > 0 && (
                     <div className="mt-4 flex flex-wrap gap-2">
                       {item.images.map((image, imageIndex) => (
