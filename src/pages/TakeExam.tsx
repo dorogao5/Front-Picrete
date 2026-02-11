@@ -6,14 +6,14 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Clock, Upload, CheckCircle, AlertCircle, Image as ImageIcon } from "lucide-react";
-import { getApiErrorMessage, getApiErrorStatus, materialsAPI, submissionsAPI } from "@/lib/api";
-import type { WorkKind } from "@/lib/api";
+import { Clock, Upload, CheckCircle, AlertCircle, Image as ImageIcon, Trash2, Smartphone } from "lucide-react";
+import { getApiErrorMessage, getApiErrorStatus, materialsAPI, submissionsAPI, type SessionImage, type WorkKind } from "@/lib/api";
 import { toast } from "sonner";
 import { renderLatex } from "@/lib/renderLatex";
 
 interface ExamSession {
   id: string;
+  status?: "active" | "submitted" | "expired" | "graded";
 }
 
 interface ExistingServerImage {
@@ -51,6 +51,14 @@ interface SubmitResponse {
   next_step?: "ocr_review" | "result";
 }
 
+interface UploadQueueItem {
+  id: string;
+  file: File;
+  previewUrl: string;
+  status: "uploading" | "uploaded" | "error";
+  error?: string;
+}
+
 const TakeExam = () => {
   const { courseId, examId } = useParams<{ courseId: string; examId: string }>();
   const navigate = useNavigate();
@@ -60,47 +68,29 @@ const TakeExam = () => {
   const [workKind, setWorkKind] = useState<WorkKind>("control");
   const [hardDeadline, setHardDeadline] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
-  const [uploadedImages, setUploadedImages] = useState<{ [key: number]: File[] }>({});
-  /** Images already on server (e.g. after refresh) — not re-uploaded, shown as "загружено" */
-  const [existingServerImages, setExistingServerImages] = useState<
-    { id: string; filename: string; order_index: number }[]
-  >([]);
-  const [uploading, setUploading] = useState(false);
+  const [serverImages, setServerImages] = useState<SessionImage[]>([]);
+  const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [isTimeUp, setIsTimeUp] = useState(false);
   const [showTimeoutDialog, setShowTimeoutDialog] = useState(false);
   const [openingMaterials, setOpeningMaterials] = useState(false);
+  const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
+
   const sessionId = session?.id;
+  const isTimedWork = workKind === "control";
   const initialRemainingRef = useRef<number | null>(null);
-  /** Refs so timer/auto-submit always see latest state (avoids stale closure → no_images) */
-  const uploadedImagesRef = useRef(uploadedImages);
-  const existingServerImagesRef = useRef(existingServerImages);
-  uploadedImagesRef.current = uploadedImages;
-  existingServerImagesRef.current = existingServerImages;
+  const uploadQueueRef = useRef<UploadQueueItem[]>([]);
 
-  // Stable object-URL cache: maps File → objectURL, revoked on unmount
-  const objectUrlCache = useRef<Map<File, string>>(new Map());
+  const uploadingCount = useMemo(
+    () => uploadQueue.filter((item) => item.status === "uploading").length,
+    [uploadQueue]
+  );
 
-  const getObjectUrl = useCallback((file: File): string => {
-    const cache = objectUrlCache.current;
-    let url = cache.get(file);
-    if (!url) {
-      url = URL.createObjectURL(file);
-      cache.set(file, url);
-    }
-    return url;
-  }, []);
+  uploadQueueRef.current = uploadQueue;
 
-  // Revoke all cached object-URLs on unmount
-  useEffect(() => {
-    const cache = objectUrlCache.current;
-    return () => {
-      cache.forEach((url) => URL.revokeObjectURL(url));
-      cache.clear();
-    };
-  }, []);
+  const canModifyImages = !isTimeUp && session?.status !== "submitted" && session?.status !== "expired";
+  const hasUploadsInProgress = uploadingCount > 0;
 
-  // Helper functions
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -109,47 +99,17 @@ const TakeExam = () => {
       .toString()
       .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
-  const isTimedWork = workKind === "control";
 
-  // Upload images function (reads current files from ref so auto-submit always uploads latest)
-  const uploadImages = useCallback(async () => {
-    if (!sessionId || isTimeUp) return;
+  const refreshSessionImages = useCallback(async () => {
+    if (!sessionId) return;
 
-    const current = uploadedImagesRef.current;
-    const totalNew = Object.values(current).reduce((sum, files) => sum + files.length, 0);
-    if (totalNew === 0) return;
-
-    setUploading(true);
     try {
-      const baseOrder = existingServerImagesRef.current.length;
-      let orderIndex = baseOrder;
-      for (const taskIndex in current) {
-        const files = current[taskIndex];
-        for (const file of files) {
-          await submissionsAPI.uploadImage(sessionId, file, orderIndex, courseId);
-          orderIndex++;
-        }
-      }
-      toast.success("Все изображения загружены");
-    } catch (error: unknown) {
-      toast.error(getApiErrorMessage(error, "Ошибка при загрузке изображений"));
-      throw error;
-    } finally {
-      setUploading(false);
+      const response = await submissionsAPI.listSessionImages(sessionId, courseId);
+      setServerImages(response.data.items || []);
+    } catch {
+      // polling is best-effort
     }
-  }, [courseId, sessionId, isTimeUp]);
-
-  // Auto-submit: use refs so we always see latest images (avoids stale closure → no_images)
-  const navigateAfterSubmit = useCallback(
-    (submittedSessionId: string, nextStep?: "ocr_review" | "result") => {
-      if (nextStep === "ocr_review") {
-        navigate(courseId ? `/c/${courseId}/exam/${submittedSessionId}/ocr-review` : "/dashboard");
-        return;
-      }
-      navigate(courseId ? `/c/${courseId}/exam/${submittedSessionId}/result` : "/dashboard");
-    },
-    [courseId, navigate]
-  );
+  }, [courseId, sessionId]);
 
   const resolveSubmitNextStep = useCallback(
     async (
@@ -167,7 +127,7 @@ const TakeExam = () => {
           return "ocr_review";
         }
       } catch {
-        // fallback to result route when server-side status cannot be resolved
+        // fallback to result route
       }
 
       return "result";
@@ -175,104 +135,29 @@ const TakeExam = () => {
     [courseId]
   );
 
-  const handleAutoSubmit = useCallback(async () => {
-    if (!sessionId || submitting) return;
-
-    setSubmitting(true);
-    try {
-      const currentNew = uploadedImagesRef.current;
-      const totalNewImages = Object.values(currentNew).reduce(
-        (sum, files) => sum + files.length,
-        0
-      );
-      if (totalNewImages > 0) {
-        await uploadImages();
+  const navigateAfterSubmit = useCallback(
+    (submittedSessionId: string, nextStep?: "ocr_review" | "result") => {
+      if (nextStep === "ocr_review") {
+        navigate(courseId ? `/c/${courseId}/exam/${submittedSessionId}/ocr-review` : "/dashboard");
+        return;
       }
-      // Always submit (with or without images) so teacher sees the attempt
-      const response = await submissionsAPI.submit(sessionId, courseId);
-      const payload = response.data as SubmitResponse;
-      const nextStep = await resolveSubmitNextStep(sessionId, payload.next_step);
-      toast.success("Работа автоматически отправлена");
-      navigateAfterSubmit(sessionId, nextStep);
-    } catch (error: unknown) {
-      toast.error(getApiErrorMessage(error, "Ошибка при автоматической отправке работы"));
-    } finally {
-      setSubmitting(false);
-    }
-  }, [sessionId, submitting, uploadImages, courseId, navigateAfterSubmit, resolveSubmitNextStep]);
-
-  // Event handlers
-  const handleTimeoutConfirm = useCallback(async () => {
-    setShowTimeoutDialog(false);
-    if (sessionId) {
-      try {
-        const resultResponse = await submissionsAPI.getResult(sessionId, courseId);
-        const ocrStatus = (resultResponse.data as { ocr_overall_status?: string }).ocr_overall_status;
-        if (ocrStatus && ocrStatus !== "not_required") {
-          navigate(courseId ? `/c/${courseId}/exam/${sessionId}/ocr-review` : "/dashboard");
-          return;
-        }
-      } catch {
-        // ignore and fall back to result page
-      }
-      navigate(courseId ? `/c/${courseId}/exam/${sessionId}/result` : "/dashboard");
-    }
-  }, [courseId, sessionId, navigate]);
-
-  const handleImageSelect = useCallback((taskIndex: number, files: FileList | null) => {
-    if (isTimeUp) {
-      toast.error("Время экзамена истекло. Действия заблокированы.");
-      return;
-    }
-
-    if (!files) return;
-
-    const newFiles = Array.from(files).filter(
-      (file) => file.type === "image/jpeg" || file.type === "image/png"
-    );
-
-    setUploadedImages((prev) => ({
-      ...prev,
-      [taskIndex]: [...(prev[taskIndex] || []), ...newFiles],
-    }));
-
-    toast.success(`Добавлено ${newFiles.length} изображений`);
-  }, [isTimeUp]);
-
-  const removeImage = useCallback((taskIndex: number, imageIndex: number) => {
-    if (isTimeUp) {
-      toast.error("Время экзамена истекло. Действия заблокированы.");
-      return;
-    }
-
-    setUploadedImages((prev) => {
-      const removed = prev[taskIndex]?.[imageIndex];
-      if (removed) {
-        const url = objectUrlCache.current.get(removed);
-        if (url) {
-          URL.revokeObjectURL(url);
-          objectUrlCache.current.delete(removed);
-        }
-      }
-      return {
-        ...prev,
-        [taskIndex]: prev[taskIndex].filter((_, i) => i !== imageIndex),
-      };
-    });
-  }, [isTimeUp]);
+      navigate(courseId ? `/c/${courseId}/exam/${submittedSessionId}/result` : "/dashboard");
+    },
+    [courseId, navigate]
+  );
 
   const handleSubmit = useCallback(async () => {
-    if (!sessionId || isTimeUp) return;
-
-    const totalNew = Object.values(uploadedImages).reduce(
-      (sum, files) => sum + files.length,
-      0
-    );
+    if (!sessionId || isTimeUp || submitting) return;
 
     setSubmitting(true);
     try {
-      if (totalNew > 0) {
-        await uploadImages();
+      const waitStartedAt = Date.now();
+      while (uploadQueueRef.current.some((item) => item.status === "uploading")) {
+        if (Date.now() - waitStartedAt >= 30_000) {
+          toast.error("Загрузка изображений не завершилась за 30 секунд. Дождитесь завершения и повторите.");
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 200));
       }
 
       const response = await submissionsAPI.submit(sessionId, courseId);
@@ -285,15 +170,138 @@ const TakeExam = () => {
     } finally {
       setSubmitting(false);
     }
-  }, [
-    sessionId,
-    isTimeUp,
-    uploadedImages,
-    uploadImages,
-    navigateAfterSubmit,
-    courseId,
-    resolveSubmitNextStep,
-  ]);
+  }, [courseId, isTimeUp, navigateAfterSubmit, resolveSubmitNextStep, sessionId, submitting]);
+
+  const handleAutoSubmit = useCallback(async () => {
+    if (!sessionId || submitting) return;
+
+    setSubmitting(true);
+    try {
+      const waitStartedAt = Date.now();
+      while (uploadQueueRef.current.some((item) => item.status === "uploading")) {
+        if (Date.now() - waitStartedAt >= 30_000) {
+          toast.error("Часть загрузок еще выполняется, отправляем работу с уже загруженными изображениями.");
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+
+      const response = await submissionsAPI.submit(sessionId, courseId);
+      const payload = response.data as SubmitResponse;
+      const nextStep = await resolveSubmitNextStep(sessionId, payload.next_step);
+      toast.success("Работа автоматически отправлена");
+      navigateAfterSubmit(sessionId, nextStep);
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Ошибка при автоматической отправке работы"));
+    } finally {
+      setSubmitting(false);
+    }
+  }, [courseId, navigateAfterSubmit, resolveSubmitNextStep, sessionId, submitting]);
+
+  const uploadSingleFile = useCallback(
+    async (queueId: string, file: File) => {
+      if (!sessionId) return;
+
+      try {
+        await submissionsAPI.uploadImage(sessionId, file, undefined, courseId);
+        setUploadQueue((prev) =>
+          prev.map((item) =>
+            item.id === queueId
+              ? {
+                  ...item,
+                  status: "uploaded",
+                }
+              : item
+          )
+        );
+        await refreshSessionImages();
+
+        setTimeout(() => {
+          setUploadQueue((prev) => {
+            const current = prev.find((item) => item.id === queueId);
+            if (current) {
+              URL.revokeObjectURL(current.previewUrl);
+            }
+            return prev.filter((item) => item.id !== queueId);
+          });
+        }, 900);
+      } catch (error: unknown) {
+        setUploadQueue((prev) =>
+          prev.map((item) =>
+            item.id === queueId
+              ? {
+                  ...item,
+                  status: "error",
+                  error: getApiErrorMessage(error, "Ошибка загрузки"),
+                }
+              : item
+          )
+        );
+      }
+    },
+    [courseId, refreshSessionImages, sessionId]
+  );
+
+  const handleFilesSelected = useCallback(
+    (files: FileList | null) => {
+      if (!canModifyImages) {
+        toast.error("Загрузка недоступна для завершенной сессии");
+        return;
+      }
+
+      if (!files || files.length === 0) return;
+
+      const accepted = Array.from(files).filter(
+        (file) => file.type === "image/jpeg" || file.type === "image/png"
+      );
+
+      if (accepted.length === 0) {
+        toast.error("Разрешены только JPEG и PNG");
+        return;
+      }
+
+      const queued: UploadQueueItem[] = accepted.map((file, idx) => ({
+        id: `${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 8)}`,
+        file,
+        previewUrl: URL.createObjectURL(file),
+        status: "uploading",
+      }));
+
+      setUploadQueue((prev) => [...prev, ...queued]);
+      queued.forEach((item) => {
+        void uploadSingleFile(item.id, item.file);
+      });
+    },
+    [canModifyImages, uploadSingleFile]
+  );
+
+  const handleRemoveQueueItem = useCallback((queueId: string) => {
+    setUploadQueue((prev) => {
+      const item = prev.find((entry) => entry.id === queueId);
+      if (item) {
+        URL.revokeObjectURL(item.previewUrl);
+      }
+      return prev.filter((entry) => entry.id !== queueId);
+    });
+  }, []);
+
+  const handleDeleteServerImage = useCallback(
+    async (imageId: string) => {
+      if (!sessionId) return;
+
+      setDeletingImageId(imageId);
+      try {
+        await submissionsAPI.deleteSessionImage(sessionId, imageId, courseId);
+        await refreshSessionImages();
+        toast.success("Изображение удалено");
+      } catch (error: unknown) {
+        toast.error(getApiErrorMessage(error, "Не удалось удалить изображение"));
+      } finally {
+        setDeletingImageId(null);
+      }
+    },
+    [courseId, refreshSessionImages, sessionId]
+  );
 
   const handleOpenMaterials = useCallback(async () => {
     if (!courseId) return;
@@ -307,7 +315,23 @@ const TakeExam = () => {
     }
   }, [courseId]);
 
-  // Load session and variant
+  const handleTimeoutConfirm = useCallback(async () => {
+    setShowTimeoutDialog(false);
+    if (sessionId) {
+      try {
+        const resultResponse = await submissionsAPI.getResult(sessionId, courseId);
+        const ocrStatus = (resultResponse.data as { ocr_overall_status?: string }).ocr_overall_status;
+        if (ocrStatus && ocrStatus !== "not_required") {
+          navigate(courseId ? `/c/${courseId}/exam/${sessionId}/ocr-review` : "/dashboard");
+          return;
+        }
+      } catch {
+        // ignore
+      }
+      navigate(courseId ? `/c/${courseId}/exam/${sessionId}/result` : "/dashboard");
+    }
+  }, [courseId, navigate, sessionId]);
+
   useEffect(() => {
     const enterExam = async () => {
       try {
@@ -317,6 +341,7 @@ const TakeExam = () => {
 
         const variantResponse = await submissionsAPI.getSessionVariant(sessionData.id, courseId);
         const variantData = variantResponse.data as SessionVariantResponse;
+
         setTasks(variantData.tasks);
         setWorkKind(variantData.work_kind ?? "control");
         setHardDeadline(variantData.hard_deadline ?? null);
@@ -324,7 +349,25 @@ const TakeExam = () => {
         initialRemainingRef.current = variantData.time_remaining;
         setIsTimeUp(false);
         setShowTimeoutDialog(false);
-        setExistingServerImages(variantData.existing_images ?? []);
+
+        try {
+          const imagesResponse = await submissionsAPI.listSessionImages(sessionData.id, courseId);
+          setServerImages(imagesResponse.data.items || []);
+        } catch {
+          // Legacy fallback through existing_images while backend rollout is in progress
+          setServerImages(
+            (variantData.existing_images || []).map((item) => ({
+              id: item.id,
+              filename: item.filename,
+              mime_type: "image/jpeg",
+              file_size: 0,
+              order_index: item.order_index,
+              upload_source: "web",
+              uploaded_at: new Date().toISOString(),
+              view_url: null,
+            }))
+          );
+        }
       } catch (error: unknown) {
         if (getApiErrorStatus(error) !== 401) {
           toast.error(getApiErrorMessage(error, "Ошибка при входе в экзамен"));
@@ -334,22 +377,20 @@ const TakeExam = () => {
     };
 
     if (examId && courseId) {
-      enterExam();
+      void enterExam();
     }
   }, [courseId, examId, navigate]);
 
-  // Timer countdown with auto-submit
   useEffect(() => {
     if (!isTimedWork || timeRemaining === null || timeRemaining <= 0 || isTimeUp) {
       return;
     }
+
     const interval = setInterval(() => {
       setTimeRemaining((prev) => {
-        if (prev === null) {
-          return null;
-        }
+        if (prev === null) return null;
         if (prev <= 1) {
-          handleAutoSubmit();
+          void handleAutoSubmit();
           setIsTimeUp(true);
           setShowTimeoutDialog(true);
           return 0;
@@ -357,30 +398,47 @@ const TakeExam = () => {
         return prev - 1;
       });
     }, 1000);
-    return () => clearInterval(interval);
-  }, [timeRemaining, isTimeUp, handleAutoSubmit, isTimedWork]);
 
-  // Server-side auto-save every 30 seconds
+    return () => clearInterval(interval);
+  }, [handleAutoSubmit, isTimeUp, isTimedWork, timeRemaining]);
+
   useEffect(() => {
     if (!sessionId || isTimeUp) return;
 
     const interval = setInterval(async () => {
-      const totalImages = Object.values(uploadedImages).reduce(
-        (sum, files) => sum + files.length,
-        0
-      );
       try {
-        await submissionsAPI.autoSave(sessionId, {
-          imageCount: totalImages,
-          savedAt: new Date().toISOString(),
-        }, courseId);
+        await submissionsAPI.autoSave(
+          sessionId,
+          {
+            imageCount: serverImages.length,
+            uploadsInProgress: uploadingCount,
+            savedAt: new Date().toISOString(),
+          },
+          courseId
+        );
       } catch {
-        // Auto-save is best-effort; failures are silent
+        // best-effort autosave
       }
     }, 30_000);
 
     return () => clearInterval(interval);
-  }, [courseId, sessionId, uploadedImages, isTimeUp]);
+  }, [courseId, isTimeUp, serverImages.length, sessionId, uploadingCount]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const interval = setInterval(() => {
+      void refreshSessionImages();
+    }, 5_000);
+
+    return () => clearInterval(interval);
+  }, [refreshSessionImages, sessionId]);
+
+  useEffect(() => {
+    return () => {
+      uploadQueueRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    };
+  }, []);
 
   if (!session || tasks.length === 0) {
     return (
@@ -418,7 +476,7 @@ const TakeExam = () => {
               </div>
               <Button
                 onClick={handleSubmit}
-                disabled={submitting || uploading || isTimeUp}
+                disabled={submitting || isTimeUp || hasUploadsInProgress}
                 variant="default"
               >
                 <CheckCircle className="w-4 h-4 mr-2" />
@@ -441,13 +499,11 @@ const TakeExam = () => {
           </Alert>
         )}
 
-        {/* Warning if low time */}
-        {existingServerImages.length > 0 && (
+        {serverImages.length > 0 && (
           <Alert className="mb-6 border-green-500 bg-green-50 dark:bg-green-950">
             <CheckCircle className="h-4 w-4" />
             <AlertDescription>
-              Уже загружено на сервер ({existingServerImages.length}):{" "}
-              {existingServerImages.map((img) => img.filename).join(", ")}
+              Уже загружено на сервер: {serverImages.length} изображений.
             </AlertDescription>
           </Alert>
         )}
@@ -461,19 +517,18 @@ const TakeExam = () => {
           </Alert>
         )}
 
-        {/* Time up warning */}
         {isTimeUp && (
           <Alert className="mb-6 border-red-500 bg-red-50 dark:bg-red-950">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              Время экзамена истекло! Все действия заблокированы. Работа будет автоматически отправлена.
+              Время экзамена истекло! Все действия заблокированы. Работа отправляется автоматически.
             </AlertDescription>
           </Alert>
         )}
 
         {!isTimedWork && (
           <div className="mb-6 flex justify-end">
-            <Button onClick={handleSubmit} disabled={submitting || uploading}>
+            <Button onClick={handleSubmit} disabled={submitting || isTimeUp || hasUploadsInProgress}>
               <CheckCircle className="w-4 h-4 mr-2" />
               Сдать домашнюю работу
             </Button>
@@ -486,7 +541,6 @@ const TakeExam = () => {
           </Button>
         </div>
 
-        {/* Tasks */}
         <div className="space-y-8">
           {tasks.map((task, index) => {
             const descriptionText = (task.task_type.description || "").trim();
@@ -518,7 +572,6 @@ const TakeExam = () => {
                     )}
                   </div>
 
-                  {/* Formulas reference */}
                   {task.task_type.formulas.length > 0 && (
                     <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg mb-4">
                       <h4 className="font-semibold mb-2">Формулы:</h4>
@@ -530,77 +583,125 @@ const TakeExam = () => {
                     </div>
                   )}
                 </div>
-
-                {/* Image Upload */}
-                <div className="border-t pt-4">
-                  <h3 className="font-semibold mb-3 flex items-center gap-2">
-                    <ImageIcon className="w-5 h-5" />
-                    Загрузите фото решения
-                  </h3>
-
-                  <div className="mb-4">
-                    <label className="block">
-                      <div
-                        className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                          isTimeUp
-                            ? 'cursor-not-allowed opacity-50 bg-gray-100 dark:bg-gray-800'
-                            : 'cursor-pointer hover:border-primary'
-                        }`}
-                      >
-                        <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                        <p className="text-sm text-muted-foreground">
-                          {isTimeUp
-                            ? "Время истекло - загрузка заблокирована"
-                            : "Нажмите или перетащите изображения (JPEG, PNG)"}
-                        </p>
-                        <input
-                          type="file"
-                          multiple
-                          accept="image/jpeg,image/png"
-                          onChange={(e) => handleImageSelect(index, e.target.files)}
-                          disabled={isTimeUp}
-                          className="hidden"
-                        />
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* Preview uploaded images */}
-                  {uploadedImages[index] && uploadedImages[index].length > 0 && (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {uploadedImages[index].map((file, imgIndex) => (
-                        <div
-                          key={imgIndex}
-                          className="relative border rounded-lg overflow-hidden group"
-                        >
-                          <img
-                            src={getObjectUrl(file)}
-                            alt={`Uploaded ${imgIndex + 1}`}
-                            className="w-full h-32 object-cover"
-                          />
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={() => removeImage(index, imgIndex)}
-                            disabled={isTimeUp}
-                          >
-                            Удалить
-                          </Button>
-                          <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 text-center">
-                            {file.name}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
               </Card>
             );
           })}
         </div>
 
-        {/* Auto-save indicator */}
+        <Card className="p-6 mt-8">
+          <h3 className="font-semibold mb-3 flex items-center gap-2">
+            <ImageIcon className="w-5 h-5" />
+            Фото решения
+          </h3>
+
+          <div className="mb-4">
+            <label className="block">
+              <div
+                className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                  canModifyImages
+                    ? "cursor-pointer hover:border-primary"
+                    : "cursor-not-allowed opacity-50 bg-gray-100 dark:bg-gray-800"
+                }`}
+              >
+                <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  {canModifyImages
+                    ? "Нажмите или перетащите изображения (JPEG, PNG). Файлы отправляются сразу."
+                    : "Загрузка недоступна для завершенной сессии"}
+                </p>
+                <input
+                  type="file"
+                  multiple
+                  accept="image/jpeg,image/png"
+                  onChange={(e) => {
+                    handleFilesSelected(e.target.files);
+                    e.currentTarget.value = "";
+                  }}
+                  disabled={!canModifyImages}
+                  className="hidden"
+                />
+              </div>
+            </label>
+          </div>
+
+          {uploadQueue.length > 0 && (
+            <div className="mb-6">
+              <p className="text-sm font-medium mb-2">Текущие загрузки</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {uploadQueue.map((item) => (
+                  <div key={item.id} className="border rounded-lg overflow-hidden">
+                    <img src={item.previewUrl} alt={item.file.name} className="w-full h-32 object-cover" />
+                    <div className="p-2 text-xs">
+                      <div className="truncate">{item.file.name}</div>
+                      <div className="mt-1">
+                        {item.status === "uploading" && "Загрузка..."}
+                        {item.status === "uploaded" && "Загружено"}
+                        {item.status === "error" && (
+                          <span className="text-red-500">Ошибка: {item.error || "неизвестно"}</span>
+                        )}
+                      </div>
+                      {item.status === "error" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="mt-2"
+                          onClick={() => handleRemoveQueueItem(item.id)}
+                        >
+                          Убрать
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <p className="text-sm font-medium mb-2">Загруженные изображения</p>
+          {serverImages.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Пока нет загруженных изображений.</p>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {serverImages.map((image) => (
+                <div key={image.id} className="relative border rounded-lg overflow-hidden group">
+                  {image.view_url ? (
+                    <img
+                      src={image.view_url}
+                      alt={image.filename}
+                      className="w-full h-32 object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-32 flex items-center justify-center bg-secondary text-muted-foreground text-xs px-2 text-center">
+                      {image.filename}
+                    </div>
+                  )}
+                  {canModifyImages && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => handleDeleteServerImage(image.id)}
+                      disabled={deletingImageId === image.id}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                  <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 text-center truncate">
+                    #{image.order_index + 1} · {image.upload_source}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-4 mt-4 border-dashed">
+          <p className="text-sm flex items-start gap-2 text-muted-foreground">
+            <Smartphone className="w-4 h-4 mt-0.5" />
+            Можно загружать фото с телефона через Telegram-бота. Сначала начните работу на сайте, затем в боте: /login → /works → /use.
+          </p>
+        </Card>
+
         <div className="fixed bottom-6 right-6">
           <Card className="p-3 shadow-lg">
             <p className="text-xs text-muted-foreground">
@@ -620,7 +721,7 @@ const TakeExam = () => {
                 Время истекло
               </DialogTitle>
               <DialogDescription>
-                Время экзамена закончилось. Работа будет автоматически отправлена на проверку.
+                Время экзамена закончилось. Работа отправлена на проверку.
               </DialogDescription>
             </DialogHeader>
             <div className="flex justify-end gap-2 mt-4">

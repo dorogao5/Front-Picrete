@@ -28,6 +28,18 @@ export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 export type JsonObject = { [key: string]: JsonValue };
 export type WorkKind = "control" | "homework";
+export type UploadSource = "web" | "telegram";
+
+export interface SessionImage {
+  id: string;
+  filename: string;
+  mime_type: string;
+  file_size: number;
+  order_index: number;
+  upload_source: UploadSource;
+  uploaded_at: string;
+  view_url?: string | null;
+}
 
 export interface TaskBankSource {
   id: string;
@@ -365,14 +377,22 @@ export const submissionsAPI = {
   getSessionVariant: (sessionId: string, courseId?: string) =>
     api.get(`${coursePrefix(courseId)}/submissions/sessions/${sessionId}/variant`),
 
-  uploadImage: (sessionId: string, file: File, orderIndex: number, courseId?: string) => {
+  uploadImage: (sessionId: string, file: File, orderIndex?: number, courseId?: string) => {
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("order_index", orderIndex.toString());
+    if (typeof orderIndex === "number") {
+      formData.append("order_index", orderIndex.toString());
+    }
     return api.post(`${coursePrefix(courseId)}/submissions/sessions/${sessionId}/upload`, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
+
+  listSessionImages: (sessionId: string, courseId?: string) =>
+    api.get<{ items: SessionImage[] }>(`${coursePrefix(courseId)}/submissions/sessions/${sessionId}/images`),
+
+  deleteSessionImage: (sessionId: string, imageId: string, courseId?: string) =>
+    api.delete(`${coursePrefix(courseId)}/submissions/sessions/${sessionId}/images/${imageId}`),
 
   submit: (sessionId: string, courseId?: string) =>
     api.post(`${coursePrefix(courseId)}/submissions/sessions/${sessionId}/submit`),
