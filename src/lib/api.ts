@@ -161,6 +161,9 @@ function getApiOrigin(): string {
   try {
     return new URL(API_URL).origin;
   } catch {
+    if (typeof window !== "undefined" && window.location?.origin) {
+      return window.location.origin;
+    }
     return "";
   }
 }
@@ -187,7 +190,11 @@ api.interceptors.request.use((config) => {
  * Caller must revoke the returned URL with URL.revokeObjectURL when done (e.g. on unmount or when no longer needed).
  */
 export async function fetchImageAsBlobUrl(url: string): Promise<string> {
-  const requestUrl = url.startsWith("http") ? url : `${getApiOrigin()}${url}`;
+  const origin = getApiOrigin();
+  const requestUrl =
+    url.startsWith("http://") || url.startsWith("https://") || !origin
+      ? url
+      : new URL(url, origin).toString();
   const res = await api.get<Blob>(requestUrl, { responseType: "blob" });
   return URL.createObjectURL(res.data);
 }
