@@ -118,3 +118,14 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  .task-rich-text table {
+    @apply w-full border-collapse text-sm;
+  }
+
+  .task-rich-text th,
+  .task-rich-text td {
+    @apply border border-border px-2 py-1 align-top;
+  }
+}

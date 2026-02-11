@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { fetchImageAsBlobUrl, getApiErrorMessage, materialsAPI, trainerAPI } from "@/lib/api";
 import type { TrainerSet } from "@/lib/api";
-import { renderLatex } from "@/lib/renderLatex";
+import { renderLatex, renderTaskText } from "@/lib/renderLatex";
 import { toast } from "sonner";
 
 const TrainerSetView = () => {
@@ -128,7 +128,7 @@ const TrainerSetView = () => {
                   </div>
                   <h2 className="font-semibold mb-2">{renderLatex(item.topic)}</h2>
                   <div className="whitespace-pre-wrap text-sm text-muted-foreground">
-                    {renderLatex(item.text)}
+                    {renderTaskText(item.text)}
                   </div>
                   {item.has_answer && (
                     <div className="mt-4">

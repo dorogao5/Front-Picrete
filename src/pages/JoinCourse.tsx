@@ -96,7 +96,7 @@ const JoinCourse = () => {
                 id="identityValue"
                 value={identityValue}
                 onChange={(event) => setIdentityValue(event.target.value)}
-                placeholder="654321 или student@itmo.ru"
+                placeholder="например ИСУ"
               />
             </div>
             <Button type="submit" disabled={loading}>

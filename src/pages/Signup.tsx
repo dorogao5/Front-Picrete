@@ -148,7 +148,7 @@ const Signup = () => {
             <Input
               id="identityValue"
               type="text"
-              placeholder="654321 или student@itmo.ru"
+              placeholder="например ИСУ"
               value={identityValue}
               onChange={(e) => setIdentityValue(e.target.value)}
               className="transition-all duration-300 focus:shadow-soft"

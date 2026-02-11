@@ -12,7 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Plus, Trash2, Save } from "lucide-react";
 import { examsAPI, getApiErrorMessage, taskBankAPI } from "@/lib/api";
 import type { ExamTaskTypePayload, JsonObject, TaskBankItem, WorkKind } from "@/lib/api";
-import { renderLatex } from "@/lib/renderLatex";
+import { renderLatex, renderTaskText } from "@/lib/renderLatex";
 import { toast } from "sonner";
 
 interface TaskVariant {
@@ -1040,7 +1040,7 @@ const CreateExam = () => {
                         </p>
                         <p className="font-semibold mb-1">{renderLatex(item.topic)}</p>
                         <div className="text-sm text-muted-foreground line-clamp-3">
-                          {renderLatex(item.text)}
+                          {renderTaskText(item.text)}
                         </div>
                       </div>
                       <Button

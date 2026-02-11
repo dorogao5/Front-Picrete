@@ -46,3 +46,39 @@ export function renderLatex(text: string): React.ReactNode {
     return renderPlainText(token, `text-${index}`);
   });
 }
+
+const TABLE_REGEX = /(<table[\s\S]*?<\/table>)/gi;
+
+function sanitizeTableHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/\son\w+=(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/\s(?:href|src)=(?:"javascript:[^"]*"|'javascript:[^']*')/gi, "");
+}
+
+/**
+ * Renders task text with support for embedded HTML tables and LaTeX in plain parts.
+ * Used for trusted task-bank content where backend may send <table>...</table>.
+ */
+export function renderTaskText(text: string): React.ReactNode {
+  if (!text) return text;
+
+  const chunks = text.split(TABLE_REGEX);
+
+  return chunks.map((chunk, index) => {
+    if (!chunk) return null;
+
+    if (chunk.trim().toLowerCase().startsWith("<table")) {
+      return (
+        <div
+          key={`table-${index}`}
+          className="task-rich-text my-3 overflow-x-auto"
+          dangerouslySetInnerHTML={{ __html: sanitizeTableHtml(chunk) }}
+        />
+      );
+    }
+
+    return <span key={`text-${index}`}>{renderLatex(chunk)}</span>;
+  });
+}
