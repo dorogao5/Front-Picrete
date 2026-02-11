@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Clock, Upload, CheckCircle, AlertCircle, Image as ImageIcon, Trash2, Smartphone } from "lucide-react";
 import { getApiErrorMessage, getApiErrorStatus, materialsAPI, submissionsAPI, type SessionImage, type WorkKind } from "@/lib/api";
 import { toast } from "sonner";
-import { renderLatex } from "@/lib/renderLatex";
+import { renderLatex, renderTaskText } from "@/lib/renderLatex";
 
 interface ExamSession {
   id: string;
@@ -560,14 +560,14 @@ const TakeExam = () => {
                   </div>
 
                   <div className="prose max-w-none">
-                    <p className="text-muted-foreground mb-4">
-                      {renderLatex(task.task_type.description)}
-                    </p>
+                    <div className="text-muted-foreground mb-4">
+                      {renderTaskText(task.task_type.description)}
+                    </div>
 
                     {showVariantBlock && (
                       <div className="bg-secondary/50 p-4 rounded-lg mb-4">
                         <h3 className="font-semibold mb-2">Ваш вариант:</h3>
-                        <div>{renderLatex(task.variant.content)}</div>
+                        <div>{renderTaskText(task.variant.content)}</div>
                       </div>
                     )}
                   </div>

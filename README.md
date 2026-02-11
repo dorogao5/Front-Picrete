@@ -1,22 +1,34 @@
 # Front-Picrete
 
-Frontend для платформы Picrete (React + TypeScript + Vite).
+Frontend платформы Picrete (React + TypeScript + Vite).
 
-## Что реализовано
+## Текущее состояние
 
-- Course-scoped routing (`/c/:courseId/...`) с membership-based доступом.
-- Auth flow: signup/login + join-course по invite.
-- Teacher workflow: создание/редактирование работ, проверка submissions.
-- Student workflow: прохождение работ, OCR review, просмотр результатов.
-- Типы работ: `control` и `homework`.
-- Task bank + trainer sets.
-- Кнопка “Дополнительные материалы” (PDF в новой вкладке через авторизованный blob-open).
+- Course-scoped routing: `/c/:courseId/...`.
+- Защита маршрутов по membership-ролям (`student`, `teacher`) + `admin`.
+- Полный teacher/student workflow:
+  - создание/публикация работ,
+  - прохождение работ,
+  - OCR review,
+  - просмотр результатов,
+  - проверка сабмишнов преподавателем.
+- Task Bank + Trainer Sets.
+- Дополнительные материалы (PDF) через авторизованный blob-open.
+
+### Что важно в новой реализации загрузки
+
+- На странице выполнения работы (`TakeExam`) одна общая зона загрузки фото, без привязки к номерам задач.
+- Immediate upload: выбранный файл сразу уходит на backend.
+- Источник истины для загруженных изображений — `GET .../sessions/:session_id/images`.
+- Есть удаление изображения до завершения/истечения сессии.
+- Идет polling списка изображений каждые 5 секунд (включая подхват загрузок из Telegram-бота).
+- Сабмит ожидает завершения текущих загрузок (до 30 секунд), чтобы минимизировать потерю фото при отправке.
 
 ## Технологии
 
 - React 18 + TypeScript
 - Vite
-- React Router
+- React Router 6
 - TanStack Query
 - Axios
 - shadcn/ui + Tailwind
@@ -32,25 +44,25 @@ npm run dev
 
 ## Переменные окружения
 
-Минимум:
-
 ```env
 VITE_API_URL=http://localhost:8000/api/v1
 ```
 
 Если `VITE_API_URL` не задан:
+
 - dev: `http://localhost:8000/api/v1`
 - prod: `https://picrete.com/api/v1`
 
-## Команды
+## Скрипты
 
 ```bash
 npm run dev
 npm run build
 npm run lint
+npm run preview
 ```
 
-## Главные директории
+## Ключевые директории
 
 ```text
 src/
@@ -59,25 +71,27 @@ src/
   lib/
 ```
 
-- `src/lib/auth.ts` — client auth/session + membership helpers.
-- `src/lib/api.ts` — API contracts и axios wrappers.
 - `src/App.tsx` — маршрутизация и protected routes.
+- `src/lib/auth.ts` — сессия, memberships, active course.
+- `src/lib/api.ts` — axios-инстанс, API wrappers, DTO/типы.
+- `src/pages/TakeExam.tsx` — единая загрузка фото + submit/autosubmit логика.
 
-## Основные страницы
+## Важно по image URL
 
-- Auth: `Login`, `Signup`, `JoinCourse`
-- Teacher: `TeacherDashboard`, `CreateExam`, `ExamSubmissions`, `SubmissionReview`
-- Student: `StudentDashboard`, `TakeExam`, `OcrReview`, `ExamResult`
-- Task Bank/Trainer: `TaskBank`, `TrainerSets`, `TrainerSetView`
-- Admin: `AdminDashboard`
+В `src/lib/api.ts` функция `fetchImageAsBlobUrl(...)` корректно собирает абсолютный URL от origin API для путей вида `/api/v1/...`, чтобы избежать двойного префикса (`/api/v1/api/v1/...`) и 404.
 
-## Связь с backend
+## Интеграция с backend
 
-Ожидается backend Picrete c API `/api/v1` и course-scoped endpoints:
+Ожидается backend Picrete с route-префиксом `/api/v1` и course-scoped endpoints:
+
 - `/courses/:course_id/exams`
 - `/courses/:course_id/submissions`
 - `/courses/:course_id/task-bank`
 - `/courses/:course_id/trainer`
 - `/courses/:course_id/materials`
 
-Подробнее по архитектуре: `ARCHITECTURE.md`.
+## Документация
+
+- Front architecture: `ARCHITECTURE.md`
+- Backend README: `../Picrete/README.md`
+- Backend architecture: `../Picrete/ARCHITECTURE.md`
