@@ -688,7 +688,7 @@ const SubmissionReview = () => {
                     const selectedBlock =
                       selectedChunkIndex !== null ? blocks[selectedChunkIndex] ?? null : null;
                     const selectedChunkText = selectedBlock ? chunkDisplayText(selectedBlock) : "";
-                    const hideImage = hideOcrImageByImage[page.image_id] ?? false;
+                    const hideImage = hideOcrImageByImage[page.image_id] ?? true;
 
                     return (
                       <div key={`${page.image_id}-${idx}`} className="rounded border p-3 space-y-3">
@@ -740,6 +740,17 @@ const SubmissionReview = () => {
                             </div>
 
                             <div className="min-w-0 w-full space-y-3 xl:w-[360px] xl:flex-none">
+                              <div className="rounded border bg-background/70 p-2">
+                                <p className="mb-2 text-xs font-semibold text-muted-foreground">
+                                  Выбранный chunk
+                                </p>
+                                <div className="ocr-rich-text max-h-40 overflow-auto text-xs leading-snug">
+                                  {selectedChunkText
+                                    ? renderTaskText(selectedChunkText)
+                                    : "Выберите chunk в списке справа или кликните на bbox/полигон на изображении."}
+                                </div>
+                              </div>
+
                               <div className="space-y-2">
                                 <p className="text-xs font-semibold text-muted-foreground">
                                   OCR chunks с привязкой геометрии
@@ -777,17 +788,6 @@ const SubmissionReview = () => {
                                       OCR chunks отсутствуют в ответе.
                                     </p>
                                   )}
-                                </div>
-                              </div>
-
-                              <div className="rounded border bg-background/70 p-2">
-                                <p className="mb-2 text-xs font-semibold text-muted-foreground">
-                                  Выбранный chunk
-                                </p>
-                                <div className="ocr-rich-text max-h-40 overflow-auto text-xs leading-snug">
-                                  {selectedChunkText
-                                    ? renderTaskText(selectedChunkText)
-                                    : "Выберите chunk в списке справа или кликните на bbox/полигон на изображении."}
                                 </div>
                               </div>
                             </div>
