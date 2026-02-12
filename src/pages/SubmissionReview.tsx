@@ -362,167 +362,6 @@ const SubmissionReview = () => {
               />
             )}
 
-            {/* OCR + REPORT */}
-            <Card className="p-6">
-              <h2 className="text-2xl font-bold mb-4">OCR / REPORT</h2>
-              <Tabs defaultValue="ocr">
-                <TabsList>
-                  <TabsTrigger value="ocr">OCR (validated)</TabsTrigger>
-                  <TabsTrigger value="report">Student REPORT issues</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="ocr" className="space-y-4">
-                  {submission.ocr_error && (
-                    <div className="rounded border border-yellow-400 bg-yellow-50 p-3 text-sm">
-                      OCR error: {submission.ocr_error}
-                    </div>
-                  )}
-                  {submission.ocr_pages && submission.ocr_pages.length > 0 ? (
-                    <div className="space-y-4">
-                      {submission.ocr_pages.map((page, idx) => {
-                        const blocks = extractOcrBlocks(page.chunks);
-                        const selectedChunkIndex =
-                          selectedChunkByImage[page.image_id] ?? (blocks.length > 0 ? 0 : null);
-                        const hideImage = hideOcrImageByImage[page.image_id] ?? false;
-
-                        return (
-                          <div key={`${page.image_id}-${idx}`} className="rounded border p-3 space-y-3">
-                            <div className="flex items-center justify-between text-sm gap-2">
-                              <span className="font-medium">Страница #{idx + 1}</span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-muted-foreground">
-                                  {page.ocr_status || "unknown"} / {page.page_status || "not_reviewed"}
-                                </span>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() =>
-                                    setHideOcrImageByImage((prev) => ({
-                                      ...prev,
-                                      [page.image_id]: !hideImage,
-                                    }))
-                                  }
-                                >
-                                  {hideImage ? "Показать изображение" : "Скрыть изображение"}
-                                </Button>
-                              </div>
-                            </div>
-
-                            <div className={`grid items-start gap-4 ${hideImage ? "grid-cols-1" : "lg:grid-cols-2"}`}>
-                              {!hideImage && (
-                                <OcrImageOverlay
-                                  imageUrl={imageUrls[page.image_id]}
-                                  blocks={blocks}
-                                  selectedChunkIndex={selectedChunkIndex}
-                                  onSelectChunk={(index) =>
-                                    setSelectedChunkByImage((prev) => ({
-                                      ...prev,
-                                      [page.image_id]: index,
-                                    }))
-                                  }
-                                  alt={`OCR page ${idx + 1}`}
-                                  className="max-h-[70vh]"
-                                />
-                              )}
-                              <div className="min-w-0 space-y-3">
-                                <OcrMarkdownPanel markdown={page.ocr_markdown} previewLines={10} />
-
-                                <div className="space-y-2">
-                                  <p className="text-xs font-semibold text-muted-foreground">
-                                    OCR chunks с привязкой геометрии
-                                  </p>
-                                  <div className="max-h-44 overflow-y-auto rounded border p-2 space-y-2">
-                                    {blocks.map((block, blockIndex) => (
-                                      (() => {
-                                        const renderedChunk = chunkDisplayText(block);
-                                        return (
-                                          <button
-                                            key={`${page.image_id}-chunk-${blockIndex}`}
-                                            type="button"
-                                            className={`w-full rounded border p-2 text-left text-xs ${
-                                              selectedChunkIndex === blockIndex
-                                                ? "border-primary bg-primary/10"
-                                                : "border-border hover:bg-muted/50"
-                                            }`}
-                                            onClick={() =>
-                                              setSelectedChunkByImage((prev) => ({
-                                                ...prev,
-                                                [page.image_id]: blockIndex,
-                                              }))
-                                            }
-                                          >
-                                            <div className="font-medium">{chunkTitle(block, blockIndex)}</div>
-                                            <div className="mt-1 max-h-24 overflow-auto rounded bg-background/70 p-1.5 text-muted-foreground">
-                                              <div className="ocr-rich-text text-[11px] leading-snug">
-                                                {renderedChunk
-                                                  ? renderTaskText(renderedChunk)
-                                                  : "(пустой OCR блок)"}
-                                              </div>
-                                            </div>
-                                          </button>
-                                        );
-                                      })()
-                                    ))}
-                                    {blocks.length === 0 && (
-                                      <p className="text-xs text-muted-foreground">
-                                        OCR chunks отсутствуют в ответе.
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">OCR-данные не предоставлены</p>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="report" className="space-y-3">
-                  {submission.report_summary && (
-                    <div className="rounded border p-3 text-sm">
-                      <p className="font-semibold mb-1">Summary</p>
-                      <p className="text-muted-foreground">{submission.report_summary}</p>
-                    </div>
-                  )}
-                  {submission.report_issues && submission.report_issues.length > 0 ? (
-                    <div className="space-y-3">
-                      {submission.report_issues.map((issue) => (
-                        <div key={issue.id} className="rounded border p-3 text-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium">
-                              Страница #{imageOrderById.get(issue.image_id) ?? "?"}
-                            </span>
-                            <span className="text-xs uppercase text-muted-foreground">{issue.severity}</span>
-                          </div>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {anchorSummary(issue.anchor)}
-                          </p>
-                          <p className="mt-2">{issue.note}</p>
-                          {issue.original_text && (
-                            <p className="mt-1 text-muted-foreground">
-                              OCR: {cleanOcrMarkdown(issue.original_text)}
-                            </p>
-                          )}
-                          {issue.suggested_text && (
-                            <p className="mt-1 text-muted-foreground">
-                              corrected: {issue.suggested_text}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">REPORT issues отсутствуют</p>
-                  )}
-                </TabsContent>
-              </Tabs>
-            </Card>
-
             {/* AI Analysis */}
             <Card className="p-6">
               <h2 className="text-2xl font-bold mb-4">Анализ AI</h2>
@@ -724,6 +563,182 @@ const SubmissionReview = () => {
             </Card>
           </div>
         </div>
+
+        <Card className="mt-6 p-6">
+          <h2 className="text-2xl font-bold mb-4">OCR / REPORT</h2>
+          <Tabs defaultValue="ocr">
+            <TabsList>
+              <TabsTrigger value="ocr">OCR (validated)</TabsTrigger>
+              <TabsTrigger value="report">Student REPORT issues</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="ocr" className="space-y-4">
+              {submission.ocr_error && (
+                <div className="rounded border border-yellow-400 bg-yellow-50 p-3 text-sm">
+                  OCR error: {submission.ocr_error}
+                </div>
+              )}
+              {submission.ocr_pages && submission.ocr_pages.length > 0 ? (
+                <div className="space-y-4">
+                  {submission.ocr_pages.map((page, idx) => {
+                    const blocks = extractOcrBlocks(page.chunks);
+                    const selectedChunkIndex =
+                      selectedChunkByImage[page.image_id] ?? (blocks.length > 0 ? 0 : null);
+                    const selectedBlock =
+                      selectedChunkIndex !== null ? blocks[selectedChunkIndex] ?? null : null;
+                    const selectedChunkText = selectedBlock ? chunkDisplayText(selectedBlock) : "";
+                    const hideImage = hideOcrImageByImage[page.image_id] ?? false;
+
+                    return (
+                      <div key={`${page.image_id}-${idx}`} className="rounded border p-3 space-y-3">
+                        <div className="flex items-center justify-between text-sm gap-2">
+                          <span className="font-medium">Страница #{idx + 1}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground">
+                              {page.ocr_status || "unknown"} / {page.page_status || "not_reviewed"}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setHideOcrImageByImage((prev) => ({
+                                  ...prev,
+                                  [page.image_id]: !hideImage,
+                                }))
+                              }
+                            >
+                              {hideImage ? "Показать изображение" : "Скрыть изображение"}
+                            </Button>
+                          </div>
+                        </div>
+
+                        {hideImage ? (
+                          <OcrMarkdownPanel
+                            markdown={page.ocr_markdown}
+                            alwaysExpanded
+                            hideToggle
+                            previewLines={9999}
+                          />
+                        ) : (
+                          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+                            <OcrImageOverlay
+                              imageUrl={imageUrls[page.image_id]}
+                              blocks={blocks}
+                              selectedChunkIndex={selectedChunkIndex}
+                              onSelectChunk={(index) =>
+                                setSelectedChunkByImage((prev) => ({
+                                  ...prev,
+                                  [page.image_id]: index,
+                                }))
+                              }
+                              alt={`OCR page ${idx + 1}`}
+                              className="max-h-[72vh]"
+                            />
+
+                            <div className="min-w-0 space-y-3">
+                              <div className="space-y-2">
+                                <p className="text-xs font-semibold text-muted-foreground">
+                                  OCR chunks с привязкой геометрии
+                                </p>
+                                <div className="max-h-[46vh] overflow-y-auto rounded border p-2 space-y-2">
+                                  {blocks.map((block, blockIndex) => {
+                                    const renderedChunk = chunkDisplayText(block);
+                                    return (
+                                      <button
+                                        key={`${page.image_id}-chunk-${blockIndex}`}
+                                        type="button"
+                                        className={`w-full rounded border p-2 text-left text-xs ${
+                                          selectedChunkIndex === blockIndex
+                                            ? "border-primary bg-primary/10"
+                                            : "border-border hover:bg-muted/50"
+                                        }`}
+                                        onClick={() =>
+                                          setSelectedChunkByImage((prev) => ({
+                                            ...prev,
+                                            [page.image_id]: blockIndex,
+                                          }))
+                                        }
+                                      >
+                                        <div className="font-medium">{chunkTitle(block, blockIndex)}</div>
+                                        <div className="mt-1 max-h-24 overflow-auto rounded bg-background/70 p-1.5 text-muted-foreground">
+                                          <div className="ocr-rich-text text-[11px] leading-snug">
+                                            {renderedChunk ? renderTaskText(renderedChunk) : "(пустой OCR блок)"}
+                                          </div>
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
+                                  {blocks.length === 0 && (
+                                    <p className="text-xs text-muted-foreground">
+                                      OCR chunks отсутствуют в ответе.
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="rounded border bg-background/70 p-2">
+                                <p className="mb-2 text-xs font-semibold text-muted-foreground">
+                                  Выбранный chunk
+                                </p>
+                                <div className="ocr-rich-text max-h-40 overflow-auto text-xs leading-snug">
+                                  {selectedChunkText
+                                    ? renderTaskText(selectedChunkText)
+                                    : "Выберите chunk в списке справа или кликните на bbox/полигон на изображении."}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">OCR-данные не предоставлены</p>
+              )}
+            </TabsContent>
+
+            <TabsContent value="report" className="space-y-3">
+              {submission.report_summary && (
+                <div className="rounded border p-3 text-sm">
+                  <p className="font-semibold mb-1">Summary</p>
+                  <p className="text-muted-foreground">{submission.report_summary}</p>
+                </div>
+              )}
+              {submission.report_issues && submission.report_issues.length > 0 ? (
+                <div className="space-y-3">
+                  {submission.report_issues.map((issue) => (
+                    <div key={issue.id} className="rounded border p-3 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">
+                          Страница #{imageOrderById.get(issue.image_id) ?? "?"}
+                        </span>
+                        <span className="text-xs uppercase text-muted-foreground">{issue.severity}</span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {anchorSummary(issue.anchor)}
+                      </p>
+                      <p className="mt-2">{issue.note}</p>
+                      {issue.original_text && (
+                        <p className="mt-1 text-muted-foreground">
+                          OCR: {cleanOcrMarkdown(issue.original_text)}
+                        </p>
+                      )}
+                      {issue.suggested_text && (
+                        <p className="mt-1 text-muted-foreground">
+                          corrected: {issue.suggested_text}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">REPORT issues отсутствуют</p>
+              )}
+            </TabsContent>
+          </Tabs>
+        </Card>
       </div>
     </div>
   );

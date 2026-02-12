@@ -7,14 +7,22 @@ import { renderTaskText } from "@/lib/renderLatex";
 interface OcrMarkdownPanelProps {
   markdown?: string | null;
   previewLines?: number;
+  alwaysExpanded?: boolean;
+  hideToggle?: boolean;
 }
 
-const OcrMarkdownPanel = ({ markdown, previewLines = 8 }: OcrMarkdownPanelProps) => {
+const OcrMarkdownPanel = ({
+  markdown,
+  previewLines = 8,
+  alwaysExpanded = false,
+  hideToggle = false,
+}: OcrMarkdownPanelProps) => {
   const [expanded, setExpanded] = useState(false);
   const cleaned = useMemo(() => cleanOcrMarkdown(markdown), [markdown]);
   const lines = useMemo(() => cleaned.split("\n"), [cleaned]);
   const needsCollapse = lines.length > previewLines;
-  const visibleText = expanded || !needsCollapse ? cleaned : lines.slice(0, previewLines).join("\n");
+  const isExpanded = alwaysExpanded || expanded;
+  const visibleText = isExpanded || !needsCollapse ? cleaned : lines.slice(0, previewLines).join("\n");
 
   return (
     <div className="min-w-0 space-y-2">
@@ -27,7 +35,7 @@ const OcrMarkdownPanel = ({ markdown, previewLines = 8 }: OcrMarkdownPanelProps)
           <span className="text-muted-foreground">OCR markdown отсутствует</span>
         )}
       </div>
-      {needsCollapse && (
+      {needsCollapse && !alwaysExpanded && !hideToggle && (
         <Button type="button" variant="outline" size="sm" onClick={() => setExpanded((prev) => !prev)}>
           {expanded ? "Свернуть OCR текст" : "Показать полный OCR текст"}
         </Button>
