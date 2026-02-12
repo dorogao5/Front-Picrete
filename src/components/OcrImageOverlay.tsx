@@ -52,13 +52,11 @@ const OcrImageOverlay = ({
   }
 
   return (
-    <div
-      className={`relative min-w-0 w-full self-start overflow-hidden rounded border bg-muted/20 ${className ?? ""}`.trim()}
-    >
+    <div className="relative inline-block max-w-full self-start overflow-hidden rounded border bg-muted/20">
       <img
         src={imageUrl}
         alt={alt}
-        className="block w-full rounded object-contain"
+        className={`block h-auto w-auto max-w-full rounded object-contain ${className ?? ""}`.trim()}
         onLoad={(event) => {
           const target = event.currentTarget;
           if (target.naturalWidth > 0 && target.naturalHeight > 0) {
