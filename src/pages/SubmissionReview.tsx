@@ -722,22 +722,24 @@ const SubmissionReview = () => {
                             previewLines={9999}
                           />
                         ) : (
-                          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-                            <OcrImageOverlay
-                              imageUrl={imageUrls[page.image_id]}
-                              blocks={blocks}
-                              selectedChunkIndex={selectedChunkIndex}
-                              onSelectChunk={(index) =>
-                                setSelectedChunkByImage((prev) => ({
-                                  ...prev,
-                                  [page.image_id]: index,
-                                }))
-                              }
-                              alt={`OCR page ${idx + 1}`}
-                              className="max-h-[72vh]"
-                            />
+                          <div className="flex flex-col items-start gap-4 xl:flex-row">
+                            <div className="w-fit max-w-full">
+                              <OcrImageOverlay
+                                imageUrl={imageUrls[page.image_id]}
+                                blocks={blocks}
+                                selectedChunkIndex={selectedChunkIndex}
+                                onSelectChunk={(index) =>
+                                  setSelectedChunkByImage((prev) => ({
+                                    ...prev,
+                                    [page.image_id]: index,
+                                  }))
+                                }
+                                alt={`OCR page ${idx + 1}`}
+                                className="max-h-[72vh]"
+                              />
+                            </div>
 
-                            <div className="min-w-0 space-y-3">
+                            <div className="min-w-0 w-full space-y-3 xl:w-[360px] xl:flex-none">
                               <div className="space-y-2">
                                 <p className="text-xs font-semibold text-muted-foreground">
                                   OCR chunks с привязкой геометрии

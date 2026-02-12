@@ -5,6 +5,8 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Eye,
+  EyeOff,
   Flag,
   Loader2,
   ScanText,
@@ -110,6 +112,7 @@ const OcrReview = () => {
   const [drafts, setDrafts] = useState<Record<string, PageDraft>>({});
   const [reportSummary, setReportSummary] = useState("");
   const [issueForm, setIssueForm] = useState<IssueDraftForm>(EMPTY_ISSUE_FORM);
+  const [hideOcrImageByImage, setHideOcrImageByImage] = useState<Record<string, boolean>>({});
 
   const loadPages = useCallback(async () => {
     if (!sessionId) return;
@@ -159,6 +162,10 @@ const OcrReview = () => {
   const currentImageId = currentPage?.image_id;
   const currentDraft = currentPage ? drafts[currentPage.image_id] ?? { issues: [] } : { issues: [] };
   const blocks = useMemo(() => extractOcrBlocks(currentPage?.chunks), [currentPage?.chunks]);
+  const hideImage = currentImageId ? hideOcrImageByImage[currentImageId] ?? false : false;
+  const selectedBlock =
+    issueForm.selectedChunkIndex !== null ? blocks[issueForm.selectedChunkIndex] ?? null : null;
+  const selectedChunkText = selectedBlock ? chunkDisplayText(selectedBlock) : "";
 
   useEffect(() => {
     if (!currentImageId) return;
@@ -188,6 +195,8 @@ const OcrReview = () => {
   const finalizeAction: "submit" | "report" = totalIssuesCount > 0 ? "report" : "submit";
   const finalizeLabel = finalizeAction === "report" ? "Репорт" : "Сдать";
   const progress = pages.length > 0 ? (reviewedPagesCount / pages.length) * 100 : 0;
+  const isFirstPage = currentPageIndex === 0;
+  const isLastPage = currentPageIndex === pages.length - 1;
 
   const setCurrentPageStatus = (pageStatus: "approved" | "reported") => {
     if (!currentPage) return;
@@ -419,6 +428,7 @@ const OcrReview = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Badge variant="outline">Страница: {currentPageIndex + 1}</Badge>
             <Badge variant="outline">Страниц: {pages.length}</Badge>
             <Badge variant={totalIssuesCount > 0 ? "destructive" : "secondary"}>
               {totalIssuesCount > 0 ? `Issues: ${totalIssuesCount}` : "Issues: 0"}
@@ -436,39 +446,123 @@ const OcrReview = () => {
           <Progress value={progress} />
         </Card>
 
-        <div className="grid items-start lg:grid-cols-2 gap-6">
-          <Card className="min-w-0 p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold">Оригинал страницы #{currentPageIndex + 1}</h2>
+        <Card className="min-w-0 p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <h2 className="font-semibold">Страница #{currentPageIndex + 1}</h2>
               <Badge variant="outline">{currentPage.ocr_status}</Badge>
             </div>
-            <OcrImageOverlay
-              imageUrl={currentPage.image_view_url}
-              blocks={blocks}
-              selectedChunkIndex={issueForm.selectedChunkIndex}
-              onSelectChunk={(index) =>
-                setIssueForm((prev) => ({ ...prev, selectedChunkIndex: index }))
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setHideOcrImageByImage((prev) => ({
+                  ...prev,
+                  [currentPage.image_id]: !hideImage,
+                }))
               }
-              alt={`OCR page ${currentPageIndex + 1}`}
-              className="max-h-[72vh]"
-            />
-            <p className="text-xs text-muted-foreground">
-              Выделенный chunk подсвечен на изображении, чтобы было понятно, какой фрагмент вы исправляете.
-            </p>
-          </Card>
+            >
+              {hideImage ? (
+                <>
+                  <Eye className="mr-1.5 h-4 w-4" />
+                  Показать изображение
+                </>
+              ) : (
+                <>
+                  <EyeOff className="mr-1.5 h-4 w-4" />
+                  Скрыть изображение
+                </>
+              )}
+            </Button>
+          </div>
 
-          <Card className="min-w-0 p-4 space-y-4">
+          {hideImage ? (
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <ScanText className="h-4 w-4" />
-                <h2 className="font-semibold">OCR Markdown</h2>
+                <h3 className="font-semibold">OCR Markdown</h3>
               </div>
-              <OcrMarkdownPanel markdown={currentPage.ocr_markdown} previewLines={12} />
+              <OcrMarkdownPanel
+                markdown={currentPage.ocr_markdown}
+                alwaysExpanded
+                hideToggle
+                previewLines={9999}
+              />
             </div>
+          ) : (
+            <div className="flex flex-col items-start gap-4 xl:flex-row">
+              <div className="w-fit max-w-full">
+                <OcrImageOverlay
+                  imageUrl={currentPage.image_view_url}
+                  blocks={blocks}
+                  selectedChunkIndex={issueForm.selectedChunkIndex}
+                  onSelectChunk={(index) =>
+                    setIssueForm((prev) => ({ ...prev, selectedChunkIndex: index }))
+                  }
+                  alt={`OCR page ${currentPageIndex + 1}`}
+                  className="max-h-[72vh]"
+                />
+              </div>
 
+              <div className="min-w-0 w-full space-y-3 xl:w-[360px] xl:flex-none">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground">
+                    OCR chunks с привязкой геометрии
+                  </p>
+                  <div className="max-h-[46vh] overflow-y-auto rounded border p-2 space-y-2">
+                    {blocks.map((block, blockIndex) => {
+                      const renderedChunk = chunkDisplayText(block);
+                      return (
+                        <button
+                          key={`${block.id ?? "chunk"}-${blockIndex}`}
+                          type="button"
+                          className={`w-full rounded border p-2 text-left text-xs ${
+                            issueForm.selectedChunkIndex === blockIndex
+                              ? "border-primary bg-primary/10"
+                              : "border-border hover:bg-muted/50"
+                          }`}
+                          onClick={() =>
+                            setIssueForm((prev) => ({ ...prev, selectedChunkIndex: blockIndex }))
+                          }
+                        >
+                          <div className="font-medium">{chunkTitle(block, blockIndex)}</div>
+                          <div className="mt-1 max-h-24 overflow-auto rounded bg-background/70 p-1.5 text-muted-foreground">
+                            <div className="ocr-rich-text text-[11px] leading-snug">
+                              {renderedChunk ? renderTaskText(renderedChunk) : "(пустой OCR блок)"}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                    {blocks.length === 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        OCR chunks отсутствуют в ответе.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded border bg-background/70 p-2">
+                  <p className="mb-2 text-xs font-semibold text-muted-foreground">
+                    Выбранный chunk
+                  </p>
+                  <div className="ocr-rich-text max-h-40 overflow-auto text-xs leading-snug">
+                    {selectedChunkText
+                      ? renderTaskText(selectedChunkText)
+                      : "Выберите chunk в списке справа или кликните на bbox/полигон на изображении."}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        <Card className="min-w-0 p-4 space-y-4">
+          <div className="grid items-start gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
             <div className="space-y-2">
               <h3 className="font-semibold text-sm">Статус страницы</h3>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 <Button
                   type="button"
                   variant={currentDraft.page_status === "approved" ? "default" : "outline"}
@@ -486,43 +580,6 @@ const OcrReview = () => {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <h3 className="font-semibold text-sm">OCR chunks (anchor geometry)</h3>
-              <div className="max-h-52 rounded border p-2 overflow-y-auto">
-                <div className="space-y-2">
-                  {blocks.map((block, idx) => (
-                    (() => {
-                      const renderedChunk = chunkDisplayText(block);
-                      return (
-                        <button
-                          key={`${block.id ?? "chunk"}-${idx}`}
-                          type="button"
-                          className={`w-full rounded border p-2 text-left text-xs ${
-                            issueForm.selectedChunkIndex === idx
-                              ? "border-primary bg-primary/10"
-                              : "border-border hover:bg-muted/50"
-                          }`}
-                          onClick={() =>
-                            setIssueForm((prev) => ({ ...prev, selectedChunkIndex: idx }))
-                          }
-                        >
-                          <div className="font-medium">{chunkTitle(block, idx)}</div>
-                          <div className="mt-1 max-h-24 overflow-auto rounded bg-background/70 p-1.5 text-muted-foreground">
-                            <div className="ocr-rich-text text-[11px] leading-snug">
-                              {renderedChunk ? renderTaskText(renderedChunk) : "(пустой OCR блок)"}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })()
-                  ))}
-                  {blocks.length === 0 && (
-                    <p className="text-xs text-muted-foreground">Нет chunk-блоков для выбора.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
             <div className="space-y-2 rounded border p-3">
               <h3 className="text-sm font-semibold">Добавить OCR issue</h3>
               <Input
@@ -537,7 +594,7 @@ const OcrReview = () => {
                 value={issueForm.note}
                 onChange={(event) => setIssueForm((prev) => ({ ...prev, note: event.target.value }))}
               />
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Label className="text-xs">Severity</Label>
                 <select
                   value={issueForm.severity}
@@ -555,62 +612,69 @@ const OcrReview = () => {
                 </Button>
               </div>
             </div>
+          </div>
 
+          <div className="space-y-2">
+            <h3 className="font-semibold text-sm">Issues страницы</h3>
             <div className="space-y-2">
-              <h3 className="font-semibold text-sm">Issues страницы</h3>
-              <div className="space-y-2">
-                {currentDraft.issues.map((issue, idx) => (
-                  <div key={`${idx}-${issue.note}`} className="rounded border p-2 text-xs">
-                    <div className="flex items-center justify-between gap-2">
-                      <Badge variant="outline">{issue.severity ?? "major"}</Badge>
-                      <span className="text-muted-foreground">{anchorSummary(issue.anchor as Record<string, unknown>)}</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeIssue(idx)}
-                        className="h-6 px-2"
-                      >
-                        удалить
-                      </Button>
-                    </div>
-                    <p className="mt-1 text-muted-foreground">{issue.note}</p>
-                    {issue.suggested_text && (
-                      <p className="mt-1">
-                        suggested: <span className="font-medium">{issue.suggested_text}</span>
-                      </p>
-                    )}
+              {currentDraft.issues.map((issue, idx) => (
+                <div key={`${idx}-${issue.note}`} className="rounded border p-2 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <Badge variant="outline">{issue.severity ?? "major"}</Badge>
+                    <span className="text-muted-foreground">
+                      {anchorSummary(issue.anchor as Record<string, unknown>)}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeIssue(idx)}
+                      className="h-6 px-2"
+                    >
+                      удалить
+                    </Button>
                   </div>
-                ))}
-                {currentDraft.issues.length === 0 && (
-                  <p className="text-xs text-muted-foreground">Issue-заметок пока нет.</p>
-                )}
-              </div>
+                  <p className="mt-1 text-muted-foreground">{issue.note}</p>
+                  {issue.suggested_text && (
+                    <p className="mt-1">
+                      suggested: <span className="font-medium">{issue.suggested_text}</span>
+                    </p>
+                  )}
+                </div>
+              ))}
+              {currentDraft.issues.length === 0 && (
+                <p className="text-xs text-muted-foreground">Issue-заметок пока нет.</p>
+              )}
             </div>
+          </div>
 
-            <div className="flex items-center justify-between gap-2">
-              <Button variant="outline" onClick={() => setCurrentPageIndex((prev) => Math.max(0, prev - 1))}>
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Предыдущая
-              </Button>
-              <Button onClick={saveCurrentPage} disabled={savingPage}>
-                {savingPage ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                ) : (
-                  <CheckCircle2 className="h-4 w-4 mr-1" />
-                )}
-                Сохранить страницу
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setCurrentPageIndex((prev) => Math.min(pages.length - 1, prev + 1))}
-              >
-                Следующая
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </div>
-          </Card>
-        </div>
+          <div className="flex items-center justify-between gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setCurrentPageIndex((prev) => Math.max(0, prev - 1))}
+              disabled={isFirstPage}
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Предыдущая
+            </Button>
+            <Button onClick={saveCurrentPage} disabled={savingPage}>
+              {savingPage ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4 mr-1" />
+              )}
+              Сохранить страницу
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setCurrentPageIndex((prev) => Math.min(pages.length - 1, prev + 1))}
+              disabled={isLastPage}
+            >
+              Следующая
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
+        </Card>
 
         {finalizeAction === "report" && (
           <Card className="p-4 space-y-2 border-destructive/30">
