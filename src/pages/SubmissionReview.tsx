@@ -133,6 +133,8 @@ const chunkTitle = (block: OcrChunkBlock, index: number) => {
   return `${kind} #${index + 1}${page}`;
 };
 
+const normalizeTaskText = (value: string) => value.replace(/\s+/g, " ").trim();
+
 const SubmissionReview = () => {
   const { courseId, submissionId } = useParams<{ courseId: string; submissionId: string }>();
   const navigate = useNavigate();
@@ -338,6 +340,12 @@ const SubmissionReview = () => {
                   {submissionTasks.map((task, index) => {
                     const descriptionText = (task.task_type.description || "").trim();
                     const variantText = (task.variant.content || "").trim();
+                    const hasDescription = Boolean(descriptionText);
+                    const hasVariant = Boolean(variantText);
+                    const isVariantDuplicate =
+                      hasDescription &&
+                      hasVariant &&
+                      normalizeTaskText(descriptionText) === normalizeTaskText(variantText);
 
                     return (
                       <div key={`${task.task_type.id}-${index}`} className="rounded border p-4 space-y-3">
@@ -352,23 +360,34 @@ const SubmissionReview = () => {
                           )}
                         </div>
 
-                        {descriptionText && (
+                        {isVariantDuplicate ? (
                           <div className="rounded border bg-secondary/30 p-3">
                             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                              Общее условие
+                              Общее условие и вариант студента совпадают
                             </p>
                             <div className="text-sm">{renderTaskText(descriptionText)}</div>
                           </div>
-                        )}
+                        ) : (
+                          <>
+                            {descriptionText && (
+                              <div className="rounded border bg-secondary/30 p-3">
+                                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                  Общее условие
+                                </p>
+                                <div className="text-sm">{renderTaskText(descriptionText)}</div>
+                              </div>
+                            )}
 
-                        <div className="rounded border border-primary/30 bg-primary/5 p-3">
-                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">
-                            Вариант этого студента
-                          </p>
-                          <div className="text-sm">
-                            {variantText ? renderTaskText(variantText) : "Текст варианта не передан API."}
-                          </div>
-                        </div>
+                            <div className="rounded border border-primary/30 bg-primary/5 p-3">
+                              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">
+                                Вариант этого студента
+                              </p>
+                              <div className="text-sm">
+                                {variantText ? renderTaskText(variantText) : "Текст варианта не передан API."}
+                              </div>
+                            </div>
+                          </>
+                        )}
 
                         {Array.isArray(task.task_type.formulas) && task.task_type.formulas.length > 0 && (
                           <div className="rounded border bg-blue-50 p-3">
