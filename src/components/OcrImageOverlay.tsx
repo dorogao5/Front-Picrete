@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { geometryForBlock, OcrChunkBlock } from "@/lib/ocr";
 
@@ -19,7 +19,19 @@ const OcrImageOverlay = ({
   alt,
   className,
 }: OcrImageOverlayProps) => {
+  const imageRef = useRef<HTMLImageElement | null>(null);
   const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
+  const [renderedSize, setRenderedSize] = useState<{ width: number; height: number } | null>(null);
+
+  const syncRenderedSize = () => {
+    const target = imageRef.current;
+    if (!target) return;
+    const width = target.clientWidth;
+    const height = target.clientHeight;
+    if (width > 0 && height > 0) {
+      setRenderedSize({ width, height });
+    }
+  };
 
   const geometries = useMemo(
     () =>
@@ -43,6 +55,20 @@ const OcrImageOverlay = ({
     [geometries]
   );
 
+  useEffect(() => {
+    syncRenderedSize();
+    const target = imageRef.current;
+    if (!target || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      syncRenderedSize();
+    });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [imageUrl]);
+
   if (!imageUrl) {
     return (
       <div className="rounded border p-4 text-sm text-muted-foreground">
@@ -54,6 +80,7 @@ const OcrImageOverlay = ({
   return (
     <div className="relative inline-block max-w-full self-start overflow-hidden rounded border bg-muted/20">
       <img
+        ref={imageRef}
         src={imageUrl}
         alt={alt}
         className={`block h-auto w-auto max-w-full rounded object-contain ${className ?? ""}`.trim()}
@@ -61,69 +88,73 @@ const OcrImageOverlay = ({
           const target = event.currentTarget;
           if (target.naturalWidth > 0 && target.naturalHeight > 0) {
             setImageSize({ width: target.naturalWidth, height: target.naturalHeight });
+            setRenderedSize({ width: target.clientWidth, height: target.clientHeight });
           }
         }}
       />
 
-      <div
-        className="absolute inset-0"
-        onClick={(event) => {
-          if (!onSelectChunk || hitTargets.length === 0) return;
-          const rect = event.currentTarget.getBoundingClientRect();
-          if (rect.width <= 0 || rect.height <= 0) return;
+      {renderedSize && (
+        <div
+          className="absolute left-0 top-0"
+          style={{ width: renderedSize.width, height: renderedSize.height }}
+          onClick={(event) => {
+            if (!onSelectChunk || hitTargets.length === 0) return;
+            const rect = event.currentTarget.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) return;
 
-          const x = ((event.clientX - rect.left) / rect.width) * 100;
-          const y = ((event.clientY - rect.top) / rect.height) * 100;
-          const target = findBestHitTarget(x, y, hitTargets);
-          if (target !== null) {
-            onSelectChunk(target);
-          }
-        }}
-      >
-        {geometries.map((geometry, index) => {
-          if (!geometry) return null;
-          const selected = index === selectedChunkIndex;
-          const hasPolygon = Array.isArray(geometry.polygon) && geometry.polygon.length >= 3;
+            const x = ((event.clientX - rect.left) / rect.width) * 100;
+            const y = ((event.clientY - rect.top) / rect.height) * 100;
+            const target = findBestHitTarget(x, y, hitTargets);
+            if (target !== null) {
+              onSelectChunk(target);
+            }
+          }}
+        >
+          {geometries.map((geometry, index) => {
+            if (!geometry) return null;
+            const selected = index === selectedChunkIndex;
+            const hasPolygon = Array.isArray(geometry.polygon) && geometry.polygon.length >= 3;
 
-          return (
-            <div key={`ocr-geometry-${index}`}>
-              {!hasPolygon && geometry.bbox && (
-                <div
-                  className={`absolute rounded border-2 ${
-                    selected
-                      ? "pointer-events-none border-primary bg-primary/15"
-                      : "pointer-events-none border-primary/40 bg-primary/5"
-                  }`}
-                  style={{
-                    left: `${geometry.bbox.left}%`,
-                    top: `${geometry.bbox.top}%`,
-                    width: `${geometry.bbox.width}%`,
-                    height: `${geometry.bbox.height}%`,
-                  }}
-                />
-              )}
-
-              {geometry.polygon && (
-                <svg
-                  className="pointer-events-none absolute inset-0 h-full w-full"
-                  viewBox="0 0 100 100"
-                  preserveAspectRatio="none"
-                >
-                  <polygon
-                    points={geometry.polygon.map((point) => `${point.x},${point.y}`).join(" ")}
-                    className="pointer-events-none"
+            return (
+              <div key={`ocr-geometry-${index}`}>
+                {!hasPolygon && geometry.bbox && (
+                  <div
+                    className={`absolute rounded border-2 ${
+                      selected
+                        ? "pointer-events-none border-primary bg-primary/15"
+                        : "pointer-events-none border-primary/40 bg-primary/5"
+                    }`}
                     style={{
-                      fill: selected ? "rgba(124,58,237,0.22)" : "rgba(124,58,237,0.08)",
-                      stroke: selected ? "rgba(124,58,237,1)" : "rgba(124,58,237,0.55)",
+                      left: `${geometry.bbox.left}%`,
+                      top: `${geometry.bbox.top}%`,
+                      width: `${geometry.bbox.width}%`,
+                      height: `${geometry.bbox.height}%`,
                     }}
-                    strokeWidth={selected ? 0.8 : 0.4}
                   />
-                </svg>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                )}
+
+                {geometry.polygon && (
+                  <svg
+                    className="pointer-events-none absolute inset-0 h-full w-full"
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                  >
+                    <polygon
+                      points={geometry.polygon.map((point) => `${point.x},${point.y}`).join(" ")}
+                      className="pointer-events-none"
+                      style={{
+                        fill: selected ? "rgba(124,58,237,0.22)" : "rgba(124,58,237,0.08)",
+                        stroke: selected ? "rgba(124,58,237,1)" : "rgba(124,58,237,0.55)",
+                      }}
+                      strokeWidth={selected ? 0.8 : 0.4}
+                    />
+                  </svg>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
