@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CheckCircle, XCircle, Edit3, AlertTriangle, RotateCcw, RotateCw, ZoomIn, ZoomOut, RefreshCw } from "lucide-react";
+import { CheckCircle, Edit3, AlertTriangle, RotateCcw, RotateCw, ZoomIn, ZoomOut, RefreshCw } from "lucide-react";
 import { getApiErrorMessage, submissionsAPI } from "@/lib/api";
 import { toast } from "sonner";
 import ImageLightbox from "@/components/ImageLightbox";
@@ -38,6 +38,25 @@ interface SubmissionScore {
   max_score: number;
   ai_score: number | null;
   ai_comment?: string | null;
+}
+
+interface SubmissionTaskType {
+  id: string;
+  title: string;
+  description?: string | null;
+  order_index?: number;
+  max_score?: number;
+  formulas?: string[];
+}
+
+interface SubmissionTaskVariant {
+  id?: string;
+  content?: string | null;
+}
+
+interface SubmissionTask {
+  task_type: SubmissionTaskType;
+  variant: SubmissionTaskVariant;
 }
 
 interface SubmissionReviewData {
@@ -100,6 +119,7 @@ interface SubmissionReviewData {
     severity: "minor" | "major" | "critical";
     created_at: string;
   }>;
+  tasks?: SubmissionTask[];
   exam?: {
     id: string;
     title: string;
@@ -252,6 +272,18 @@ const SubmissionReview = () => {
     imageOrderById.set(image.id, (image.order_index ?? index) + 1);
   });
 
+  const submissionTasks = (submission.tasks ?? [])
+    .slice()
+    .sort((a, b) => (a.task_type.order_index ?? 0) - (b.task_type.order_index ?? 0));
+
+  const lightboxImages = submission.images
+    .map((image) => ({ id: image.id, url: imageUrls[image.id] }))
+    .filter((item): item is { id: string; url: string } => Boolean(item.url));
+  const lightboxIndexByImageId = new Map<string, number>();
+  lightboxImages.forEach((item, idx) => {
+    lightboxIndexByImageId.set(item.id, idx);
+  });
+
   return (
     <div className="min-h-screen bg-gradient-subtle">
       <Navbar />
@@ -299,6 +331,70 @@ const SubmissionReview = () => {
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
+            <Card className="p-6">
+              <h2 className="text-2xl font-bold mb-4">Задачи и вариант студента</h2>
+              {submissionTasks.length > 0 ? (
+                <div className="space-y-4">
+                  {submissionTasks.map((task, index) => {
+                    const descriptionText = (task.task_type.description || "").trim();
+                    const variantText = (task.variant.content || "").trim();
+
+                    return (
+                      <div key={`${task.task_type.id}-${index}`} className="rounded border p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="text-base font-semibold">
+                            Задача {index + 1}. {task.task_type.title}
+                          </h3>
+                          {typeof task.task_type.max_score === "number" && (
+                            <span className="text-xs font-semibold rounded bg-primary/10 px-2 py-1 text-primary">
+                              {task.task_type.max_score} баллов
+                            </span>
+                          )}
+                        </div>
+
+                        {descriptionText && (
+                          <div className="rounded border bg-secondary/30 p-3">
+                            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              Общее условие
+                            </p>
+                            <div className="text-sm">{renderTaskText(descriptionText)}</div>
+                          </div>
+                        )}
+
+                        <div className="rounded border border-primary/30 bg-primary/5 p-3">
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">
+                            Вариант этого студента
+                          </p>
+                          <div className="text-sm">
+                            {variantText ? renderTaskText(variantText) : "Текст варианта не передан API."}
+                          </div>
+                        </div>
+
+                        {Array.isArray(task.task_type.formulas) && task.task_type.formulas.length > 0 && (
+                          <div className="rounded border bg-blue-50 p-3">
+                            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-blue-700">
+                              Формулы
+                            </p>
+                            <div className="space-y-1 text-sm">
+                              {task.task_type.formulas.map((formula, formulaIndex) => (
+                                <div key={`${task.task_type.id}-formula-${formulaIndex}`}>
+                                  {renderLatex(formula)}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Текст варианта для этой работы не получен от API.
+                </p>
+              )}
+            </Card>
+
             {/* Images */}
             <Card className="p-6">
               <h2 className="text-2xl font-bold mb-4">Загруженные изображения</h2>
@@ -317,7 +413,12 @@ const SubmissionReview = () => {
                               (e.target as HTMLImageElement).src = "/placeholder.svg";
                             }}
                             onClick={() => {
-                              setLightboxIndex(index);
+                              const nextIndex = lightboxIndexByImageId.get(image.id);
+                              if (typeof nextIndex === "number") {
+                                setLightboxIndex(nextIndex);
+                              } else {
+                                setLightboxIndex(0);
+                              }
                               setLightboxOpen(true);
                             }}
                           />
@@ -354,86 +455,86 @@ const SubmissionReview = () => {
 
             {lightboxOpen && (
               <ImageLightbox
-                images={submission.images
-                  .map((img) => imageUrls[img.id])
-                  .filter((url): url is string => Boolean(url))}
+                images={lightboxImages.map((item) => item.url)}
                 startIndex={lightboxIndex}
                 onClose={() => setLightboxOpen(false)}
               />
             )}
 
             {/* AI Analysis */}
-            <Card className="p-6">
-              <h2 className="text-2xl font-bold mb-4">Анализ AI</h2>
+            {submission.llm_precheck_status !== "skipped" && (
+              <Card className="p-6">
+                <h2 className="text-2xl font-bold mb-4">Анализ AI</h2>
 
-              <Tabs defaultValue="overview">
-                <TabsList>
-                  <TabsTrigger value="overview">Общее</TabsTrigger>
-                  <TabsTrigger value="criteria">По критериям</TabsTrigger>
-                  <TabsTrigger value="details">Детали</TabsTrigger>
-                  {submission.ai_analysis?.full_transcription_md && (
-                    <TabsTrigger value="transcription">Расшифровка</TabsTrigger>
-                  )}
-                </TabsList>
+                <Tabs defaultValue="overview">
+                  <TabsList>
+                    <TabsTrigger value="overview">Общее</TabsTrigger>
+                    <TabsTrigger value="criteria">По критериям</TabsTrigger>
+                    <TabsTrigger value="details">Детали</TabsTrigger>
+                    {submission.ai_analysis?.full_transcription_md && (
+                      <TabsTrigger value="transcription">Расшифровка</TabsTrigger>
+                    )}
+                  </TabsList>
 
-                <TabsContent value="overview" className="space-y-4">
-                  <div>
-                    <Label>AI Score:</Label>
-                    <p className="text-3xl font-bold">
-                      {submission.ai_score || 0} / {submission.max_score}
-                    </p>
-                  </div>
-                  {submission.ai_comments && (
+                  <TabsContent value="overview" className="space-y-4">
                     <div>
-                      <Label>Комментарии AI:</Label>
-                      <div className="bg-secondary/50 p-4 rounded mt-2">
-                        <div className="whitespace-pre-wrap">{renderLatex(submission.ai_comments)}</div>
-                      </div>
+                      <Label>AI Score:</Label>
+                      <p className="text-3xl font-bold">
+                        {submission.ai_score || 0} / {submission.max_score}
+                      </p>
                     </div>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="criteria">
-                  {submission.scores && submission.scores.length > 0 ? (
-                    <div className="space-y-4">
-                      {submission.scores.map((score, index) => (
-                        <div key={index} className="border-b pb-4 last:border-0">
-                          <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-semibold">{score.criterion_name}</h4>
-                            <span className="font-bold">
-                              {score.ai_score || 0} / {score.max_score}
-                            </span>
-                          </div>
-                          {score.ai_comment && (
-                            <div className="text-sm text-muted-foreground">
-                              {renderLatex(score.ai_comment)}
-                            </div>
-                          )}
+                    {submission.ai_comments && (
+                      <div>
+                        <Label>Комментарии AI:</Label>
+                        <div className="bg-secondary/50 p-4 rounded mt-2">
+                          <div className="whitespace-pre-wrap">{renderLatex(submission.ai_comments)}</div>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-muted-foreground">Нет детализации по критериям</p>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="details">
-                  {submission.ai_analysis ? (
-                    <AiAnalysis data={submission.ai_analysis} />
-                  ) : (
-                    <p className="text-muted-foreground">Детальный анализ недоступен</p>
-                  )}
-                </TabsContent>
-
-                {submission.ai_analysis?.full_transcription_md && (
-                  <TabsContent value="transcription">
-                    <div className="prose max-w-none">
-                      <div className="whitespace-pre-wrap">{renderLatex(submission.ai_analysis.full_transcription_md)}</div>
-                    </div>
+                      </div>
+                    )}
                   </TabsContent>
-                )}
-              </Tabs>
-            </Card>
+
+                  <TabsContent value="criteria">
+                    {submission.scores && submission.scores.length > 0 ? (
+                      <div className="space-y-4">
+                        {submission.scores.map((score, index) => (
+                          <div key={index} className="border-b pb-4 last:border-0">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="font-semibold">{score.criterion_name}</h4>
+                              <span className="font-bold">
+                                {score.ai_score || 0} / {score.max_score}
+                              </span>
+                            </div>
+                            {score.ai_comment && (
+                              <div className="text-sm text-muted-foreground">
+                                {renderLatex(score.ai_comment)}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground">Нет детализации по критериям</p>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="details">
+                    {submission.ai_analysis ? (
+                      <AiAnalysis data={submission.ai_analysis} />
+                    ) : (
+                      <p className="text-muted-foreground">Детальный анализ недоступен</p>
+                    )}
+                  </TabsContent>
+
+                  {submission.ai_analysis?.full_transcription_md && (
+                    <TabsContent value="transcription">
+                      <div className="prose max-w-none">
+                        <div className="whitespace-pre-wrap">{renderLatex(submission.ai_analysis.full_transcription_md)}</div>
+                      </div>
+                    </TabsContent>
+                  )}
+                </Tabs>
+              </Card>
+            )}
 
             {/* Flags */}
             {submission.is_flagged && submission.flag_reasons.length > 0 && (

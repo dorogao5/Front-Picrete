@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RefreshCcw } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCcw, RotateCw, RefreshCcw } from "lucide-react";
 
 type ImageLightboxProps = {
   images: string[];
@@ -11,10 +11,12 @@ type ImageLightboxProps = {
 const ZOOM_STEP = 0.2;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 5;
+const ROTATE_STEP = 90;
 
 export function ImageLightbox({ images, startIndex = 0, onClose }: ImageLightboxProps) {
   const [index, setIndex] = useState(startIndex);
   const [scale, setScale] = useState(1);
+  const [angle, setAngle] = useState(0);
   const [translate, setTranslate] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const lastPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -24,6 +26,7 @@ export function ImageLightbox({ images, startIndex = 0, onClose }: ImageLightbox
 
   const resetView = () => {
     setScale(1);
+    setAngle(0);
     setTranslate({ x: 0, y: 0 });
   };
 
@@ -84,6 +87,8 @@ export function ImageLightbox({ images, startIndex = 0, onClose }: ImageLightbox
 
   const zoomIn = () => setScale((s) => clampScale(s + ZOOM_STEP));
   const zoomOut = () => setScale((s) => clampScale(s - ZOOM_STEP));
+  const rotateLeft = () => setAngle((prev) => prev - ROTATE_STEP);
+  const rotateRight = () => setAngle((prev) => prev + ROTATE_STEP);
 
   if (images.length === 0) {
     return null;
@@ -130,13 +135,19 @@ export function ImageLightbox({ images, startIndex = 0, onClose }: ImageLightbox
       {/* Toolbar */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white/10 rounded px-3 py-2">
         <span className="text-sm opacity-80 mr-2">{index + 1} / {images.length}</span>
-        <button className="p-2 rounded hover:bg-white/20" onClick={zoomOut}>
+        <button aria-label="Zoom out" className="p-2 rounded hover:bg-white/20" onClick={zoomOut}>
           <ZoomOut className="w-5 h-5" />
         </button>
-        <button className="p-2 rounded hover:bg-white/20" onClick={zoomIn}>
+        <button aria-label="Zoom in" className="p-2 rounded hover:bg-white/20" onClick={zoomIn}>
           <ZoomIn className="w-5 h-5" />
         </button>
-        <button className="p-2 rounded hover:bg-white/20" onClick={resetView}>
+        <button aria-label="Rotate left 90 degrees" className="p-2 rounded hover:bg-white/20" onClick={rotateLeft}>
+          <RotateCcw className="w-5 h-5" />
+        </button>
+        <button aria-label="Rotate right 90 degrees" className="p-2 rounded hover:bg-white/20" onClick={rotateRight}>
+          <RotateCw className="w-5 h-5" />
+        </button>
+        <button aria-label="Reset view" className="p-2 rounded hover:bg-white/20" onClick={resetView}>
           <RefreshCcw className="w-5 h-5" />
         </button>
       </div>
@@ -147,7 +158,7 @@ export function ImageLightbox({ images, startIndex = 0, onClose }: ImageLightbox
           src={images[index]}
           alt={`image-${index + 1}`}
           draggable={false}
-          style={{ transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})` }}
+          style={{ transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale}) rotate(${angle}deg)` }}
           className="origin-center select-none"
           onError={(e) => { (e.target as HTMLImageElement).src = "/placeholder.svg"; }}
         />
