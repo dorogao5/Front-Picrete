@@ -411,7 +411,7 @@ const SubmissionReview = () => {
                               </div>
                             </div>
 
-                            <div className={`grid gap-4 ${hideImage ? "grid-cols-1" : "lg:grid-cols-2"}`}>
+                            <div className={`grid items-start gap-4 ${hideImage ? "grid-cols-1" : "lg:grid-cols-2"}`}>
                               {!hideImage && (
                                 <OcrImageOverlay
                                   imageUrl={imageUrls[page.image_id]}

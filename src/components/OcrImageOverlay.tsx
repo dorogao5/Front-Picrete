@@ -36,11 +36,13 @@ const OcrImageOverlay = ({
   }
 
   return (
-    <div className={`relative overflow-hidden rounded border bg-muted/20 ${className ?? ""}`.trim()}>
+    <div
+      className={`relative self-start overflow-hidden rounded border bg-muted/20 ${className ?? ""}`.trim()}
+    >
       <img
         src={imageUrl}
         alt={alt}
-        className="w-full rounded object-contain"
+        className="block w-full rounded object-contain"
         onLoad={(event) => {
           const target = event.currentTarget;
           if (target.naturalWidth > 0 && target.naturalHeight > 0) {
@@ -53,10 +55,11 @@ const OcrImageOverlay = ({
         {geometries.map((geometry, index) => {
           if (!geometry) return null;
           const selected = index === selectedChunkIndex;
+          const hasPolygon = Array.isArray(geometry.polygon) && geometry.polygon.length >= 3;
 
           return (
             <div key={`ocr-geometry-${index}`}>
-              {geometry.bbox && (
+              {!hasPolygon && geometry.bbox && (
                 <div
                   className={`absolute rounded border-2 ${
                     selected ? "border-primary bg-primary/15" : "border-primary/40 bg-primary/5"

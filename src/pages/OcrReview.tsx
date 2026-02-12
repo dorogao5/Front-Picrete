@@ -443,7 +443,7 @@ const OcrReview = () => {
           <Progress value={progress} />
         </Card>
 
-        <div className="grid lg:grid-cols-2 gap-6">
+        <div className="grid items-start lg:grid-cols-2 gap-6">
           <Card className="p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold">Оригинал страницы #{currentPageIndex + 1}</h2>
