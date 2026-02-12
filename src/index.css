@@ -128,4 +128,25 @@ All colors MUST be HSL.
   .task-rich-text td {
     @apply border border-border px-2 py-1 align-top;
   }
+
+  .ocr-rich-text {
+    @apply min-w-0 max-w-full;
+  }
+
+  .ocr-rich-text .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+    margin: 0.5rem 0;
+    padding-bottom: 0.125rem;
+  }
+
+  .ocr-rich-text table {
+    @apply my-2 w-full border-collapse text-xs;
+  }
+
+  .ocr-rich-text th,
+  .ocr-rich-text td {
+    @apply border border-border px-2 py-1 align-top;
+  }
 }

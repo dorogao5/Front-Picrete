@@ -20,7 +20,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
-import { anchorSummary, extractOcrBlocks, OcrChunkBlock } from "@/lib/ocr";
+import { anchorSummary, chunkDisplayText, extractOcrBlocks, OcrChunkBlock } from "@/lib/ocr";
+import { renderTaskText } from "@/lib/renderLatex";
 import { getApiErrorMessage, JsonObject, OcrIssueInput, submissionsAPI } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -95,14 +96,6 @@ const chunkTitle = (block: OcrChunkBlock, index: number) => {
   const kind = typeof block.block_type === "string" && block.block_type.trim() ? block.block_type : "chunk";
   const page = typeof block.page === "number" ? ` • page ${block.page}` : "";
   return `${kind} #${index + 1}${page}`;
-};
-
-const chunkPreview = (block: OcrChunkBlock) => {
-  if (typeof block.text !== "string") {
-    return "(пустой OCR блок)";
-  }
-  const normalized = block.text.replace(/\s+/g, " ").trim();
-  return normalized.length > 220 ? `${normalized.slice(0, 217)}...` : normalized;
 };
 
 const OcrReview = () => {
@@ -243,7 +236,7 @@ const OcrReview = () => {
 
     const issue: OcrIssueInput = {
       anchor,
-      original_text: block.text ?? "",
+      original_text: chunkDisplayText(block),
       suggested_text: issueForm.suggestedText.trim() || undefined,
       note: issueForm.note.trim(),
       severity: issueForm.severity,
@@ -444,7 +437,7 @@ const OcrReview = () => {
         </Card>
 
         <div className="grid items-start lg:grid-cols-2 gap-6">
-          <Card className="p-4 space-y-3">
+          <Card className="min-w-0 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold">Оригинал страницы #{currentPageIndex + 1}</h2>
               <Badge variant="outline">{currentPage.ocr_status}</Badge>
@@ -453,6 +446,9 @@ const OcrReview = () => {
               imageUrl={currentPage.image_view_url}
               blocks={blocks}
               selectedChunkIndex={issueForm.selectedChunkIndex}
+              onSelectChunk={(index) =>
+                setIssueForm((prev) => ({ ...prev, selectedChunkIndex: index }))
+              }
               alt={`OCR page ${currentPageIndex + 1}`}
               className="max-h-[72vh]"
             />
@@ -461,7 +457,7 @@ const OcrReview = () => {
             </p>
           </Card>
 
-          <Card className="p-4 space-y-4">
+          <Card className="min-w-0 p-4 space-y-4">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <ScanText className="h-4 w-4" />
@@ -495,19 +491,30 @@ const OcrReview = () => {
               <div className="max-h-52 rounded border p-2 overflow-y-auto">
                 <div className="space-y-2">
                   {blocks.map((block, idx) => (
-                    <button
-                      key={`${block.id ?? "chunk"}-${idx}`}
-                      type="button"
-                      className={`w-full rounded border p-2 text-left text-xs ${
-                        issueForm.selectedChunkIndex === idx
-                          ? "border-primary bg-primary/10"
-                          : "border-border hover:bg-muted/50"
-                      }`}
-                      onClick={() => setIssueForm((prev) => ({ ...prev, selectedChunkIndex: idx }))}
-                    >
-                      <div className="font-medium">{chunkTitle(block, idx)}</div>
-                      <div className="text-muted-foreground line-clamp-2">{chunkPreview(block)}</div>
-                    </button>
+                    (() => {
+                      const renderedChunk = chunkDisplayText(block);
+                      return (
+                        <button
+                          key={`${block.id ?? "chunk"}-${idx}`}
+                          type="button"
+                          className={`w-full rounded border p-2 text-left text-xs ${
+                            issueForm.selectedChunkIndex === idx
+                              ? "border-primary bg-primary/10"
+                              : "border-border hover:bg-muted/50"
+                          }`}
+                          onClick={() =>
+                            setIssueForm((prev) => ({ ...prev, selectedChunkIndex: idx }))
+                          }
+                        >
+                          <div className="font-medium">{chunkTitle(block, idx)}</div>
+                          <div className="mt-1 max-h-24 overflow-auto rounded bg-background/70 p-1.5 text-muted-foreground">
+                            <div className="ocr-rich-text text-[11px] leading-snug">
+                              {renderedChunk ? renderTaskText(renderedChunk) : "(пустой OCR блок)"}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })()
                   ))}
                   {blocks.length === 0 && (
                     <p className="text-xs text-muted-foreground">Нет chunk-блоков для выбора.</p>

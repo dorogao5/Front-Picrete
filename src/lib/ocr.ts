@@ -1,6 +1,8 @@
 export interface OcrChunkBlock {
   id?: string;
   text?: string;
+  markdown?: string;
+  html?: string;
   block_type?: string;
   page?: number;
   bbox?: number[];
@@ -22,6 +24,8 @@ export interface NormalizedGeometry {
 
 const MAX_TRAVERSAL_DEPTH = 8;
 const SKIP_FALLBACK_KEYS = new Set(["metadata", "page_info", "images", "section_hierarchy"]);
+const TABLE_REGEX = /(<table[\s\S]*?<\/table>)/gi;
+const MATH_REGEX = /<math\b([^>]*)>([\s\S]*?)<\/math>/gi;
 
 export const extractOcrBlocks = (chunks: unknown): OcrChunkBlock[] => {
   const container = resolveChunksContainer(chunks);
@@ -52,6 +56,22 @@ export const cleanOcrMarkdown = (markdown?: string | null): string => {
   // DataLab markdown often includes embedded image links; hide them in textual OCR preview.
   const withoutImages = markdown.replace(/!\[[^\]]*]\([^)]*\)/g, "");
   return withoutImages.replace(/\n{3,}/g, "\n\n").trim();
+};
+
+export const chunkDisplayText = (block: OcrChunkBlock): string => {
+  if (typeof block.markdown === "string" && block.markdown.trim().length > 0) {
+    return cleanOcrMarkdown(block.markdown);
+  }
+
+  if (typeof block.html === "string" && block.html.trim().length > 0) {
+    return htmlChunkToDisplayText(block.html);
+  }
+
+  if (typeof block.text === "string") {
+    return block.text.trim();
+  }
+
+  return "";
 };
 
 export const anchorSummary = (anchor: Record<string, unknown>): string => {
@@ -107,6 +127,8 @@ const collectBlocks = (
     const signature = JSON.stringify({
       id: maybeBlock.id ?? null,
       text: maybeBlock.text ?? null,
+      markdown: maybeBlock.markdown ?? null,
+      html: maybeBlock.html ?? null,
       block_type: maybeBlock.block_type ?? null,
       page: maybeBlock.page ?? null,
       bbox: maybeBlock.bbox ?? null,
@@ -220,7 +242,9 @@ const toChunkBlock = (
 ): OcrChunkBlock | null => {
   const bbox = parseBbox(value.bbox);
   const polygon = parsePolygon(value.polygon);
-  const text = extractChunkText(value);
+  const markdown = firstString(value, ["markdown"]);
+  const html = firstString(value, ["html"]);
+  const text = extractChunkText(value, markdown, html);
   const blockType = firstString(value, ["block_type", "type", "label", "category"]);
   const id = firstString(value, ["id", "chunk_id", "uuid"]);
   const page = firstNumber(value, ["page", "page_number", "page_id"]);
@@ -245,6 +269,8 @@ const toChunkBlock = (
   return {
     id: id ?? undefined,
     text: text ?? undefined,
+    markdown: markdown ?? undefined,
+    html: html ?? undefined,
     block_type: blockType ?? undefined,
     page: page ?? undefined,
     bbox: bbox ?? undefined,
@@ -311,29 +337,69 @@ const parsePageNumber = (value: unknown): number | null => {
   return null;
 };
 
-const extractChunkText = (value: Record<string, unknown>): string | null => {
+const extractChunkText = (
+  value: Record<string, unknown>,
+  markdown: string | null,
+  html: string | null
+): string | null => {
   const direct = firstString(value, ["text", "content", "value", "markdown"]);
   if (direct) {
     return direct;
   }
 
-  const html = firstString(value, ["html"]);
+  if (markdown) {
+    return cleanOcrMarkdown(markdown);
+  }
+
   if (!html) {
     return null;
   }
 
-  const plain = htmlToPlainText(html);
+  const plain = htmlChunkToDisplayText(html);
   return plain.length > 0 ? plain : null;
 };
+
+const htmlChunkToDisplayText = (html: string): string => {
+  const withoutScripts = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ");
+  const withLatex = normalizeMathTags(withoutScripts);
+
+  const parts = withLatex.split(TABLE_REGEX);
+  return parts
+    .map((part) => {
+      if (!part) return "";
+      if (part.trim().toLowerCase().startsWith("<table")) {
+        return part;
+      }
+      return htmlToPlainText(part);
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+};
+
+const normalizeMathTags = (value: string): string =>
+  value.replace(MATH_REGEX, (_match, attrs: string, body: string) => {
+    const latexBody = decodeHtmlEntities(body).replace(/\s+/g, " ").trim();
+    if (!latexBody) return "";
+    const isBlock = /display\s*=\s*["']block["']/i.test(attrs);
+    return isBlock ? `\n$$${latexBody}$$\n` : ` $${latexBody}$ `;
+  });
 
 const htmlToPlainText = (html: string): string =>
   decodeHtmlEntities(
     html
       .replace(/<script[\s\S]*?<\/script>/gi, " ")
       .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|div|li|tr|h1|h2|h3|h4|h5|h6)>/gi, "\n")
+      .replace(/<li[^>]*>/gi, "• ")
       .replace(/<[^>]+>/g, " ")
   )
-    .replace(/\s+/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
     .trim();
 
 const decodeHtmlEntities = (text: string): string =>
@@ -361,6 +427,8 @@ const dedupeBlocks = (blocks: OcrChunkBlock[]): OcrChunkBlock[] => {
     const signature = JSON.stringify({
       id: block.id ?? null,
       text: block.text ?? null,
+      markdown: block.markdown ?? null,
+      html: block.html ?? null,
       block_type: block.block_type ?? null,
       page: block.page ?? null,
       bbox: block.bbox ?? null,

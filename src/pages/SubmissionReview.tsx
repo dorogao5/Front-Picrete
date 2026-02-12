@@ -14,8 +14,14 @@ import { getApiErrorMessage, submissionsAPI } from "@/lib/api";
 import { toast } from "sonner";
 import ImageLightbox from "@/components/ImageLightbox";
 import AiAnalysis from "@/components/AiAnalysis";
-import { renderLatex } from "@/lib/renderLatex";
-import { anchorSummary, cleanOcrMarkdown, extractOcrBlocks, OcrChunkBlock } from "@/lib/ocr";
+import { renderLatex, renderTaskText } from "@/lib/renderLatex";
+import {
+  anchorSummary,
+  chunkDisplayText,
+  cleanOcrMarkdown,
+  extractOcrBlocks,
+  OcrChunkBlock,
+} from "@/lib/ocr";
 
 interface SubmissionImage {
   id: string;
@@ -105,14 +111,6 @@ const chunkTitle = (block: OcrChunkBlock, index: number) => {
   const kind = typeof block.block_type === "string" && block.block_type.trim() ? block.block_type : "chunk";
   const page = typeof block.page === "number" ? ` • page ${block.page}` : "";
   return `${kind} #${index + 1}${page}`;
-};
-
-const chunkPreview = (block: OcrChunkBlock) => {
-  if (typeof block.text !== "string") {
-    return "(пустой OCR блок)";
-  }
-  const normalized = block.text.replace(/\s+/g, " ").trim();
-  return normalized.length > 200 ? `${normalized.slice(0, 197)}...` : normalized;
 };
 
 const SubmissionReview = () => {
@@ -417,11 +415,17 @@ const SubmissionReview = () => {
                                   imageUrl={imageUrls[page.image_id]}
                                   blocks={blocks}
                                   selectedChunkIndex={selectedChunkIndex}
+                                  onSelectChunk={(index) =>
+                                    setSelectedChunkByImage((prev) => ({
+                                      ...prev,
+                                      [page.image_id]: index,
+                                    }))
+                                  }
                                   alt={`OCR page ${idx + 1}`}
                                   className="max-h-[70vh]"
                                 />
                               )}
-                              <div className="space-y-3">
+                              <div className="min-w-0 space-y-3">
                                 <OcrMarkdownPanel markdown={page.ocr_markdown} previewLines={10} />
 
                                 <div className="space-y-2">
@@ -430,26 +434,35 @@ const SubmissionReview = () => {
                                   </p>
                                   <div className="max-h-44 overflow-y-auto rounded border p-2 space-y-2">
                                     {blocks.map((block, blockIndex) => (
-                                      <button
-                                        key={`${page.image_id}-chunk-${blockIndex}`}
-                                        type="button"
-                                        className={`w-full rounded border p-2 text-left text-xs ${
-                                          selectedChunkIndex === blockIndex
-                                            ? "border-primary bg-primary/10"
-                                            : "border-border hover:bg-muted/50"
-                                        }`}
-                                        onClick={() =>
-                                          setSelectedChunkByImage((prev) => ({
-                                            ...prev,
-                                            [page.image_id]: blockIndex,
-                                          }))
-                                        }
-                                      >
-                                        <div className="font-medium">{chunkTitle(block, blockIndex)}</div>
-                                        <div className="text-muted-foreground line-clamp-2">
-                                          {chunkPreview(block)}
-                                        </div>
-                                      </button>
+                                      (() => {
+                                        const renderedChunk = chunkDisplayText(block);
+                                        return (
+                                          <button
+                                            key={`${page.image_id}-chunk-${blockIndex}`}
+                                            type="button"
+                                            className={`w-full rounded border p-2 text-left text-xs ${
+                                              selectedChunkIndex === blockIndex
+                                                ? "border-primary bg-primary/10"
+                                                : "border-border hover:bg-muted/50"
+                                            }`}
+                                            onClick={() =>
+                                              setSelectedChunkByImage((prev) => ({
+                                                ...prev,
+                                                [page.image_id]: blockIndex,
+                                              }))
+                                            }
+                                          >
+                                            <div className="font-medium">{chunkTitle(block, blockIndex)}</div>
+                                            <div className="mt-1 max-h-24 overflow-auto rounded bg-background/70 p-1.5 text-muted-foreground">
+                                              <div className="ocr-rich-text text-[11px] leading-snug">
+                                                {renderedChunk
+                                                  ? renderTaskText(renderedChunk)
+                                                  : "(пустой OCR блок)"}
+                                              </div>
+                                            </div>
+                                          </button>
+                                        );
+                                      })()
                                     ))}
                                     {blocks.length === 0 && (
                                       <p className="text-xs text-muted-foreground">
