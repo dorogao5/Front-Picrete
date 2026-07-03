@@ -227,4 +227,57 @@
   .ocr-rich-text td {
     @apply border border-border px-2 py-1 align-top;
   }
+
+  /* Live-редактор OCR-текста (Obsidian-like) */
+  .math-live-editor .cm-editor {
+    @apply rounded-md border border-input bg-card text-sm;
+    max-height: 40vh;
+  }
+
+  .math-live-editor .cm-editor.cm-focused {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 1px;
+  }
+
+  .math-live-editor .cm-scroller {
+    @apply font-sans leading-relaxed;
+    overflow: auto;
+  }
+
+  .math-live-editor .cm-content {
+    padding: 10px 12px;
+  }
+
+  .math-live-editor .cm-line {
+    padding: 1px 0;
+  }
+
+  .cm-math-widget {
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 0 3px;
+    transition: background-color 0.15s ease;
+  }
+
+  .cm-math-widget:hover {
+    background-color: hsl(var(--accent) / 0.1);
+    box-shadow: 0 0 0 1px hsl(var(--accent) / 0.25);
+  }
+
+  .cm-math-block {
+    display: block;
+    text-align: center;
+    padding: 4px 0;
+  }
+
+  .math-live-editor .cm-tooltip {
+    border: none;
+    background: transparent;
+  }
+
+  .cm-math-preview {
+    @apply rounded-md border bg-card px-3 py-2 shadow-elegant;
+    max-width: min(480px, 80vw);
+    overflow-x: auto;
+  }
 }

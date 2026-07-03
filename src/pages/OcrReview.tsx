@@ -19,10 +19,10 @@ import OcrMarkdownPanel from "@/components/OcrMarkdownPanel";
 import { PageShell, PageLoader } from "@/components/PageShell";
 import { ChunkListPanel, ChunkTypeChip } from "@/components/ChunkListPanel";
 import { OcrIssueCard } from "@/components/OcrIssueCard";
+import { MathLiveEditor } from "@/components/MathLiveEditor";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Textarea } from "@/components/ui/textarea";
 import {
   CHUNK_KINDS,
   CORRECTABLE_BLOCK_TYPES,
@@ -551,24 +551,15 @@ const OcrReview = () => {
 
                 {selectedEditable ? (
                   <>
-                    <Textarea
+                    <MathLiveEditor
+                      key={`${currentImageId}-${selectedChunkIndex}`}
                       value={editorText}
-                      onChange={(event) => applyEdit({ text: event.target.value })}
-                      rows={Math.min(10, Math.max(3, editorText.split("\n").length + 1))}
-                      spellCheck={false}
-                      className="font-mono text-xs leading-relaxed"
+                      onChange={(text) => applyEdit({ text })}
                       placeholder="Распознанный текст блока"
                     />
-                    {editorText.trim() && (
-                      <div className="rounded-md border bg-secondary/30 p-2.5">
-                        <p className="mb-1 text-[11px] font-medium text-muted-foreground">
-                          Как это будет прочитано
-                        </p>
-                        <div className="ocr-rich-text max-h-32 overflow-auto text-xs leading-snug">
-                          {renderTaskText(editorText)}
-                        </div>
-                      </div>
-                    )}
+                    <p className="text-[11px] text-muted-foreground">
+                      Формулы отображаются как есть — нажмите на формулу, чтобы исправить её код.
+                    </p>
                   </>
                 ) : (
                   <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
