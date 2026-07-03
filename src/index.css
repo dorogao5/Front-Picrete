@@ -229,14 +229,18 @@
   }
 
   /* Live-редактор OCR-текста (Obsidian-like) */
+  .math-live-editor:focus-within {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 1px;
+  }
+
   .math-live-editor .cm-editor {
-    @apply rounded-md border border-input bg-card text-sm;
-    max-height: 40vh;
+    @apply bg-transparent text-sm;
+    max-height: 46vh;
   }
 
   .math-live-editor .cm-editor.cm-focused {
-    outline: 2px solid hsl(var(--ring));
-    outline-offset: 1px;
+    outline: none;
   }
 
   .math-live-editor .cm-scroller {
@@ -252,11 +256,26 @@
     padding: 1px 0;
   }
 
+  /* Раскрытый исходник формулы — заметная зона редактирования */
+  .cm-math-active {
+    @apply font-mono;
+    font-size: 12px;
+    background-color: hsl(var(--accent) / 0.08);
+    box-shadow: 0 0 0 1px hsl(var(--accent) / 0.3);
+    border-radius: 4px;
+    padding: 1px 2px;
+  }
+
   .cm-math-widget {
     cursor: pointer;
     border-radius: 4px;
     padding: 0 3px;
     transition: background-color 0.15s ease;
+    max-width: 100%;
+  }
+
+  .cm-math-widget .katex {
+    font-size: 1em;
   }
 
   .cm-math-widget:hover {
@@ -266,18 +285,14 @@
 
   .cm-math-block {
     display: block;
-    text-align: center;
-    padding: 4px 0;
-  }
-
-  .math-live-editor .cm-tooltip {
-    border: none;
-    background: transparent;
-  }
-
-  .cm-math-preview {
-    @apply rounded-md border bg-card px-3 py-2 shadow-elegant;
-    max-width: min(480px, 80vw);
+    text-align: left;
+    padding: 4px 2px;
     overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .cm-math-block .katex-display {
+    margin: 0;
+    text-align: left;
   }
 }

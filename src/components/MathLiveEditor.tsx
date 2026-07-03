@@ -1,13 +1,13 @@
-import { useEffect, useRef } from "react";
-import { EditorState, StateField, type Range } from "@codemirror/state";
+import { useEffect, useRef, useState } from "react";
+import { EditorState, type Range } from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
   EditorView,
   keymap,
   placeholder as cmPlaceholder,
-  showTooltip,
-  type Tooltip,
+  ViewPlugin,
+  type ViewUpdate,
   WidgetType,
 } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
@@ -17,8 +17,8 @@ import { cn } from "@/lib/utils";
 
 /*
   Obsidian-подобный live-редактор OCR-текста: формулы $...$ / $$...$$ рендерятся
-  прямо в тексте; клик по формуле раскрывает её исходник, над ним плавает
-  живой предпросмотр. Остальной текст редактируется как обычный.
+  прямо в тексте; клик по формуле раскрывает её исходник (подсвеченной зоной),
+  а над редактором появляется закреплённая полоса живого предпросмотра.
 */
 
 interface MathSpan {
@@ -90,53 +90,44 @@ const activeSpan = (state: EditorState): MathSpan | null => {
   return null;
 };
 
-const buildDecorations = (state: EditorState): DecorationSet => {
+const buildDecorations = (state: EditorState, hasFocus: boolean): DecorationSet => {
   const selection = state.selection.main;
   const decorations: Range<Decoration>[] = [];
   for (const span of findMathSpans(state.doc.toString())) {
-    const isActive = selection.from <= span.to && selection.to >= span.from;
-    if (isActive) continue;
-    decorations.push(
-      Decoration.replace({ widget: new MathWidget(span.latex, span.display, span.from) }).range(
-        span.from,
-        span.to
-      )
-    );
+    const isActive = hasFocus && selection.from <= span.to && selection.to >= span.from;
+    if (isActive) {
+      // Раскрытый исходник формулы — подсвеченная зона редактирования
+      decorations.push(Decoration.mark({ class: "cm-math-active" }).range(span.from, span.to));
+    } else {
+      decorations.push(
+        Decoration.replace({ widget: new MathWidget(span.latex, span.display, span.from) }).range(
+          span.from,
+          span.to
+        )
+      );
+    }
   }
   return Decoration.set(decorations, true);
 };
 
-const mathDecorations = StateField.define<DecorationSet>({
-  create: buildDecorations,
-  update: (_deco, tr) => buildDecorations(tr.state),
-  provide: (field) => EditorView.decorations.from(field),
-});
+/* ViewPlugin вместо StateField: декорации зависят и от фокуса —
+   клик мимо редактора сворачивает раскрытую формулу обратно в рендер */
+const mathDecorations = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
 
-/* Плавающий предпросмотр редактируемой формулы (как в Obsidian) */
-const previewTooltip = (state: EditorState): Tooltip | null => {
-  const span = activeSpan(state);
-  if (!span) return null;
-  const text = state.doc.sliceString(span.from, span.to);
-  const inner = text.replace(/^\$\$?|\$\$?$/g, "").trim();
-  if (!inner) return null;
-  return {
-    pos: span.from,
-    above: true,
-    strictSide: false,
-    create: () => {
-      const dom = document.createElement("div");
-      dom.className = "cm-math-preview";
-      renderKatex(dom, inner, span.display);
-      return { dom };
-    },
-  };
-};
+    constructor(view: EditorView) {
+      this.decorations = buildDecorations(view.state, view.hasFocus);
+    }
 
-const mathPreview = StateField.define<Tooltip | null>({
-  create: previewTooltip,
-  update: (_tip, tr) => previewTooltip(tr.state),
-  provide: (field) => showTooltip.from(field),
-});
+    update(update: ViewUpdate) {
+      if (update.docChanged || update.selectionSet || update.focusChanged) {
+        this.decorations = buildDecorations(update.state, update.view.hasFocus);
+      }
+    }
+  },
+  { decorations: (plugin) => plugin.decorations }
+);
 
 interface MathLiveEditorProps {
   value: string;
@@ -150,6 +141,7 @@ export const MathLiveEditor = ({ value, onChange, placeholder, className }: Math
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const [activeLatex, setActiveLatex] = useState<string | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -164,10 +156,13 @@ export const MathLiveEditor = ({ value, onChange, placeholder, className }: Math
           EditorView.lineWrapping,
           cmPlaceholder(placeholder ?? ""),
           mathDecorations,
-          mathPreview,
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
               onChangeRef.current(update.state.doc.toString());
+            }
+            if (update.docChanged || update.selectionSet || update.focusChanged) {
+              const span = update.view.hasFocus ? activeSpan(update.state) : null;
+              setActiveLatex(span && span.latex ? span.latex : null);
             }
           }),
           EditorView.contentAttributes.of({ spellcheck: "false" }),
@@ -192,5 +187,36 @@ export const MathLiveEditor = ({ value, onChange, placeholder, className }: Math
     }
   }, [value]);
 
-  return <div ref={containerRef} className={cn("math-live-editor", className)} />;
+  // Вывод KaTeX безопасен для innerHTML: без опции trust команды вроде \href отключены,
+  // а входной LaTeX экранируется — сырой HTML из текста студента сюда не попадает.
+  let previewHtml = "";
+  if (activeLatex) {
+    try {
+      previewHtml = katex.renderToString(activeLatex, { throwOnError: false, displayMode: false });
+    } catch {
+      previewHtml = "";
+    }
+  }
+
+  return (
+    <div
+      className={cn(
+        "math-live-editor overflow-hidden rounded-md border border-input bg-card",
+        className
+      )}
+    >
+      {activeLatex && (
+        <div className="border-b bg-secondary/50 px-3 py-1.5">
+          <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Предпросмотр формулы
+          </p>
+          <div
+            className="overflow-x-auto py-0.5 text-sm [scrollbar-width:thin]"
+            dangerouslySetInnerHTML={{ __html: previewHtml }}
+          />
+        </div>
+      )}
+      <div ref={containerRef} />
+    </div>
+  );
 };

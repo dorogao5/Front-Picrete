@@ -458,7 +458,7 @@ const OcrReview = () => {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_440px] 2xl:grid-cols-[minmax(0,1fr)_500px]">
         {/* Изображение с разметкой */}
         <Card className="h-fit min-w-0 p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
