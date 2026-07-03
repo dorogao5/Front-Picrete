@@ -60,7 +60,7 @@ const Landing = () => {
       <Navbar />
 
       <main>
-        <section className="border-b border-border/70 bg-background px-4 pb-12 pt-24 sm:px-6 sm:pb-16 sm:pt-28">
+        <section className="border-b border-border/70 bg-notebook px-4 pb-12 pt-24 sm:px-6 sm:pb-16 sm:pt-28">
           <div className="container mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[1.02fr_0.98fr]">
             <div className="max-w-3xl">
               <p className="text-sm font-medium text-muted-foreground">
@@ -80,13 +80,13 @@ const Landing = () => {
 
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                 <Link to="/signup">
-                  <Button size="lg" className="w-full sm:w-auto">
+                  <Button size="lg" variant="accent" className="w-full sm:w-auto">
                     Создать аккаунт
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
                 <Link to="/demo">
-                  <Button size="lg" variant="outline" className="w-full bg-white sm:w-auto">
+                  <Button size="lg" variant="outline" className="w-full sm:w-auto">
                     Посмотреть демо
                   </Button>
                 </Link>
@@ -97,7 +97,7 @@ const Landing = () => {
               </div>
             </div>
 
-            <div className="rounded-lg border border-border bg-white p-4 shadow-elegant sm:p-5">
+            <div className="rounded-lg border border-border bg-card p-4 shadow-elegant sm:p-5">
               <div className="flex items-center justify-between border-b border-border pb-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Работа 10Б</p>
@@ -111,16 +111,16 @@ const Landing = () => {
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 {workflow.map(({ label, value, icon: Icon }) => (
                   <div key={label} className="rounded-md border border-border bg-background p-4">
-                    <Icon className="h-5 w-5 text-primary" />
+                    <Icon className="h-5 w-5 text-accent" />
                     <p className="mt-3 text-sm font-semibold">{label}</p>
                     <p className="mt-1 min-h-10 text-sm leading-5 text-muted-foreground">{value}</p>
                   </div>
                 ))}
               </div>
 
-              <div className="mt-4 rounded-md border border-border bg-[#fbfcfd] p-4">
+              <div className="mt-4 rounded-md border border-border bg-secondary/30 p-4">
                 <div className="flex items-start gap-3">
-                  <FileText className="mt-0.5 h-5 w-5 text-primary" />
+                  <FileText className="mt-0.5 h-5 w-5 text-accent" />
                   <div className="min-w-0">
                     <p className="font-medium">Комментарий к критерию</p>
                     <p className="mt-1 text-sm leading-6 text-muted-foreground">
@@ -128,8 +128,8 @@ const Landing = () => {
                     </p>
                   </div>
                 </div>
-                <div className="mt-4 h-2 bg-secondary">
-                  <div className="h-2 w-[78%] bg-foreground" />
+                <div className="mt-4 h-2 rounded-full bg-secondary">
+                  <div className="h-2 w-[78%] rounded-full bg-accent" />
                 </div>
                 <div className="mt-2 flex justify-between text-xs text-muted-foreground">
                   <span>7.8 / 10</span>
@@ -143,7 +143,7 @@ const Landing = () => {
         <section className="px-4 py-12 sm:px-6 sm:py-16">
           <div className="container mx-auto max-w-6xl">
             <div className="max-w-2xl">
-              <p className="text-sm font-semibold uppercase text-primary">Основной контур</p>
+              <p className="text-sm font-semibold uppercase tracking-wide text-accent">Основной контур</p>
               <h2 className="mt-2 text-3xl font-semibold leading-tight sm:text-4xl">
                 Не чат с промптом, а рабочий процесс проверки
               </h2>
@@ -166,10 +166,10 @@ const Landing = () => {
           </div>
         </section>
 
-        <section className="border-y border-border/70 bg-white px-4 py-12 sm:px-6 sm:py-16">
+        <section className="border-y border-border/70 bg-card px-4 py-12 sm:px-6 sm:py-16">
           <div className="container mx-auto grid max-w-6xl gap-8 lg:grid-cols-[0.82fr_1.18fr]">
             <div>
-              <p className="text-sm font-semibold uppercase text-accent">Роли без лишних экранов</p>
+              <p className="text-sm font-semibold uppercase tracking-wide text-accent">Роли без лишних экранов</p>
               <h2 className="mt-2 text-3xl font-semibold leading-tight sm:text-4xl">
                 Сайт одинаково удобен с компьютера и телефона
               </h2>
@@ -193,22 +193,22 @@ const Landing = () => {
         <section className="px-4 py-12 sm:px-6 sm:py-16">
           <div className="container mx-auto max-w-6xl">
             <div className="grid gap-4 md:grid-cols-3">
-              <div className="rounded-lg border border-border bg-white p-5">
-                <Clock className="h-5 w-5 text-primary" />
+              <div className="rounded-lg border border-border bg-card p-5">
+                <Clock className="h-5 w-5 text-accent" />
                 <p className="mt-4 text-2xl font-semibold">меньше рутины</p>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   OCR и первичный разбор снимают самую медленную часть проверки.
                 </p>
               </div>
-              <div className="rounded-lg border border-border bg-white p-5">
-                <ShieldCheck className="h-5 w-5 text-primary" />
+              <div className="rounded-lg border border-border bg-card p-5">
+                <ShieldCheck className="h-5 w-5 text-accent" />
                 <p className="mt-4 text-2xl font-semibold">контроль доступа</p>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   Курсы, роли и приглашения не смешивают студентов и преподавателей.
                 </p>
               </div>
-              <div className="rounded-lg border border-border bg-white p-5">
-                <GraduationCap className="h-5 w-5 text-primary" />
+              <div className="rounded-lg border border-border bg-card p-5">
+                <GraduationCap className="h-5 w-5 text-accent" />
                 <p className="mt-4 text-2xl font-semibold">понятная обратная связь</p>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   Итоговый балл сопровождается комментарием, а не только числом.
@@ -216,21 +216,21 @@ const Landing = () => {
               </div>
             </div>
 
-            <div className="mt-8 flex flex-col items-start justify-between gap-5 border border-border bg-foreground p-6 text-white sm:flex-row sm:items-center sm:p-7">
+            <div className="mt-8 flex flex-col items-start justify-between gap-5 rounded-lg border border-border bg-primary p-6 text-primary-foreground sm:flex-row sm:items-center sm:p-7">
               <div>
                 <h2 className="text-2xl font-semibold">Начните с курса или демо</h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/72">
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-primary-foreground/75">
                   Если аккаунт уже есть, войдите. Если нужно быстро оценить интерфейс, откройте демо.
                 </p>
               </div>
               <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
                 <Link to="/login">
-                  <Button variant="secondary" className="w-full bg-white text-foreground hover:bg-white/90 sm:w-auto">
+                  <Button variant="secondary" className="w-full bg-background text-foreground hover:bg-background/90 sm:w-auto">
                     Войти
                   </Button>
                 </Link>
                 <Link to="/demo">
-                  <Button variant="outline" className="w-full border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white sm:w-auto">
+                  <Button variant="outline" className="w-full border-primary-foreground/30 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground sm:w-auto">
                     Демо
                   </Button>
                 </Link>
@@ -240,7 +240,7 @@ const Landing = () => {
         </section>
       </main>
 
-      <footer className="border-t border-border bg-white px-4 py-8 sm:px-6">
+      <footer className="border-t border-border bg-card px-4 py-8 sm:px-6">
         <div className="container mx-auto flex max-w-6xl flex-col gap-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p>© 2026 Picrete. Проверка работ по химии.</p>
           <div className="flex flex-wrap gap-x-5 gap-y-2">

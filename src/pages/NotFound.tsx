@@ -4,16 +4,15 @@ import { Card } from "@/components/ui/card";
 
 const NotFound = () => {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-subtle px-6">
-      <Card className="w-full max-w-md p-8 text-center shadow-elegant">
-        <h1 className="text-6xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent mb-4">
-          404
-        </h1>
-        <p className="text-xl text-muted-foreground mb-6">
-          Страница не найдена
+    <div className="flex min-h-screen items-center justify-center bg-notebook px-6">
+      <Card className="w-full max-w-md p-10 text-center shadow-elegant">
+        <p className="font-display text-7xl font-semibold text-accent">404</p>
+        <h1 className="mt-3 text-xl font-semibold">Такой страницы нет</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Возможно, ссылка устарела или страница была перемещена.
         </p>
-        <Link to="/">
-          <Button size="lg">Вернуться на главную</Button>
+        <Link to="/" className="mt-6 inline-block">
+          <Button size="lg">На главную</Button>
         </Link>
       </Card>
     </div>

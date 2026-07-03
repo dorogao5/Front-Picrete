@@ -42,7 +42,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background px-4 py-6 sm:px-6 lg:py-10">
+    <div className="min-h-screen bg-notebook px-4 py-6 sm:px-6 lg:py-10">
       <div className="mx-auto grid min-h-[calc(100vh-3rem)] max-w-6xl items-center gap-8 lg:grid-cols-[0.95fr_1.05fr]">
         <section className="hidden lg:block">
           <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
@@ -51,7 +51,7 @@ const Login = () => {
           </Link>
           <div className="mt-10 max-w-xl">
             <img src={logo} alt="Picrete" className="h-12 w-12" />
-            <h1 className="mt-6 text-5xl font-semibold leading-tight">Вернитесь к проверке работ</h1>
+            <h1 className="mt-6 text-5xl font-semibold leading-tight">С возвращением в лабораторию</h1>
             <p className="mt-5 text-lg leading-8 text-muted-foreground">
               После входа откроется активный курс: работы, банк задач, тренажеры и ревью загруженных решений.
             </p>
@@ -68,7 +68,7 @@ const Login = () => {
             На главную
           </Link>
 
-          <Card className="border-border bg-white p-6 shadow-elegant sm:p-8">
+          <Card className="p-6 shadow-elegant sm:p-8">
             <div className="mb-8">
               <div className="mb-5 flex items-center gap-3">
                 <img src={logo} alt="Picrete" className="h-10 w-10" />
@@ -120,7 +120,7 @@ const Login = () => {
 
             <div className="mt-6 border-t border-border pt-5 text-center text-sm text-muted-foreground">
               Нет аккаунта?{" "}
-              <Link to="/signup" className="font-medium text-primary hover:underline">
+              <Link to="/signup" className="font-medium text-accent hover:underline">
                 Создать аккаунт
               </Link>
             </div>

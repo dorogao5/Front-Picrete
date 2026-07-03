@@ -94,7 +94,7 @@ const Signup = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background px-4 py-6 sm:px-6 lg:py-10">
+    <div className="min-h-screen bg-notebook px-4 py-6 sm:px-6 lg:py-10">
       <div className="mx-auto grid min-h-[calc(100vh-3rem)] max-w-6xl items-center gap-8 lg:grid-cols-[0.85fr_1.15fr]">
         <section className="hidden lg:block">
           <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
@@ -121,7 +121,7 @@ const Signup = () => {
             На главную
           </Link>
 
-          <Card className="border-border bg-white p-5 shadow-elegant sm:p-7">
+          <Card className="p-5 shadow-elegant sm:p-7">
             <div className="mb-7 flex items-center gap-3">
               <img src={logo} alt="Picrete" className="h-10 w-10" />
               <div>
@@ -218,16 +218,16 @@ const Signup = () => {
                   <Checkbox id="pdConsent" checked={pdConsent} onCheckedChange={(v) => setPdConsent(Boolean(v))} />
                   <Label htmlFor="pdConsent" className="min-w-0 text-sm leading-6">
                     Согласен(а) на обработку персональных данных по{" "}
-                    <Link to="/consent" className="font-medium text-primary hover:underline">согласию</Link>{" "}
+                    <Link to="/consent" className="font-medium text-accent hover:underline">согласию</Link>{" "}
                     и{" "}
-                    <Link to="/privacy" className="font-medium text-primary hover:underline">политике конфиденциальности</Link>.
+                    <Link to="/privacy" className="font-medium text-accent hover:underline">политике конфиденциальности</Link>.
                   </Label>
                 </div>
                 <div className="flex items-start gap-3">
                   <Checkbox id="termsAccepted" checked={termsAccepted} onCheckedChange={(v) => setTermsAccepted(Boolean(v))} />
                   <Label htmlFor="termsAccepted" className="min-w-0 text-sm leading-6">
                     Принимаю{" "}
-                    <Link to="/terms" className="font-medium text-primary hover:underline">пользовательское соглашение</Link>.
+                    <Link to="/terms" className="font-medium text-accent hover:underline">пользовательское соглашение</Link>.
                   </Label>
                 </div>
                 <p className="text-xs text-muted-foreground">Версия документов: {POLICY_VERSION}</p>
@@ -246,7 +246,7 @@ const Signup = () => {
 
             <div className="mt-6 border-t border-border pt-5 text-center text-sm text-muted-foreground">
               Уже есть аккаунт?{" "}
-              <Link to="/login" className="font-medium text-primary hover:underline">
+              <Link to="/login" className="font-medium text-accent hover:underline">
                 Войти
               </Link>
             </div>

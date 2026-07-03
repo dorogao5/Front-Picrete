@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 
 const Demo = () => {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-notebook">
       <Navbar />
 
       <section className="pt-28 pb-14 px-6">
@@ -28,7 +28,7 @@ const Demo = () => {
       <section className="pb-10 px-6">
         <div className="container mx-auto max-w-6xl grid gap-8 md:grid-cols-3">
           <section className="border-t border-border pt-5">
-            <div className="mb-4 text-foreground">
+            <div className="mb-4 text-accent">
               <Camera className="h-5 w-5" />
             </div>
             <p className="text-sm text-muted-foreground">Шаг 1</p>
@@ -39,7 +39,7 @@ const Demo = () => {
           </section>
 
           <section className="border-t border-border pt-5">
-            <div className="mb-4 text-foreground">
+            <div className="mb-4 text-accent">
               <ScanText className="h-5 w-5" />
             </div>
             <p className="text-sm text-muted-foreground">Шаг 2</p>
@@ -50,7 +50,7 @@ const Demo = () => {
           </section>
 
           <section className="border-t border-border pt-5">
-            <div className="mb-4 text-foreground">
+            <div className="mb-4 text-accent">
               <ClipboardCheck className="h-5 w-5" />
             </div>
             <p className="text-sm text-muted-foreground">Шаг 3</p>
@@ -86,19 +86,19 @@ const Demo = () => {
 
       <section className="pb-20 px-6">
         <div className="container mx-auto max-w-4xl">
-          <div className="bg-foreground p-7 text-left text-white shadow-elegant sm:p-9">
+          <div className="rounded-lg bg-primary p-7 text-left text-primary-foreground shadow-elegant sm:p-9">
             <h3 className="max-w-3xl text-3xl font-semibold leading-tight">Готово к запуску в вашем курсе</h3>
-            <p className="mt-3 max-w-2xl text-white/72">
+            <p className="mt-3 max-w-2xl text-primary-foreground/75">
               Подключите курс и получите единый контур для проверки работ без ручной рутины.
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Link to="/signup">
-                <Button size="lg" variant="secondary" className="w-full bg-white text-foreground hover:bg-white/90 sm:w-auto">
+                <Button size="lg" variant="secondary" className="w-full bg-background text-foreground hover:bg-background/90 sm:w-auto">
                   Подключить курс
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
-              <Link to="/login" className="inline-flex h-11 items-center justify-center border border-white/20 px-5 text-sm font-medium text-white hover:bg-white/10">
+              <Link to="/login" className="inline-flex h-11 items-center justify-center rounded-md border border-primary-foreground/25 px-5 text-sm font-medium text-primary-foreground hover:bg-primary-foreground/10">
                 Уже есть аккаунт
               </Link>
             </div>
