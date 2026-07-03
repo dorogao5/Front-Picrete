@@ -1,13 +1,18 @@
 import { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
-import { Navbar } from "@/components/Navbar";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { FileText, Flag } from "lucide-react";
+import { toast } from "sonner";
+
+import { PageShell, PageLoader } from "@/components/PageShell";
+import { StatusBadge } from "@/components/StatusBadge";
+import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Clock, CheckCircle, AlertCircle, Eye } from "lucide-react";
 import { examsAPI, getApiErrorMessage } from "@/lib/api";
 import type { WorkKind } from "@/lib/api";
-import { toast } from "sonner";
+import type { BadgeTone } from "@/lib/statuses";
+import { cn } from "@/lib/utils";
 
 interface Submission {
   id: string;
@@ -36,8 +41,33 @@ interface ExamDetails {
   kind?: WorkKind;
 }
 
+const pipelineStage = (submission: Submission): { label: string; tone: BadgeTone } => {
+  switch (submission.status) {
+    case "approved":
+      return { label: "Проверена", tone: "success" };
+    case "preliminary":
+      return { label: "Ждёт вашей проверки", tone: "warning" };
+    case "processing":
+      return submission.llm_precheck_status === "queued"
+        ? { label: "AI в очереди", tone: "muted" }
+        : { label: "AI проверяет", tone: "info" };
+    case "uploaded":
+      if (submission.ocr_overall_status === "in_review") {
+        return { label: "Студент проверяет OCR", tone: "info" };
+      }
+      return { label: "Распознаётся", tone: "muted" };
+    case "flagged":
+      return { label: "Требует внимания", tone: "warning" };
+    case "rejected":
+      return { label: "Отклонена", tone: "destructive" };
+    default:
+      return { label: submission.status, tone: "muted" };
+  }
+};
+
 const ExamSubmissions = () => {
   const { courseId, examId } = useParams<{ courseId: string; examId: string }>();
+  const navigate = useNavigate();
   const [exam, setExam] = useState<ExamDetails | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +78,7 @@ const ExamSubmissions = () => {
       try {
         const examResponse = await examsAPI.get(examId!, courseId);
         setExam(examResponse.data);
-        
+
         const submissionsResponse = await examsAPI.listSubmissions(
           examId!,
           courseId,
@@ -56,7 +86,7 @@ const ExamSubmissions = () => {
         );
         setSubmissions(submissionsResponse.data.items);
       } catch (error: unknown) {
-        toast.error(getApiErrorMessage(error, "Ошибка загрузки данных"));
+        toast.error(getApiErrorMessage(error, "Не удалось загрузить решения"));
       } finally {
         setLoading(false);
       }
@@ -67,233 +97,186 @@ const ExamSubmissions = () => {
     }
   }, [courseId, examId, filter]);
 
-  const getStatusBadge = (submission: Submission) => {
-    const { status, ocr_overall_status, llm_precheck_status } = submission;
-    switch (status) {
-      case "uploaded":
-        if (ocr_overall_status === "in_review") {
-          return <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
-            <Clock className="w-3 h-3 mr-1" />
-            OCR review студентом
-          </Badge>;
-        }
-        return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-          <Clock className="w-3 h-3 mr-1" />
-          OCR обрабатывается
-        </Badge>;
-      case "processing":
-        if (llm_precheck_status === "queued") {
-          return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-            <AlertCircle className="w-3 h-3 mr-1" />
-            LLM в очереди
-          </Badge>;
-        }
-        return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-          <AlertCircle className="w-3 h-3 mr-1" />
-          Проверяется ИИ
-        </Badge>;
-      case "preliminary":
-        return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-          <Clock className="w-3 h-3 mr-1" />
-          Требует проверки
-        </Badge>;
-      case "approved":
-        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-          <CheckCircle className="w-3 h-3 mr-1" />
-          Одобрено
-        </Badge>;
-      case "flagged":
-        return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-          <AlertCircle className="w-3 h-3 mr-1" />
-          Требует ручной проверки
-        </Badge>;
-      case "rejected":
-        return <Badge variant="outline" className="bg-gray-100 text-gray-700 border-gray-200">
-          Отклонено
-        </Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-subtle">
-        <Navbar />
-        <div className="container mx-auto px-6 pt-24 pb-12">
-          <p className="text-muted-foreground">Загрузка...</p>
-        </div>
-      </div>
+      <PageShell title="Решения студентов">
+        <PageLoader label="Загружаем решения..." />
+      </PageShell>
     );
   }
 
   if (!exam) {
     return (
-      <div className="min-h-screen bg-gradient-subtle">
-        <Navbar />
-        <div className="container mx-auto px-6 pt-24 pb-12">
-          <Card className="p-6">
-            <p className="text-muted-foreground mb-4">Контрольная работа не найдена</p>
-            <Link to={courseId ? `/c/${courseId}/teacher` : "/dashboard"} className="mt-4 inline-block">
-              <Button>Вернуться к списку</Button>
+      <PageShell title="Решения студентов">
+        <EmptyState
+          icon={FileText}
+          title="Работа не найдена"
+          action={
+            <Link to={courseId ? `/c/${courseId}/teacher` : "/dashboard"}>
+              <Button variant="outline">К списку работ</Button>
             </Link>
-          </Card>
-        </div>
-      </div>
+          }
+        />
+      </PageShell>
     );
   }
 
-  const pendingCount = submissions.filter(s => s.status === "preliminary").length;
-  const approvedCount = submissions.filter(s => s.status === "approved").length;
+  const pendingCount = submissions.filter((s) => s.status === "preliminary").length;
+  const approvedCount = submissions.filter((s) => s.status === "approved").length;
 
   return (
-    <div className="min-h-screen bg-gradient-subtle">
-      <Navbar />
-      
-      <div className="container mx-auto px-6 pt-24 pb-12">
-        <div className="mb-8">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-            <Link to={courseId ? `/c/${courseId}/teacher` : "/dashboard"} className="hover:text-primary">
-              Панель преподавателя
-            </Link>
-            <span>/</span>
-            <span>{exam.title}</span>
-          </div>
-          <h1 className="text-4xl font-bold mb-2">Проверка работ</h1>
-          <div className="flex items-center gap-2">
-            <p className="text-muted-foreground">{exam.title}</p>
-            {exam.kind && (
-              <Badge
-                variant="outline"
-                className={
-                  exam.kind === "homework"
-                    ? "bg-orange-50 text-orange-700 border-orange-200"
-                    : "bg-blue-50 text-blue-700 border-blue-200"
-                }
-              >
-                {exam.kind === "homework" ? "Домашняя" : "Контрольная"}
-              </Badge>
-            )}
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <Card className="p-6 bg-gradient-card border-border/50">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                <FileText className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{submissions.length}</p>
-                <p className="text-sm text-muted-foreground">Всего работ</p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6 bg-gradient-card border-border/50">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-yellow-400 to-orange-400 flex items-center justify-center">
-                <Clock className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{pendingCount}</p>
-                <p className="text-sm text-muted-foreground">Требуют проверки</p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6 bg-gradient-card border-border/50">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-400 to-emerald-400 flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{approvedCount}</p>
-                <p className="text-sm text-muted-foreground">Одобрено</p>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* Submissions List */}
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold">Работы студентов</h2>
-            <div className="flex gap-2">
-              <Button variant={filter === null ? "default" : "outline"} onClick={() => setFilter(null)}>Все</Button>
-              <Button variant={filter === "preliminary" ? "default" : "outline"} onClick={() => setFilter("preliminary")}>Требуют проверки</Button>
-              <Button variant={filter === "approved" ? "default" : "outline"} onClick={() => setFilter("approved")}>Одобрено</Button>
-            </div>
-          </div>
-          
-          {submissions.length === 0 ? (
-            <div className="text-center py-12">
-              <FileText className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-              <p className="text-muted-foreground">Работы пока не сданы</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {submissions.map((submission) => (
-                <Card key={submission.id} className="p-4 hover:shadow-lg transition-all duration-300">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-semibold">{submission.student_name}</h3>
-                        <span className="text-sm text-muted-foreground">@{submission.student_username}</span>
-                        {getStatusBadge(submission)}
-                        {submission.report_flag && (
-                          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                            REPORT
-                          </Badge>
-                        )}
-                        {submission.ocr_overall_status === "failed" && (
-                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                            OCR failed
-                          </Badge>
-                        )}
-                        {submission.llm_precheck_status === "skipped" && (
-                          <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-300">
-                            LLM skipped
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-6 text-sm text-muted-foreground">
-                        <span>
-                          Сдано: {new Date(submission.submitted_at).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })}
-                        </span>
-                        {submission.final_score !== null && (
-                          <span className="text-primary font-semibold">
-                            Балл: {submission.final_score.toFixed(1)}/{submission.max_score}
-                          </span>
-                        )}
-                        {submission.ai_score !== null && submission.final_score === null && (
-                          <span className="text-blue-600 font-semibold">
-                            AI Балл: {submission.ai_score.toFixed(1)}/{submission.max_score}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {["preliminary", "approved", "flagged", "rejected"].includes(submission.status) ? (
-                      <Link to={courseId ? `/c/${courseId}/submission/${submission.id}` : "/dashboard"}>
-                        <Button>
-                          <Eye className="w-4 h-4 mr-2" />
-                          Проверить
-                        </Button>
-                      </Link>
-                    ) : (
-                      <Button disabled variant="outline">
-                        Ожидается pipeline
-                      </Button>
-                    )}
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
+    <PageShell
+      width="wide"
+      backLabel="К списку работ"
+      onBack={() => navigate(courseId ? `/c/${courseId}/teacher` : "/dashboard")}
+      title="Решения студентов"
+      subtitle={
+        <span className="inline-flex flex-wrap items-center gap-2">
+          {exam.title}
+          <StatusBadge domain="workKind" value={exam.kind} />
+        </span>
+      }
+    >
+      <div className="mb-6 grid grid-cols-3 gap-4">
+        <Card className="p-5">
+          <p className="font-display text-3xl font-semibold">{submissions.length}</p>
+          <p className="mt-1 text-sm text-muted-foreground">Сдано решений</p>
+        </Card>
+        <Card className={cn("p-5", pendingCount > 0 && "border-warning/50")}>
+          <p className={cn("font-display text-3xl font-semibold", pendingCount > 0 && "text-warning")}>
+            {pendingCount}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">Ждут проверки</p>
+        </Card>
+        <Card className="p-5">
+          <p className="font-display text-3xl font-semibold">{approvedCount}</p>
+          <p className="mt-1 text-sm text-muted-foreground">Проверено</p>
         </Card>
       </div>
-    </div>
+
+      <Card className="overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
+          <h2 className="font-semibold">Работы студентов</h2>
+          <div className="inline-flex rounded-md border bg-muted/60 p-0.5">
+            {([
+              [null, "Все"],
+              ["preliminary", "Ждут проверки"],
+              ["approved", "Проверенные"],
+            ] as const).map(([value, label]) => (
+              <Button
+                key={label}
+                size="sm"
+                variant="ghost"
+                className={cn("h-8", filter === value && "bg-card shadow-soft")}
+                onClick={() => setFilter(value)}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {submissions.length === 0 ? (
+          <EmptyState
+            icon={FileText}
+            title={filter ? "По этому фильтру решений нет" : "Решения пока не сданы"}
+            description={filter ? undefined : "Как только студенты сдадут работы, они появятся здесь."}
+            className="m-4"
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2.5 font-medium">Студент</th>
+                  <th className="px-4 py-2.5 font-medium">Сдана</th>
+                  <th className="px-4 py-2.5 font-medium">Этап</th>
+                  <th className="px-4 py-2.5 font-medium">Отметки</th>
+                  <th className="px-4 py-2.5 text-right font-medium">Балл</th>
+                  <th className="px-4 py-2.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {submissions.map((submission) => {
+                  const stage = pipelineStage(submission);
+                  const canOpen = ["preliminary", "approved", "flagged", "rejected"].includes(
+                    submission.status
+                  );
+                  return (
+                    <tr key={submission.id} className="border-b last:border-0 hover:bg-secondary/30">
+                      <td className="px-4 py-3">
+                        <p className="font-medium">{submission.student_name}</p>
+                        <p className="text-xs text-muted-foreground">@{submission.student_username}</p>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+                        {new Date(submission.submitted_at).toLocaleString("ru-RU", {
+                          timeZone: "Europe/Moscow",
+                          day: "2-digit",
+                          month: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant={stage.tone}>{stage.label}</Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {submission.report_flag && (
+                            <Badge variant="warning" className="gap-1">
+                              <Flag className="h-3 w-3" />
+                              Замечания к OCR
+                            </Badge>
+                          )}
+                          {submission.ocr_overall_status === "failed" && (
+                            <Badge variant="destructive">Ошибка OCR</Badge>
+                          )}
+                          {submission.llm_precheck_status === "skipped" && (
+                            <Badge variant="muted">Без AI</Badge>
+                          )}
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right">
+                        {submission.final_score !== null ? (
+                          <span className="font-mono font-semibold">
+                            {submission.final_score.toFixed(1)} / {submission.max_score}
+                          </span>
+                        ) : submission.ai_score !== null ? (
+                          <span
+                            className="font-mono text-accent"
+                            title="Предварительная оценка AI"
+                          >
+                            {submission.ai_score.toFixed(1)} / {submission.max_score}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {canOpen ? (
+                          <Link to={courseId ? `/c/${courseId}/submission/${submission.id}` : "/dashboard"}>
+                            <Button
+                              size="sm"
+                              variant={submission.status === "preliminary" ? "accent" : "outline"}
+                            >
+                              {submission.status === "preliminary" ? "Проверить" : "Открыть"}
+                            </Button>
+                          </Link>
+                        ) : (
+                          <Button size="sm" disabled variant="outline">
+                            В обработке
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </PageShell>
   );
 };
 

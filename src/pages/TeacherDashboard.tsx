@@ -1,12 +1,16 @@
 import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
+import { BookOpen, FileText, Plus } from "lucide-react";
+import { toast } from "sonner";
+
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Navbar } from "@/components/Navbar";
-import { Plus, FileText, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { PageShell } from "@/components/PageShell";
+import { StatusBadge } from "@/components/StatusBadge";
+import { EmptyState } from "@/components/EmptyState";
 import { examsAPI, getApiErrorStatus } from "@/lib/api";
 import type { WorkKind } from "@/lib/api";
-import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface ExamSummary {
   id: string;
@@ -20,6 +24,13 @@ interface ExamSummary {
   student_count: number;
   pending_count: number;
 }
+
+const SkeletonCard = () => (
+  <Card className="animate-pulse p-6">
+    <div className="h-5 w-1/3 rounded bg-muted" />
+    <div className="mt-3 h-4 w-1/2 rounded bg-muted" />
+  </Card>
+);
 
 const TeacherDashboard = () => {
   const { courseId } = useParams<{ courseId: string }>();
@@ -38,13 +49,11 @@ const TeacherDashboard = () => {
         const response = await examsAPI.list(courseId);
         setExams(response.data.items);
       } catch (error: unknown) {
-        // Не показываем ошибку для 401 - interceptor сам обработает редирект
         if (getApiErrorStatus(error) === 401) {
           setLoading(false);
           return;
         }
-        // Для других ошибок показываем уведомление
-        toast.error("Ошибка загрузки работ");
+        toast.error("Не удалось загрузить работы — обновите страницу");
       } finally {
         setLoading(false);
       }
@@ -64,7 +73,7 @@ const TeacherDashboard = () => {
       await examsAPI.publish(examId, courseId);
       const response = await examsAPI.list(courseId);
       setExams(response.data.items);
-      toast.success("Работа опубликована");
+      toast.success("Работа опубликована — студенты её видят");
     } catch {
       toast.error("Не удалось опубликовать работу");
     } finally {
@@ -75,209 +84,151 @@ const TeacherDashboard = () => {
   const filteredExams =
     kindFilter === "all" ? exams : exams.filter((exam) => exam.kind === kindFilter);
 
-  // Calculate statistics
   const stats = {
     total: filteredExams.length,
-    active: filteredExams.filter(e => e.status === 'active' || e.status === 'published').length,
+    active: filteredExams.filter((e) => e.status === "active" || e.status === "published").length,
     pendingReview: filteredExams.reduce((sum, e) => sum + e.pending_count, 0),
     completed: filteredExams.reduce((sum, e) => sum + (e.student_count - e.pending_count), 0),
-    control: filteredExams.filter((e) => e.kind === "control").length,
-    homework: filteredExams.filter((e) => e.kind === "homework").length,
   };
 
+  const statCards = [
+    { label: "Всего работ", value: stats.total },
+    { label: "Активных", value: stats.active },
+    { label: "Ждут проверки", value: stats.pendingReview, highlight: stats.pendingReview > 0 },
+    { label: "Проверено решений", value: stats.completed },
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-subtle">
-      <Navbar />
-      
-      <div className="container mx-auto px-6 pt-24 pb-12">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-4xl font-bold mb-2">Панель преподавателя</h1>
-            <p className="text-muted-foreground">Управление работами и проверка решений</p>
-          </div>
-          <div className="flex gap-2">
-            <Link to={`/c/${courseId}/task-bank`}>
-              <Button variant="outline" size="lg">
-                Банк задач
-              </Button>
-            </Link>
+    <PageShell
+      title="Работы курса"
+      subtitle="Создание контрольных и домашних, проверка решений"
+      actions={
+        <>
+          <Link to={`/c/${courseId}/task-bank`}>
+            <Button variant="outline" className="gap-1.5">
+              <BookOpen className="h-4 w-4" />
+              Банк задач
+            </Button>
+          </Link>
+          <Link to={`/c/${courseId}/create-exam`}>
+            <Button variant="accent" className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              Создать работу
+            </Button>
+          </Link>
+        </>
+      }
+    >
+      <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {statCards.map((stat) => (
+          <Card key={stat.label} className={cn("p-5", stat.highlight && "border-warning/50")}>
+            <p
+              className={cn(
+                "font-display text-3xl font-semibold",
+                stat.highlight && "text-warning"
+              )}
+            >
+              {loading ? "…" : stat.value}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">{stat.label}</p>
+          </Card>
+        ))}
+      </div>
+
+      <div className="mb-6 inline-flex rounded-md border bg-muted/60 p-0.5">
+        {([
+          ["all", "Все"],
+          ["control", "Контрольные"],
+          ["homework", "Домашние"],
+        ] as const).map(([value, label]) => (
+          <Button
+            key={value}
+            size="sm"
+            variant="ghost"
+            className={cn("h-8", kindFilter === value && "bg-card shadow-soft")}
+            onClick={() => setKindFilter(value)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      ) : filteredExams.length === 0 ? (
+        <EmptyState
+          icon={FileText}
+          title="Работ пока нет"
+          description="Создайте первую контрольную или домашнюю работу — задачи можно взять из банка."
+          action={
             <Link to={`/c/${courseId}/create-exam`}>
-              <Button size="lg" className="shadow-elegant">
-                <Plus className="w-5 h-5 mr-2" />
+              <Button variant="accent" className="gap-1.5">
+                <Plus className="h-4 w-4" />
                 Создать работу
               </Button>
             </Link>
-          </div>
-        </div>
-
-        <div className="mb-6 flex flex-wrap items-center gap-2">
-          <Button
-            variant={kindFilter === "all" ? "default" : "outline"}
-            onClick={() => setKindFilter("all")}
-          >
-            Все
-          </Button>
-          <Button
-            variant={kindFilter === "control" ? "default" : "outline"}
-            onClick={() => setKindFilter("control")}
-          >
-            Контрольные
-          </Button>
-          <Button
-            variant={kindFilter === "homework" ? "default" : "outline"}
-            onClick={() => setKindFilter("homework")}
-          >
-            Домашние
-          </Button>
-          <span className="ml-2 text-sm text-muted-foreground">
-            Контрольных: {stats.control}, домашних: {stats.homework}
-          </span>
-        </div>
-
-        {/* Stats Overview */}
-        <div className="grid md:grid-cols-4 gap-6 mb-8">
-          <Card className="p-6 bg-gradient-card border-border/50">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                <FileText className="w-6 h-6 text-white" />
+          }
+        />
+      ) : (
+        <div className="space-y-3">
+          {filteredExams.map((exam) => (
+            <Card key={exam.id} className="p-5 transition-shadow hover:shadow-elegant">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                    <h3 className="text-lg font-semibold">{exam.title}</h3>
+                    <StatusBadge domain="workKind" value={exam.kind} />
+                    <StatusBadge domain="exam" value={exam.status} />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-muted-foreground">
+                    <span>
+                      {new Date(exam.start_time).toLocaleDateString("ru-RU", {
+                        timeZone: "Europe/Moscow",
+                      })}
+                    </span>
+                    <span>Задач: {exam.task_count}</span>
+                    <span>Сдали: {exam.student_count}</span>
+                    {exam.pending_count > 0 && (
+                      <span className="font-medium text-warning">
+                        Ждут проверки: {exam.pending_count}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {exam.status === "draft" && (
+                    <Button
+                      variant="accent"
+                      onClick={() => handlePublishExam(exam.id)}
+                      disabled={publishingExamId === exam.id}
+                    >
+                      {publishingExamId === exam.id ? "Публикуем..." : "Опубликовать"}
+                    </Button>
+                  )}
+                  <Link to={`/c/${courseId}/exam/${exam.id}/submissions`}>
+                    <Button variant="outline">
+                      Решения
+                      {exam.pending_count > 0 && (
+                        <span className="ml-1.5 rounded-full bg-warning/15 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-warning">
+                          {exam.pending_count}
+                        </span>
+                      )}
+                    </Button>
+                  </Link>
+                  <Link to={`/c/${courseId}/exam/${exam.id}/edit`}>
+                    <Button variant="ghost">Изменить</Button>
+                  </Link>
+                </div>
               </div>
-              <div>
-                <p className="text-2xl font-bold">{loading ? "..." : stats.total}</p>
-                <p className="text-sm text-muted-foreground">Всего работ</p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6 bg-gradient-card border-border/50">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-primary flex items-center justify-center">
-                <Clock className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{loading ? "..." : stats.active}</p>
-                <p className="text-sm text-muted-foreground">Активные</p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6 bg-gradient-card border-border/50">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                <AlertCircle className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{loading ? "..." : stats.pendingReview}</p>
-                <p className="text-sm text-muted-foreground">Требуют проверки</p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6 bg-gradient-card border-border/50">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-primary flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{loading ? "..." : stats.completed}</p>
-                <p className="text-sm text-muted-foreground">Проверено</p>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* Exams List */}
-        <div>
-          <h2 className="text-2xl font-bold mb-6">Работы</h2>
-          {loading ? (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">Загрузка...</p>
-            </div>
-          ) : filteredExams.length === 0 ? (
-            <Card className="p-12 text-center bg-gradient-card border-border/50">
-              <FileText className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-              <h3 className="text-xl font-semibold mb-2">Работ пока нет</h3>
-              <p className="text-muted-foreground mb-6">Создайте первую работу</p>
-              <Link to={`/c/${courseId}/create-exam`}>
-                <Button>
-                  <Plus className="w-5 h-5 mr-2" />
-                  Создать работу
-                </Button>
-              </Link>
             </Card>
-          ) : (
-            <div className="space-y-4">
-              {filteredExams.map((exam) => {
-                const getStatusLabel = (status: string) => {
-                  switch (status) {
-                    case 'active': return 'Активна';
-                    case 'published': return 'Опубликована';
-                    case 'draft': return 'Черновик';
-                    case 'completed': return 'Завершена';
-                    default: return status;
-                  }
-                };
-                const kindLabel = exam.kind === "homework" ? "Домашняя" : "Контрольная";
-                const kindClass =
-                  exam.kind === "homework"
-                    ? "bg-orange-50 text-orange-700 border-orange-200"
-                    : "bg-blue-50 text-blue-700 border-blue-200";
-
-                const isActive = exam.status === 'active' || exam.status === 'published';
-
-                return (
-                  <Card key={exam.id} className="p-6 hover:shadow-elegant transition-all duration-300 border-border/50 bg-gradient-card">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-xl font-semibold">{exam.title}</h3>
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium border ${kindClass}`}>
-                            {kindLabel}
-                          </span>
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            isActive
-                              ? "bg-primary/10 text-primary border border-primary/20" 
-                              : "bg-muted text-muted-foreground"
-                          }`}>
-                            {getStatusLabel(exam.status)}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-6 text-sm text-muted-foreground">
-                          <span>Дата: {new Date(exam.start_time).toLocaleDateString("ru-RU", { timeZone: "Europe/Moscow" })}</span>
-                          <span>Студентов: {exam.student_count}</span>
-                          <span>Задач: {exam.task_count}</span>
-                          {exam.pending_count > 0 && (
-                            <span className="text-primary font-medium">
-                              {exam.pending_count} требуют проверки
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        {exam.status === "draft" && (
-                          <Button
-                            variant="outline"
-                            onClick={() => handlePublishExam(exam.id)}
-                            disabled={publishingExamId === exam.id}
-                          >
-                            {publishingExamId === exam.id ? "Публикация..." : "Опубликовать"}
-                          </Button>
-                        )}
-                        <Link to={`/c/${courseId}/exam/${exam.id}/submissions`}>
-                          <Button variant="outline">Проверка</Button>
-                        </Link>
-                        <Link to={`/c/${courseId}/exam/${exam.id}/edit`}>
-                          <Button variant="ghost">Редактировать</Button>
-                        </Link>
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
+          ))}
         </div>
-      </div>
-    </div>
+      )}
+    </PageShell>
   );
 };
 
