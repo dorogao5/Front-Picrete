@@ -5,10 +5,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import { BookOpen, ChevronDown, Dumbbell, LogOut, Settings, User, UserPlus } from "lucide-react";
+import { BookOpen, Check, ChevronDown, Dumbbell, GraduationCap, LogOut, Settings, User, UserPlus } from "lucide-react";
 import logo from "@/assets/logo.png";
 import {
   getActiveCourseId,
@@ -20,7 +21,14 @@ import {
   isAuthenticated,
   logout,
   setActiveCourseId,
+  type Membership,
 } from "@/lib/auth";
+
+const roleLabelForMembership = (membership: Membership): string => {
+  if (membership.roles.includes("teacher")) return "Преподаватель";
+  if (membership.roles.includes("student")) return "Студент";
+  return "";
+};
 
 export const Navbar = () => {
   const navigate = useNavigate();
@@ -30,19 +38,11 @@ export const Navbar = () => {
   const memberships = getMemberships().filter((membership) => membership.status === "active");
 
   const getInitials = (fullName: string) => {
-    const names = fullName.split(' ');
-    if (names.length >= 2) {
+    const names = fullName.split(" ");
+    if (names.length >= 2 && names[0] && names[1]) {
       return `${names[0][0]}${names[1][0]}`.toUpperCase();
     }
     return fullName.substring(0, 2).toUpperCase();
-  };
-
-  const handleLogout = () => {
-    logout();
-  };
-
-  const handleProfile = () => {
-    navigate(getDefaultAppPath());
   };
 
   const handleSwitchCourse = (courseId: string) => {
@@ -50,79 +50,99 @@ export const Navbar = () => {
     navigate(getCourseHomePath(courseId));
   };
 
-  const activeCourseTitle =
-    memberships.find((membership) => membership.course_id === activeCourseId)?.course_title ?? null;
+  const activeMembership = memberships.find((membership) => membership.course_id === activeCourseId) ?? null;
 
-  const roleLabel = user?.is_platform_admin ? "Platform Admin" : "User";
+  const userRoleLabel = user?.is_platform_admin
+    ? "Администратор платформы"
+    : activeMembership
+      ? roleLabelForMembership(activeMembership)
+      : "";
 
-  const displayUsername = user?.username ?? "";
-
-  const openAdmin = () => {
-    if (isAdmin()) {
-      navigate("/admin");
-    }
-  };
-
-  return <nav className="fixed left-0 right-0 top-0 z-50 border-b border-border/80 bg-background/95 backdrop-blur-xl">
-      <div className="container mx-auto px-4 py-3 sm:px-6">
+  return (
+    <nav className="fixed left-0 right-0 top-0 z-50 border-b bg-background/90 backdrop-blur-xl">
+      <div className="container mx-auto px-4 py-2.5 sm:px-6">
         <div className="flex min-h-10 items-center justify-between gap-3">
-          <Link to="/" className="group flex min-w-0 flex-shrink-0 items-center gap-2.5">
-            <img src={logo} alt="Picrete" className="h-8 w-8 flex-shrink-0 sm:h-9 sm:w-9" />
-            <span className="truncate font-aptos text-lg font-semibold text-foreground sm:text-xl">
-              Picrete
-            </span>
-          </Link>
-          
+          <div className="flex min-w-0 items-center gap-2">
+            <Link to="/" className="flex flex-shrink-0 items-center gap-2.5">
+              <img src={logo} alt="Picrete" className="h-8 w-8 flex-shrink-0" />
+              <span className="hidden font-display text-xl font-semibold tracking-tight sm:inline">
+                Picrete
+              </span>
+            </Link>
+
+            {isAuth && memberships.length > 0 && (
+              <>
+                <span className="mx-1 hidden h-5 w-px bg-border sm:block" />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="min-w-0 gap-1.5 px-2 text-sm font-medium">
+                      <GraduationCap className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                      <span className="max-w-44 truncate">
+                        {activeMembership?.course_title ?? "Выбрать курс"}
+                      </span>
+                      <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-64">
+                    <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                      Мои курсы
+                    </DropdownMenuLabel>
+                    {memberships.map((membership) => (
+                      <DropdownMenuItem
+                        key={membership.course_id}
+                        onClick={() => handleSwitchCourse(membership.course_id)}
+                        className="cursor-pointer"
+                      >
+                        <span className="flex w-4 justify-center">
+                          {membership.course_id === activeCourseId && <Check className="h-4 w-4" />}
+                        </span>
+                        <span className="ml-1 min-w-0 flex-1">
+                          <span className="block truncate">{membership.course_title}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {roleLabelForMembership(membership)}
+                          </span>
+                        </span>
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate("/join-course")} className="cursor-pointer">
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Присоединиться к курсу
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            )}
+          </div>
+
           <div className="flex flex-shrink-0 items-center gap-2">
             {isAuth && user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="h-10 gap-2 rounded-md px-1.5 sm:px-2">
-                    <Avatar className="h-8 w-8 cursor-pointer">
-                      <AvatarFallback className="bg-primary text-primary-foreground">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback className="bg-accent text-xs font-semibold text-accent-foreground">
                         {getInitials(user.full_name)}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="hidden max-w-40 truncate text-sm font-medium sm:inline">
-                      {activeCourseTitle ?? user.full_name}
+                    <span className="hidden max-w-36 truncate text-sm font-medium md:inline">
+                      {user.full_name}
                     </span>
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    <ChevronDown className="hidden h-4 w-4 text-muted-foreground md:inline" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <div className="flex items-center justify-start gap-2 p-2">
-                    <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">{user.full_name}</p>
-                      <p className="text-xs leading-none text-muted-foreground">@{displayUsername}</p>
-                      <p className="text-xs leading-none text-muted-foreground">{roleLabel}</p>
-                    </div>
+                <DropdownMenuContent align="end" className="w-60">
+                  <div className="px-2 py-1.5">
+                    <p className="truncate text-sm font-medium">{user.full_name}</p>
+                    <p className="truncate text-xs text-muted-foreground">@{user.username}</p>
+                    {userRoleLabel && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">{userRoleLabel}</p>
+                    )}
                   </div>
                   <DropdownMenuSeparator />
-                  {memberships.length > 0 && (
-                    <>
-                      <div className="px-2 py-1 text-xs text-muted-foreground">Курс</div>
-                      {memberships.map((membership) => (
-                        <DropdownMenuItem
-                          key={membership.course_id}
-                          onClick={() => handleSwitchCourse(membership.course_id)}
-                          className="cursor-pointer"
-                        >
-                          <span className={membership.course_id === activeCourseId ? "font-semibold" : ""}>
-                            {membership.course_title}
-                          </span>
-                        </DropdownMenuItem>
-                      ))}
-                      {activeCourseTitle && (
-                        <div className="px-2 py-1 text-xs text-muted-foreground">
-                          Активный: {activeCourseTitle}
-                        </div>
-                      )}
-                      <DropdownMenuSeparator />
-                    </>
-                  )}
-                  <DropdownMenuItem onClick={handleProfile} className="cursor-pointer">
+                  <DropdownMenuItem onClick={() => navigate(getDefaultAppPath())} className="cursor-pointer">
                     <User className="mr-2 h-4 w-4" />
-                    <span>Профиль</span>
+                    Мои работы
                   </DropdownMenuItem>
                   {activeCourseId && (
                     <>
@@ -131,30 +151,27 @@ export const Navbar = () => {
                         className="cursor-pointer"
                       >
                         <BookOpen className="mr-2 h-4 w-4" />
-                        <span>Банк задач</span>
+                        Банк задач
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => navigate(`/c/${activeCourseId}/trainer`)}
                         className="cursor-pointer"
                       >
                         <Dumbbell className="mr-2 h-4 w-4" />
-                        <span>Тренажеры</span>
+                        Тренажёры
                       </DropdownMenuItem>
                     </>
                   )}
-                  <DropdownMenuItem onClick={() => navigate("/join-course")} className="cursor-pointer">
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    <span>Присоединиться к курсу</span>
-                  </DropdownMenuItem>
                   {isAdmin() && (
-                    <DropdownMenuItem onClick={openAdmin} className="cursor-pointer">
+                    <DropdownMenuItem onClick={() => navigate("/admin")} className="cursor-pointer">
                       <Settings className="mr-2 h-4 w-4" />
-                      <span>Админка</span>
+                      Администрирование
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600">
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={logout} className="cursor-pointer text-destructive focus:text-destructive">
                     <LogOut className="mr-2 h-4 w-4" />
-                    <span>Выйти</span>
+                    Выйти
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -171,7 +188,7 @@ export const Navbar = () => {
                   </Button>
                 </Link>
                 <Link to="/signup">
-                  <Button size="sm" className="px-3 sm:px-4">
+                  <Button variant="accent" size="sm" className="px-3 sm:px-4">
                     <span className="hidden sm:inline">Создать аккаунт</span>
                     <span className="sm:hidden">Старт</span>
                   </Button>
@@ -181,5 +198,6 @@ export const Navbar = () => {
           </div>
         </div>
       </div>
-    </nav>;
+    </nav>
+  );
 };

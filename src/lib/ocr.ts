@@ -22,6 +22,73 @@ export interface NormalizedGeometry {
   polygon?: Array<{ x: number; y: number }>;
 }
 
+export type ChunkKind = "equation" | "figure" | "table" | "text" | "other";
+
+export interface ChunkKindMeta {
+  kind: ChunkKind;
+  label: string;
+  colorVar: string;
+}
+
+export const CHUNK_KINDS: Record<ChunkKind, ChunkKindMeta> = {
+  equation: { kind: "equation", label: "Формула", colorVar: "--chunk-equation" },
+  figure: { kind: "figure", label: "Рисунок", colorVar: "--chunk-figure" },
+  table: { kind: "table", label: "Таблица", colorVar: "--chunk-table" },
+  text: { kind: "text", label: "Текст", colorVar: "--chunk-text" },
+  other: { kind: "other", label: "Другое", colorVar: "--chunk-other" },
+};
+
+const KIND_BY_TYPE: Record<string, ChunkKind> = {
+  equation: "equation",
+  textinlinemath: "equation",
+  inlinemath: "equation",
+  math: "equation",
+  formula: "equation",
+  figure: "figure",
+  figuregroup: "figure",
+  picture: "figure",
+  picturegroup: "figure",
+  image: "figure",
+  table: "table",
+  tablegroup: "table",
+  tableofcontents: "table",
+  form: "table",
+  text: "text",
+  span: "text",
+  line: "text",
+  listitem: "text",
+  listgroup: "text",
+  paragraph: "text",
+  sectionheader: "text",
+  caption: "text",
+  handwriting: "text",
+  footnote: "text",
+};
+
+export const chunkKindForType = (blockType?: string | null): ChunkKind => {
+  if (typeof blockType !== "string") return "other";
+  const normalized = blockType.trim().toLowerCase().replace(/[\s_-]+/g, "");
+  return KIND_BY_TYPE[normalized] ?? "other";
+};
+
+export const chunkKindMeta = (blockType?: string | null): ChunkKindMeta =>
+  CHUNK_KINDS[chunkKindForType(blockType)];
+
+export const chunkColor = (blockType: string | null | undefined, alpha?: number): string => {
+  const meta = chunkKindMeta(blockType);
+  return alpha === undefined
+    ? `hsl(var(${meta.colorVar}))`
+    : `hsl(var(${meta.colorVar}) / ${alpha})`;
+};
+
+/* Типы, которые студент может указать как правильные для OCR-блока */
+export const CORRECTABLE_BLOCK_TYPES: Array<{ value: string; kind: ChunkKind }> = [
+  { value: "Text", kind: "text" },
+  { value: "Equation", kind: "equation" },
+  { value: "Figure", kind: "figure" },
+  { value: "Table", kind: "table" },
+];
+
 const MAX_TRAVERSAL_DEPTH = 8;
 const SKIP_FALLBACK_KEYS = new Set(["metadata", "page_info", "images", "section_hierarchy"]);
 const TABLE_REGEX = /(<table[\s\S]*?<\/table>)/gi;

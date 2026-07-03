@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { geometryForBlock, OcrChunkBlock } from "@/lib/ocr";
+import { chunkColor, chunkKindMeta, geometryForBlock, OcrChunkBlock } from "@/lib/ocr";
 
 interface OcrImageOverlayProps {
   imageUrl?: string | null;
@@ -95,7 +95,7 @@ const OcrImageOverlay = ({
 
       {renderedSize && (
         <div
-          className="absolute left-0 top-0"
+          className={`absolute left-0 top-0 ${onSelectChunk ? "cursor-pointer" : ""}`.trim()}
           style={{ width: renderedSize.width, height: renderedSize.height }}
           onClick={(event) => {
             if (!onSelectChunk || hitTargets.length === 0) return;
@@ -112,23 +112,26 @@ const OcrImageOverlay = ({
         >
           {geometries.map((geometry, index) => {
             if (!geometry) return null;
+            const block = blocks[index];
             const selected = index === selectedChunkIndex;
             const hasPolygon = Array.isArray(geometry.polygon) && geometry.polygon.length >= 3;
+            const kindLabel = chunkKindMeta(block?.block_type).label;
 
             return (
-              <div key={`ocr-geometry-${index}`}>
+              <div key={`ocr-geometry-${index}`} title={`${kindLabel} #${index + 1}`}>
                 {!hasPolygon && geometry.bbox && (
                   <div
-                    className={`absolute rounded border-2 ${
-                      selected
-                        ? "pointer-events-none border-primary bg-primary/15"
-                        : "pointer-events-none border-primary/40 bg-primary/5"
-                    }`}
+                    className="pointer-events-none absolute rounded-sm"
                     style={{
                       left: `${geometry.bbox.left}%`,
                       top: `${geometry.bbox.top}%`,
                       width: `${geometry.bbox.width}%`,
                       height: `${geometry.bbox.height}%`,
+                      border: `2px solid ${chunkColor(block?.block_type, selected ? 1 : 0.5)}`,
+                      backgroundColor: chunkColor(block?.block_type, selected ? 0.2 : 0.06),
+                      boxShadow: selected
+                        ? `0 0 0 2px ${chunkColor(block?.block_type, 0.25)}`
+                        : undefined,
                     }}
                   />
                 )}
@@ -143,8 +146,8 @@ const OcrImageOverlay = ({
                       points={geometry.polygon.map((point) => `${point.x},${point.y}`).join(" ")}
                       className="pointer-events-none"
                       style={{
-                        fill: selected ? "rgba(124,58,237,0.22)" : "rgba(124,58,237,0.08)",
-                        stroke: selected ? "rgba(124,58,237,1)" : "rgba(124,58,237,0.55)",
+                        fill: chunkColor(block?.block_type, selected ? 0.22 : 0.07),
+                        stroke: chunkColor(block?.block_type, selected ? 1 : 0.55),
                       }}
                       strokeWidth={selected ? 0.8 : 0.4}
                     />
