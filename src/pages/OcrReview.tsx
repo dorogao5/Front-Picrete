@@ -634,11 +634,14 @@ const OcrReview = () => {
                       удалить
                     </Button>
                   </div>
-                  <p className="mt-1 text-muted-foreground">{issue.note}</p>
+                  <div className="ocr-rich-text mt-1 text-muted-foreground">
+                    {renderTaskText(issue.note)}
+                  </div>
                   {issue.suggested_text && (
-                    <p className="mt-1">
-                      suggested: <span className="font-medium">{issue.suggested_text}</span>
-                    </p>
+                    <div className="ocr-rich-text mt-1">
+                      <span className="text-muted-foreground">suggested: </span>
+                      <div className="font-medium">{renderTaskText(issue.suggested_text)}</div>
+                    </div>
                   )}
                 </div>
               ))}

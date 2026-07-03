@@ -1,20 +1,18 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, Camera, CheckCircle2, ClipboardCheck, ScanText, Sparkles } from "lucide-react";
+import { ArrowRight, Camera, ClipboardCheck, ScanText } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 const Demo = () => {
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,_hsl(248_78%_96%)_0%,_hsl(0_0%_100%)_48%,_hsl(0_0%_100%)_100%)]">
+    <div className="min-h-screen bg-background">
       <Navbar />
 
       <section className="pt-28 pb-14 px-6">
         <div className="container mx-auto max-w-5xl text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-4 py-2 text-sm font-medium text-primary">
-            <Sparkles className="h-4 w-4" />
+          <p className="text-sm font-medium text-muted-foreground">
             Демонстрация Picrete
-          </div>
+          </p>
           <h1 className="mt-6 text-4xl font-bold leading-tight sm:text-5xl md:text-6xl">
             Как проходит проверка
             <br />
@@ -28,9 +26,9 @@ const Demo = () => {
       </section>
 
       <section className="pb-10 px-6">
-        <div className="container mx-auto max-w-6xl grid gap-5 md:grid-cols-3">
-          <Card className="border-border/60 bg-white/80 p-6">
-            <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <div className="container mx-auto max-w-6xl grid gap-8 md:grid-cols-3">
+          <section className="border-t border-border pt-5">
+            <div className="mb-4 text-foreground">
               <Camera className="h-5 w-5" />
             </div>
             <p className="text-sm text-muted-foreground">Шаг 1</p>
@@ -38,10 +36,10 @@ const Demo = () => {
             <p className="mt-2 text-sm text-muted-foreground">
               Студент отправляет фото, система собирает страницы и готовит решение к проверке.
             </p>
-          </Card>
+          </section>
 
-          <Card className="border-border/60 bg-white/80 p-6">
-            <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <section className="border-t border-border pt-5">
+            <div className="mb-4 text-foreground">
               <ScanText className="h-5 w-5" />
             </div>
             <p className="text-sm text-muted-foreground">Шаг 2</p>
@@ -49,10 +47,10 @@ const Demo = () => {
             <p className="mt-2 text-sm text-muted-foreground">
               Продвинутый OCR извлекает текст, затем AI оценивает решение по критериям и химическим правилам.
             </p>
-          </Card>
+          </section>
 
-          <Card className="border-border/60 bg-white/80 p-6">
-            <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <section className="border-t border-border pt-5">
+            <div className="mb-4 text-foreground">
               <ClipboardCheck className="h-5 w-5" />
             </div>
             <p className="text-sm text-muted-foreground">Шаг 3</p>
@@ -60,58 +58,51 @@ const Demo = () => {
             <p className="mt-2 text-sm text-muted-foreground">
               Преподаватель видит объяснения и подтверждает оценку, либо корректирует баллы и комментарии.
             </p>
-          </Card>
+          </section>
         </div>
       </section>
 
       <section className="pb-12 px-6">
         <div className="container mx-auto max-w-5xl">
-          <Card className="border-border/60 bg-gradient-to-r from-white to-secondary/40 p-6 sm:p-8">
+          <div className="border-t border-border pt-8">
             <h3 className="text-2xl font-semibold">Что увидите в демо</h3>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-background/80 p-3">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 text-primary" />
-                <span className="text-sm">Экран студента: загрузка изображений и отправка работы</span>
-              </div>
-              <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-background/80 p-3">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 text-primary" />
-                <span className="text-sm">Панель преподавателя: критерии, баллы, комментарии</span>
-              </div>
-              <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-background/80 p-3">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 text-primary" />
-                <span className="text-sm">Трекинг OCR-проблем и прозрачная апелляционная история</span>
-              </div>
-              <div className="flex items-start gap-2 rounded-xl border border-border/60 bg-background/80 p-3">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 text-primary" />
-                <span className="text-sm">Сценарии для домашних и контрольных работ в одном интерфейсе</span>
-              </div>
+            <div className="mt-5 grid gap-x-10 gap-y-5 sm:grid-cols-2">
+              <p className="text-sm leading-6 text-muted-foreground">
+                <span className="font-medium text-foreground">Экран студента.</span> Загрузка изображений и отправка работы.
+              </p>
+              <p className="text-sm leading-6 text-muted-foreground">
+                <span className="font-medium text-foreground">Панель преподавателя.</span> Критерии, баллы, комментарии.
+              </p>
+              <p className="text-sm leading-6 text-muted-foreground">
+                <span className="font-medium text-foreground">OCR review.</span> Проблемные места и история исправлений.
+              </p>
+              <p className="text-sm leading-6 text-muted-foreground">
+                <span className="font-medium text-foreground">Работы курса.</span> Домашние и контрольные в одном интерфейсе.
+              </p>
             </div>
-          </Card>
+          </div>
         </div>
       </section>
 
       <section className="pb-20 px-6">
         <div className="container mx-auto max-w-4xl">
-          <Card className="border-0 bg-gradient-to-br from-primary via-accent to-primary p-8 text-center shadow-glow sm:p-10">
-            <h3 className="text-3xl font-bold text-white">Готово к запуску в вашем курсе</h3>
-            <p className="mx-auto mt-3 max-w-2xl text-white/90">
+          <div className="bg-foreground p-7 text-left text-white shadow-elegant sm:p-9">
+            <h3 className="max-w-3xl text-3xl font-semibold leading-tight">Готово к запуску в вашем курсе</h3>
+            <p className="mt-3 max-w-2xl text-white/72">
               Подключите курс и получите единый контур для проверки работ без ручной рутины.
             </p>
-            <div className="mt-6 flex justify-center">
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Link to="/signup">
-                <Button size="lg" variant="secondary" className="bg-white text-primary hover:bg-white/90">
+                <Button size="lg" variant="secondary" className="w-full bg-white text-foreground hover:bg-white/90 sm:w-auto">
                   Подключить курс
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
-            </div>
-            <div className="mt-4 text-sm text-white/85">
-              Уже есть аккаунт?{" "}
-              <Link to="/login" className="underline underline-offset-4">
-                Войти
+              <Link to="/login" className="inline-flex h-11 items-center justify-center border border-white/20 px-5 text-sm font-medium text-white hover:bg-white/10">
+                Уже есть аккаунт
               </Link>
             </div>
-          </Card>
+          </div>
         </div>
       </section>
     </div>

@@ -1,155 +1,257 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Navbar } from "@/components/Navbar";
-import { Beaker, Bot, CheckCircle2, ScanText, ShieldCheck } from "lucide-react";
+import {
+  ArrowRight,
+  Beaker,
+  Bot,
+  ClipboardCheck,
+  Clock,
+  FileText,
+  GraduationCap,
+  ScanText,
+  ShieldCheck,
+  Upload,
+} from "lucide-react";
+
+const workflow = [
+  { label: "Загрузка", value: "фото или PDF", icon: Upload },
+  { label: "OCR", value: "формулы и рукописный текст", icon: ScanText },
+  { label: "Проверка", value: "баллы по критериям", icon: ClipboardCheck },
+  { label: "Ревью", value: "решение остается за преподавателем", icon: GraduationCap },
+];
+
+const features = [
+  {
+    title: "Для реальных работ по химии",
+    text: "Поддерживаются контрольные и домашние, варианты, критерии, максимальные баллы и предметные комментарии.",
+    icon: Beaker,
+  },
+  {
+    title: "OCR без ручной перепечатки",
+    text: "Студент загружает снимки работы, система собирает распознанный текст и оставляет спорные места на проверку.",
+    icon: ScanText,
+  },
+  {
+    title: "Препроверка LLM, финал за человеком",
+    text: "Модель предлагает оценку и пояснение, преподаватель подтверждает, корректирует или отправляет на доработку.",
+    icon: Bot,
+  },
+];
+
+const roles = [
+  {
+    title: "Студент",
+    items: ["видит свои работы и сроки", "загружает решения с телефона", "получает результат и комментарии"],
+  },
+  {
+    title: "Преподаватель",
+    items: ["создает работы и варианты", "смотрит OCR и AI-разбор", "утверждает итоговые баллы"],
+  },
+  {
+    title: "Курс",
+    items: ["единый банк задач", "права доступа по участникам", "история решений и проверок"],
+  },
+];
 
 const Landing = () => {
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_hsl(248_78%_96%)_0%,_hsl(0_0%_100%)_42%,_hsl(0_0%_100%)_100%)]">
+    <div className="min-h-screen bg-background text-foreground">
       <Navbar />
 
-      <section className="pt-28 pb-14 px-6">
-        <div className="container mx-auto max-w-5xl">
-          <div className="mx-auto w-fit rounded-full border border-primary/20 bg-primary/10 px-4 py-2 text-sm font-medium text-primary">
-            Picrete для химии
-          </div>
-          <h1 className="mt-6 text-center text-4xl font-bold leading-tight sm:text-5xl md:text-6xl">
-            Проверка домашних и контрольных
-            <br />
-            в одном рабочем контуре
-          </h1>
-          <p className="mx-auto mt-6 max-w-3xl text-center text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Продвинутый OCR, AI оценка с помощью специализированных LLM и предметная логика по химии:
-            Picrete собирает решение по шагам, проверяет по критериям и оставляет преподавателю контроль над итогом.
-          </p>
-          <div className="mt-8 flex justify-center">
-            <Link to="/signup">
-              <Button size="lg" className="px-8">
-                Начать работу
-              </Button>
-            </Link>
-          </div>
-          <div className="mt-10 grid gap-3 text-sm sm:grid-cols-3">
-            <div className="rounded-xl border border-border/70 bg-white/70 p-3 text-center">
-              Домашние работы и контрольные
-            </div>
-            <div className="rounded-xl border border-border/70 bg-white/70 p-3 text-center">
-              Прозрачная проверка по критериям
-            </div>
-            <div className="rounded-xl border border-border/70 bg-white/70 p-3 text-center">
-              Проверка преподавателем в один клик
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="py-10 px-6">
-        <div className="container mx-auto max-w-6xl">
-          <h2 className="text-center text-3xl font-bold">Что делает Picrete</h2>
-          <div className="mt-10 grid gap-5 md:grid-cols-3">
-            <Card className="border-border/60 bg-white/80 p-6">
-              <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <ScanText className="h-5 w-5" />
-              </div>
-              <h3 className="text-xl font-semibold">Продвинутый OCR</h3>
-              <p className="mt-2 text-muted-foreground">
-                Распознаёт рукописные решения, формулы и табличные данные, собирает текст в единый контекст проверки.
+      <main>
+        <section className="border-b border-border/70 bg-background px-4 pb-12 pt-24 sm:px-6 sm:pb-16 sm:pt-28">
+          <div className="container mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[1.02fr_0.98fr]">
+            <div className="max-w-3xl">
+              <p className="text-sm font-medium text-muted-foreground">
+                Платформа проверки работ по химии
               </p>
-            </Card>
 
-            <Card className="border-border/60 bg-white/80 p-6">
-              <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <Bot className="h-5 w-5" />
-              </div>
-              <h3 className="text-xl font-semibold">AI оценка с помощью специализированных LLM</h3>
-              <p className="mt-2 text-muted-foreground">
-                Оценка идёт по рубрикам и проверочным правилам курса, с объяснимыми комментариями к каждому критерию.
+              <h1 className="mt-6 text-5xl font-semibold leading-[0.96] text-foreground sm:text-6xl lg:text-7xl">
+                Picrete
+              </h1>
+              <p className="mt-5 max-w-2xl text-xl font-medium leading-snug text-foreground sm:text-2xl">
+                Проверка контрольных и домашних без ручного разбора каждой фотографии.
               </p>
-            </Card>
-
-            <Card className="border-border/60 bg-white/80 p-6">
-              <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <CheckCircle2 className="h-5 w-5" />
-              </div>
-              <h3 className="text-xl font-semibold">Решение остаётся у преподавателя</h3>
-              <p className="mt-2 text-muted-foreground">
-                AI предлагает балл и комментарий, преподаватель подтверждает или корректирует результат перед публикацией.
+              <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
+                Сервис собирает работу студента, распознает решение, готовит проверку по критериям и
+                оставляет преподавателю понятное место для финального решения.
               </p>
-            </Card>
-          </div>
-        </div>
-      </section>
 
-      <section className="py-8 px-6">
-        <div className="container mx-auto max-w-6xl">
-          <Card className="border-border/60 bg-gradient-to-r from-white to-secondary/30 p-6 sm:p-8">
-            <h2 className="text-2xl font-bold sm:text-3xl">Почему это не просто GPT-обёртка</h2>
-            <div className="mt-6 grid gap-4 md:grid-cols-3">
-              <div className="rounded-xl border border-border/60 bg-background/80 p-4">
-                <div className="mb-2 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <Beaker className="h-4 w-4" />
+              <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+                <Link to="/signup">
+                  <Button size="lg" className="w-full sm:w-auto">
+                    Создать аккаунт
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </Link>
+                <Link to="/demo">
+                  <Button size="lg" variant="outline" className="w-full bg-white sm:w-auto">
+                    Посмотреть демо
+                  </Button>
+                </Link>
+              </div>
+
+              <div className="mt-8 max-w-2xl border-t border-border pt-4 text-sm leading-6 text-muted-foreground">
+                OCR рукописных решений, AI-разбор по рубрике, ревью преподавателя.
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border bg-white p-4 shadow-elegant sm:p-5">
+              <div className="flex items-center justify-between border-b border-border pb-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Работа 10Б</p>
+                  <p className="font-semibold">Растворы и стехиометрия</p>
                 </div>
-                <p className="font-medium">Предметная проверка химии</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Учитываются уравнивание, размерности, стехиометрия и критерии конкретной работы.
+                <div className="rounded-md bg-secondary px-3 py-1 text-sm font-medium text-secondary-foreground">
+                  Проверка
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                {workflow.map(({ label, value, icon: Icon }) => (
+                  <div key={label} className="rounded-md border border-border bg-background p-4">
+                    <Icon className="h-5 w-5 text-primary" />
+                    <p className="mt-3 text-sm font-semibold">{label}</p>
+                    <p className="mt-1 min-h-10 text-sm leading-5 text-muted-foreground">{value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 rounded-md border border-border bg-[#fbfcfd] p-4">
+                <div className="flex items-start gap-3">
+                  <FileText className="mt-0.5 h-5 w-5 text-primary" />
+                  <div className="min-w-0">
+                    <p className="font-medium">Комментарий к критерию</p>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      Уравнение записано верно, но коэффициент перед H2O потерян при расчете массы.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 h-2 bg-secondary">
+                  <div className="h-2 w-[78%] bg-foreground" />
+                </div>
+                <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+                  <span>7.8 / 10</span>
+                  <span>ожидает утверждения</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="px-4 py-12 sm:px-6 sm:py-16">
+          <div className="container mx-auto max-w-6xl">
+            <div className="max-w-2xl">
+              <p className="text-sm font-semibold uppercase text-primary">Основной контур</p>
+              <h2 className="mt-2 text-3xl font-semibold leading-tight sm:text-4xl">
+                Не чат с промптом, а рабочий процесс проверки
+              </h2>
+              <p className="mt-3 text-muted-foreground">
+                Интерфейс построен вокруг курса, варианта, загруженной работы, критериев и финального решения.
+              </p>
+            </div>
+
+            <div className="mt-8 grid gap-8 md:grid-cols-3">
+              {features.map(({ title, text, icon: Icon }) => (
+                <div key={title} className="border-t border-border pt-5">
+                  <div className="text-primary">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h3 className="mt-4 text-lg font-semibold leading-snug">{title}</h3>
+                  <p className="mt-3 leading-6 text-muted-foreground">{text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="border-y border-border/70 bg-white px-4 py-12 sm:px-6 sm:py-16">
+          <div className="container mx-auto grid max-w-6xl gap-8 lg:grid-cols-[0.82fr_1.18fr]">
+            <div>
+              <p className="text-sm font-semibold uppercase text-accent">Роли без лишних экранов</p>
+              <h2 className="mt-2 text-3xl font-semibold leading-tight sm:text-4xl">
+                Сайт одинаково удобен с компьютера и телефона
+              </h2>
+              <p className="mt-4 leading-7 text-muted-foreground">
+                На компьютере удобно проверять и сравнивать работы. С телефона удобно войти, выбрать курс,
+                загрузить фото и посмотреть результат.
+              </p>
+            </div>
+
+            <div className="grid gap-8 md:grid-cols-3">
+              {roles.map((role) => (
+                <div key={role.title} className="border-t border-border pt-5">
+                  <h3 className="font-semibold">{role.title}</h3>
+                  <p className="mt-4 text-sm leading-6 text-muted-foreground">{role.items.join(". ")}.</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="px-4 py-12 sm:px-6 sm:py-16">
+          <div className="container mx-auto max-w-6xl">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-lg border border-border bg-white p-5">
+                <Clock className="h-5 w-5 text-primary" />
+                <p className="mt-4 text-2xl font-semibold">меньше рутины</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  OCR и первичный разбор снимают самую медленную часть проверки.
                 </p>
               </div>
-              <div className="rounded-xl border border-border/60 bg-background/80 p-4">
-                <div className="mb-2 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <ShieldCheck className="h-4 w-4" />
-                </div>
-                <p className="font-medium">Контролируемый workflow</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  OCR, AI-препроверка, ревью преподавателя и финальная оценка собраны в едином процессе.
+              <div className="rounded-lg border border-border bg-white p-5">
+                <ShieldCheck className="h-5 w-5 text-primary" />
+                <p className="mt-4 text-2xl font-semibold">контроль доступа</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Курсы, роли и приглашения не смешивают студентов и преподавателей.
                 </p>
               </div>
-              <div className="rounded-xl border border-border/60 bg-background/80 p-4">
-                <div className="mb-2 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <CheckCircle2 className="h-4 w-4" />
-                </div>
-                <p className="font-medium">Прозрачные комментарии</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Для каждого балла есть пояснение, что упрощает апелляции и обратную связь студенту.
+              <div className="rounded-lg border border-border bg-white p-5">
+                <GraduationCap className="h-5 w-5 text-primary" />
+                <p className="mt-4 text-2xl font-semibold">понятная обратная связь</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Итоговый балл сопровождается комментарием, а не только числом.
                 </p>
               </div>
             </div>
-          </Card>
-        </div>
-      </section>
 
-      <section className="py-14 px-6">
-        <div className="container mx-auto max-w-4xl">
-          <Card className="border-0 bg-gradient-to-br from-primary via-accent to-primary p-8 text-center shadow-glow sm:p-10">
-            <h2 className="text-3xl font-bold text-white">Посмотрите продукт в действии</h2>
-            <p className="mx-auto mt-3 max-w-2xl text-white/90">
-              Откройте краткое демо интерфейса студента и преподавателя.
-            </p>
-            <div className="mt-6 flex justify-center">
-              <Link to="/demo">
-                <Button size="lg" variant="secondary" className="bg-white text-primary hover:bg-white/90">
-                  Открыть демо
-                </Button>
-              </Link>
+            <div className="mt-8 flex flex-col items-start justify-between gap-5 border border-border bg-foreground p-6 text-white sm:flex-row sm:items-center sm:p-7">
+              <div>
+                <h2 className="text-2xl font-semibold">Начните с курса или демо</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/72">
+                  Если аккаунт уже есть, войдите. Если нужно быстро оценить интерфейс, откройте демо.
+                </p>
+              </div>
+              <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+                <Link to="/login">
+                  <Button variant="secondary" className="w-full bg-white text-foreground hover:bg-white/90 sm:w-auto">
+                    Войти
+                  </Button>
+                </Link>
+                <Link to="/demo">
+                  <Button variant="outline" className="w-full border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white sm:w-auto">
+                    Демо
+                  </Button>
+                </Link>
+              </div>
             </div>
-          </Card>
-        </div>
-      </section>
+          </div>
+        </section>
+      </main>
 
-      <footer className="py-12 px-6 border-t border-border">
-        <div className="container mx-auto text-center text-muted-foreground space-y-3">
-          <p>© 2026 Picrete. Платформа проверки работ по химии</p>
-          <div className="flex justify-center gap-4 text-sm">
-            <Link to="/privacy" className="hover:underline text-muted-foreground hover:text-foreground">
-              Политика конфиденциальности
+      <footer className="border-t border-border bg-white px-4 py-8 sm:px-6">
+        <div className="container mx-auto flex max-w-6xl flex-col gap-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <p>© 2026 Picrete. Проверка работ по химии.</p>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            <Link to="/privacy" className="hover:text-foreground">
+              Конфиденциальность
             </Link>
-            <span aria-hidden>•</span>
-            <Link to="/terms" className="hover:underline text-muted-foreground hover:text-foreground">
-              Пользовательское соглашение
+            <Link to="/terms" className="hover:text-foreground">
+              Соглашение
             </Link>
-            <span aria-hidden>•</span>
-            <Link to="/consent" className="hover:underline text-muted-foreground hover:text-foreground">
-              Согласие на обработку персональных данных
+            <Link to="/consent" className="hover:text-foreground">
+              Персональные данные
             </Link>
           </div>
         </div>

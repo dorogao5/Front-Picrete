@@ -154,7 +154,7 @@ export interface OcrIssueInput {
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  (import.meta.env.PROD ? "https://picrete.com/api/v1" : "http://localhost:8000/api/v1");
+  (import.meta.env.PROD ? "/api/v1" : "http://localhost:8000/api/v1");
 
 /** Origin of the API (e.g. https://example.com). Used to build full URLs and avoid double /api/v1 when backend returns paths. */
 function getApiOrigin(): string {
@@ -260,6 +260,11 @@ export const coursesAPI = {
 
   rotateInviteCode: (courseId: string, data: { role: "teacher" | "student" }) =>
     api.post(`/courses/${courseId}/invite-codes/rotate`, data),
+
+  assignMember: (
+    courseId: string,
+    data: { user_id: string; role: "teacher" | "student"; identity_payload?: Record<string, unknown> }
+  ) => api.post(`/courses/${courseId}/memberships`, data),
 
   updateIdentityPolicy: (
     courseId: string,

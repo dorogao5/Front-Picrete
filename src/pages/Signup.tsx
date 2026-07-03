@@ -9,6 +9,8 @@ import logo from "@/assets/logo.png";
 import { authAPI, getApiErrorMessage } from "@/lib/api";
 import { getDefaultAppPath, setAuthSession } from "@/lib/auth";
 import { toast } from "sonner";
+import { ArrowLeft, UserPlus } from "lucide-react";
+
 const POLICY_VERSION = "2025-12-09";
 
 const Signup = () => {
@@ -25,7 +27,7 @@ const Signup = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (password !== confirmPassword) {
       toast.error("Пароли не совпадают");
       return;
@@ -37,12 +39,12 @@ const Signup = () => {
     }
 
     if (username.trim().length < 3) {
-      toast.error("Username должен содержать минимум 3 символа");
+      toast.error("Логин должен содержать минимум 3 символа");
       return;
     }
 
     if (!pdConsent || !termsAccepted) {
-      toast.error("Необходимо принять условия и согласие на обработку персональных данных");
+      toast.error("Примите соглашение и согласие на обработку данных");
       return;
     }
 
@@ -71,7 +73,7 @@ const Signup = () => {
         terms_version: POLICY_VERSION,
         privacy_version: POLICY_VERSION,
       });
-      
+
       const { access_token, user, memberships, active_course_id } = response.data;
 
       setAuthSession({
@@ -80,153 +82,177 @@ const Signup = () => {
         memberships: memberships ?? [],
         active_course_id: active_course_id ?? null,
       });
-      
+
       setLoading(false);
-      toast.success("Регистрация успешна");
+      toast.success("Аккаунт создан");
 
       navigate(getDefaultAppPath(), { replace: true });
     } catch (error: unknown) {
-      toast.error(getApiErrorMessage(error, "Ошибка регистрации"));
+      toast.error(getApiErrorMessage(error, "Не удалось создать аккаунт"));
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-subtle px-6 py-12">
-      <Card className="w-full max-w-md p-8 shadow-elegant">
-        <div className="flex flex-col items-center mb-8">
-          <img src={logo} alt="Picrete" className="h-16 w-16 mb-4" />
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            Регистрация
-          </h1>
-          <p className="text-muted-foreground mt-2">Создайте аккаунт Picrete</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="fullName">Полное имя *</Label>
-            <Input
-              id="fullName"
-              type="text"
-              placeholder="Иванов Иван Иванович"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              required
-              className="transition-all duration-300 focus:shadow-soft"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="username">Username *</Label>
-            <Input
-              id="username"
-              type="text"
-              placeholder="petrov_2026"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              minLength={3}
-              maxLength={64}
-              className="transition-all duration-300 focus:shadow-soft"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="inviteCode">Invite code (необязательно)</Label>
-            <Input
-              id="inviteCode"
-              type="text"
-              placeholder="CHEM-STUD-V1"
-              value={inviteCode}
-              onChange={(e) => setInviteCode(e.target.value)}
-              className="transition-all duration-300 focus:shadow-soft"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="identityValue">Identity value (необязательно)</Label>
-            <Input
-              id="identityValue"
-              type="text"
-              placeholder="например ИСУ"
-              value={identityValue}
-              onChange={(e) => setIdentityValue(e.target.value)}
-              className="transition-all duration-300 focus:shadow-soft"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="password">Пароль * (минимум 8 символов)</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-              className="transition-all duration-300 focus:shadow-soft"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Подтвердите пароль *</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              placeholder="••••••••"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              minLength={8}
-              className="transition-all duration-300 focus:shadow-soft"
-            />
-          </div>
-
-          <div className="space-y-3 rounded-lg border border-border/60 p-4 bg-muted/30">
-            <div className="flex items-start space-x-3">
-              <Checkbox id="pdConsent" checked={pdConsent} onCheckedChange={(v) => setPdConsent(Boolean(v))} />
-              <Label htmlFor="pdConsent" className="leading-relaxed">
-                Согласен(а) на обработку персональных данных в соответствии с{" "}
-                <Link to="/consent" className="text-primary hover:underline">Согласием на обработку персональных данных</Link> и{" "}
-                <Link to="/privacy" className="text-primary hover:underline">Политикой конфиденциальности</Link>.
-              </Label>
-            </div>
-            <div className="flex items-start space-x-3">
-              <Checkbox id="termsAccepted" checked={termsAccepted} onCheckedChange={(v) => setTermsAccepted(Boolean(v))} />
-              <Label htmlFor="termsAccepted" className="leading-relaxed">
-                Принимаю условия{" "}
-                <Link to="/terms" className="text-primary hover:underline">Пользовательского соглашения</Link>.
-              </Label>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Версия документов: {POLICY_VERSION}. Для работы сервиса необходимо принять условия.
+    <div className="min-h-screen bg-background px-4 py-6 sm:px-6 lg:py-10">
+      <div className="mx-auto grid min-h-[calc(100vh-3rem)] max-w-6xl items-center gap-8 lg:grid-cols-[0.85fr_1.15fr]">
+        <section className="hidden lg:block">
+          <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-4 w-4" />
+            На главную
+          </Link>
+          <div className="mt-10 max-w-lg">
+            <img src={logo} alt="Picrete" className="h-12 w-12" />
+            <h1 className="mt-6 text-5xl font-semibold leading-tight">Аккаунт для курса</h1>
+            <p className="mt-5 text-lg leading-8 text-muted-foreground">
+              Регистрация привязывает пользователя к курсам, ролям и проверкам. Код курса можно добавить сразу
+              или позже в личном кабинете.
+            </p>
+            <p className="mt-8 max-w-lg border-t border-border pt-5 text-sm leading-6 text-muted-foreground">
+              ФИО нужно преподавателю для ведомости. ИСУ или email помогает подтвердить участника.
+              Согласия нужны для работы с загруженными решениями.
             </p>
           </div>
+        </section>
 
-          <Button
-            type="submit"
-            className="w-full"
-            size="lg"
-            disabled={loading || !pdConsent || !termsAccepted}
-          >
-            {loading ? "Регистрация..." : "Создать аккаунт"}
-          </Button>
-        </form>
-
-        <div className="mt-6 text-center text-sm text-muted-foreground">
-          Уже есть аккаунт?{" "}
-          <Link to="/login" className="text-primary hover:underline font-medium">
-            Войти
+        <section className="mx-auto w-full max-w-2xl">
+          <Link to="/" className="mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground lg:hidden">
+            <ArrowLeft className="h-4 w-4" />
+            На главную
           </Link>
-        </div>
 
-        <div className="mt-4 text-center">
-          <Link to="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-            ← Назад на главную
-          </Link>
-        </div>
-      </Card>
+          <Card className="border-border bg-white p-5 shadow-elegant sm:p-7">
+            <div className="mb-7 flex items-center gap-3">
+              <img src={logo} alt="Picrete" className="h-10 w-10" />
+              <div>
+                <p className="text-sm text-muted-foreground">Picrete</p>
+                <h1 className="text-2xl font-semibold">Создать аккаунт</h1>
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="fullName">ФИО</Label>
+                  <Input
+                    id="fullName"
+                    type="text"
+                    placeholder="Иванов Иван Иванович"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    required
+                    autoComplete="name"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="username">Логин</Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    placeholder="petrov_2026"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    required
+                    minLength={3}
+                    maxLength={64}
+                    autoComplete="username"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="identityValue">ИСУ или email</Label>
+                  <Input
+                    id="identityValue"
+                    type="text"
+                    placeholder="123456 или name@example.com"
+                    value={identityValue}
+                    onChange={(e) => setIdentityValue(e.target.value)}
+                    autoComplete="email"
+                  />
+                </div>
+
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="inviteCode">Код курса</Label>
+                  <Input
+                    id="inviteCode"
+                    type="text"
+                    placeholder="CHEM-STUD-V1"
+                    value={inviteCode}
+                    onChange={(e) => setInviteCode(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">Если кода нет, аккаунт можно создать и присоединиться позже.</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password">Пароль</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="Не менее 8 символов"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Повторите пароль</Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    placeholder="Еще раз"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4 rounded-md border border-border bg-background p-4">
+                <div className="flex items-start gap-3">
+                  <Checkbox id="pdConsent" checked={pdConsent} onCheckedChange={(v) => setPdConsent(Boolean(v))} />
+                  <Label htmlFor="pdConsent" className="min-w-0 text-sm leading-6">
+                    Согласен(а) на обработку персональных данных по{" "}
+                    <Link to="/consent" className="font-medium text-primary hover:underline">согласию</Link>{" "}
+                    и{" "}
+                    <Link to="/privacy" className="font-medium text-primary hover:underline">политике конфиденциальности</Link>.
+                  </Label>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Checkbox id="termsAccepted" checked={termsAccepted} onCheckedChange={(v) => setTermsAccepted(Boolean(v))} />
+                  <Label htmlFor="termsAccepted" className="min-w-0 text-sm leading-6">
+                    Принимаю{" "}
+                    <Link to="/terms" className="font-medium text-primary hover:underline">пользовательское соглашение</Link>.
+                  </Label>
+                </div>
+                <p className="text-xs text-muted-foreground">Версия документов: {POLICY_VERSION}</p>
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full"
+                size="lg"
+                disabled={loading || !pdConsent || !termsAccepted}
+              >
+                <UserPlus className="h-4 w-4" />
+                {loading ? "Создаем..." : "Создать аккаунт"}
+              </Button>
+            </form>
+
+            <div className="mt-6 border-t border-border pt-5 text-center text-sm text-muted-foreground">
+              Уже есть аккаунт?{" "}
+              <Link to="/login" className="font-medium text-primary hover:underline">
+                Войти
+              </Link>
+            </div>
+          </Card>
+        </section>
+      </div>
     </div>
   );
 };

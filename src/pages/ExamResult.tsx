@@ -8,7 +8,7 @@ import { CheckCircle, XCircle, Clock, FileText, RefreshCw, Award } from "lucide-
 import { getApiErrorMessage, submissionsAPI } from "@/lib/api";
 import { toast } from "sonner";
 import AiAnalysis from "@/components/AiAnalysis";
-import { renderLatex } from "@/lib/renderLatex";
+import { renderLatex, renderTaskText } from "@/lib/renderLatex";
 
 interface SubmissionScore {
   criterion_name: string;
@@ -312,9 +312,9 @@ const ExamResult = () => {
         {submission.report_flag && (
           <Card className="p-6 mb-8 border-destructive/40">
             <h3 className="text-xl font-bold mb-2">REPORT отправлен</h3>
-            <p className="text-sm text-muted-foreground">
-              {submission.report_summary || "Студент отметил OCR-проблемы для преподавателя."}
-            </p>
+            <div className="ocr-rich-text text-sm text-muted-foreground">
+              {renderTaskText(submission.report_summary || "Студент отметил OCR-проблемы для преподавателя.")}
+            </div>
           </Card>
         )}
 

@@ -23,6 +23,9 @@ interface AdminUser {
 }
 
 type PolicyType = "none" | "isu_6_digits" | "email_domain" | "custom_text_validator";
+type CourseRoleChoice = "teacher" | "student";
+
+const NO_COURSE_VALUE = "__none__";
 
 const AdminDashboard = () => {
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -44,6 +47,8 @@ const AdminDashboard = () => {
     password: "",
     is_platform_admin: false,
     is_active: true,
+    course_id: NO_COURSE_VALUE,
+    course_role: "teacher" as CourseRoleChoice,
   });
   const [courseForm, setCourseForm] = useState({
     slug: "",
@@ -55,6 +60,9 @@ const AdminDashboard = () => {
     Record<string, { rule_type: PolicyType; rule_config: string }>
   >({});
   const [resetPasswords, setResetPasswords] = useState<Record<string, string>>({});
+  const [memberAssignments, setMemberAssignments] = useState<
+    Record<string, { course_id: string; course_role: CourseRoleChoice }>
+  >({});
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [deletingCourseId, setDeletingCourseId] = useState<string | null>(null);
 
@@ -138,21 +146,68 @@ const AdminDashboard = () => {
     }
   };
 
+  const assignCourseRole = async (
+    userId: string,
+    courseId: string,
+    role: CourseRoleChoice,
+    successMessage = "Роль в курсе назначена"
+  ) => {
+    if (!courseId || courseId === NO_COURSE_VALUE) {
+      toast.error("Выберите курс");
+      return;
+    }
+
+    await coursesAPI.assignMember(courseId, { user_id: userId, role });
+    toast.success(successMessage);
+  };
+
+  const handleAssignExistingUser = async (user: AdminUser) => {
+    const assignment = memberAssignments[user.id] ?? {
+      course_id: memberships[0]?.course_id ?? NO_COURSE_VALUE,
+      course_role: "teacher" as CourseRoleChoice,
+    };
+
+    try {
+      await assignCourseRole(
+        user.id,
+        assignment.course_id,
+        assignment.course_role,
+        `${assignment.course_role === "teacher" ? "Преподаватель" : "Студент"} назначен в курс`
+      );
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Не удалось назначить роль в курсе"));
+    }
+  };
+
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await usersAPI.create(createUserForm);
-      toast.success("Пользователь создан");
+      const { course_id, course_role, ...userPayload } = createUserForm;
+      const response = await usersAPI.create(userPayload);
+
+      if (course_id !== NO_COURSE_VALUE) {
+        await assignCourseRole(
+          response.data.id,
+          course_id,
+          course_role,
+          `Пользователь создан как ${course_role === "teacher" ? "преподаватель" : "студент"}`
+        );
+      } else {
+        toast.success("Пользователь создан");
+      }
+
       setCreateUserForm({
         username: "",
         full_name: "",
         password: "",
         is_platform_admin: false,
         is_active: true,
+        course_id: NO_COURSE_VALUE,
+        course_role: "teacher",
       });
       fetchUsers();
     } catch (error: unknown) {
-      toast.error(getApiErrorMessage(error, "Не удалось создать пользователя"));
+      toast.error(getApiErrorMessage(error, "Не удалось создать пользователя или назначить роль"));
     }
   };
 
@@ -399,6 +454,45 @@ const AdminDashboard = () => {
               />
               <Label>Активен</Label>
             </div>
+            <div className="space-y-2">
+              <Label>Курс</Label>
+              <Select
+                value={createUserForm.course_id}
+                onValueChange={(value) =>
+                  setCreateUserForm((prev) => ({ ...prev, course_id: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Без курса" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_COURSE_VALUE}>Без курса</SelectItem>
+                  {memberships.map((membership) => (
+                    <SelectItem key={membership.course_id} value={membership.course_id}>
+                      {membership.course_title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Роль в курсе</Label>
+              <Select
+                value={createUserForm.course_role}
+                onValueChange={(value) =>
+                  setCreateUserForm((prev) => ({ ...prev, course_role: value as CourseRoleChoice }))
+                }
+                disabled={createUserForm.course_id === NO_COURSE_VALUE}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="teacher">Преподаватель</SelectItem>
+                  <SelectItem value="student">Студент</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="md:col-span-3">
               <Button type="submit">Создать</Button>
             </div>
@@ -438,6 +532,65 @@ const AdminDashboard = () => {
                         <Switch checked={user.is_active} onCheckedChange={() => handleToggle(user, "is_active")} />
                       </div>
                     </div>
+                  </div>
+                  <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto] md:items-end">
+                    <div className="space-y-2">
+                      <Label className="text-sm">Назначить в курс</Label>
+                      <Select
+                        value={memberAssignments[user.id]?.course_id ?? NO_COURSE_VALUE}
+                        onValueChange={(value) =>
+                          setMemberAssignments((prev) => ({
+                            ...prev,
+                            [user.id]: {
+                              course_id: value,
+                              course_role: prev[user.id]?.course_role ?? "teacher",
+                            },
+                          }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Выберите курс" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={NO_COURSE_VALUE}>Выберите курс</SelectItem>
+                          {memberships.map((membership) => (
+                            <SelectItem key={membership.course_id} value={membership.course_id}>
+                              {membership.course_title}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm">Роль</Label>
+                      <Select
+                        value={memberAssignments[user.id]?.course_role ?? "teacher"}
+                        onValueChange={(value) =>
+                          setMemberAssignments((prev) => ({
+                            ...prev,
+                            [user.id]: {
+                              course_id: prev[user.id]?.course_id ?? NO_COURSE_VALUE,
+                              course_role: value as CourseRoleChoice,
+                            },
+                          }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="teacher">Преподаватель</SelectItem>
+                          <SelectItem value="student">Студент</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleAssignExistingUser(user)}
+                      disabled={!memberships.length}
+                    >
+                      Назначить
+                    </Button>
                   </div>
                   <div className="mt-4 flex flex-col md:flex-row md:items-end gap-3">
                     <div className="space-y-2 flex-1">

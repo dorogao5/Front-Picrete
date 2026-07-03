@@ -455,11 +455,6 @@ const SubmissionReview = () => {
                       )}
                       <div className="p-2 bg-secondary text-xs">
                         <p>Страница {index + 1}</p>
-                        {(image.ocr_markdown || image.ocr_text) && (
-                          <p className="mt-1 text-[10px] line-clamp-2 text-muted-foreground">
-                            OCR: {cleanOcrMarkdown(image.ocr_markdown || image.ocr_text).slice(0, 120)}
-                          </p>
-                        )}
                         {image.quality_score && (
                           <p>Качество: {(image.quality_score * 100).toFixed(0)}%</p>
                         )}
@@ -825,7 +820,9 @@ const SubmissionReview = () => {
               {submission.report_summary && (
                 <div className="rounded border p-3 text-sm">
                   <p className="font-semibold mb-1">Summary</p>
-                  <p className="text-muted-foreground">{submission.report_summary}</p>
+                  <div className="ocr-rich-text text-muted-foreground">
+                    {renderTaskText(submission.report_summary)}
+                  </div>
                 </div>
               )}
               {submission.report_issues && submission.report_issues.length > 0 ? (
@@ -841,16 +838,18 @@ const SubmissionReview = () => {
                       <p className="mt-1 text-xs text-muted-foreground">
                         {anchorSummary(issue.anchor)}
                       </p>
-                      <p className="mt-2">{issue.note}</p>
+                      <div className="ocr-rich-text mt-2">{renderTaskText(issue.note)}</div>
                       {issue.original_text && (
-                        <p className="mt-1 text-muted-foreground">
-                          OCR: {cleanOcrMarkdown(issue.original_text)}
-                        </p>
+                        <div className="ocr-rich-text mt-1 text-muted-foreground">
+                          <span className="font-medium text-foreground">OCR: </span>
+                          {renderTaskText(cleanOcrMarkdown(issue.original_text))}
+                        </div>
                       )}
                       {issue.suggested_text && (
-                        <p className="mt-1 text-muted-foreground">
-                          corrected: {issue.suggested_text}
-                        </p>
+                        <div className="ocr-rich-text mt-1 text-muted-foreground">
+                          <span className="font-medium text-foreground">corrected: </span>
+                          {renderTaskText(issue.suggested_text)}
+                        </div>
                       )}
                     </div>
                   ))}

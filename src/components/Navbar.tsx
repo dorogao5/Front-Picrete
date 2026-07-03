@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import { BookOpen, Dumbbell, LogOut, User } from "lucide-react";
+import { BookOpen, ChevronDown, Dumbbell, LogOut, Settings, User, UserPlus } from "lucide-react";
 import logo from "@/assets/logo.png";
 import {
   getActiveCourseId,
@@ -63,28 +63,30 @@ export const Navbar = () => {
     }
   };
 
-  return <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg border-b border-border">
-      <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4">
-        <div className="flex items-center justify-between gap-2">
-          <Link to="/" className="flex items-center gap-2 sm:gap-3 group flex-shrink-0 min-w-0">
-            <img src={logo} alt="Picrete" className="h-8 w-8 sm:h-10 sm:w-10 transition-transform duration-300 group-hover:scale-110 flex-shrink-0" />
-            <span style={{
-            color: '#414141'
-          }} className="text-lg sm:text-2xl font-bold font-aptos -ml-2 mt-1 truncate">
+  return <nav className="fixed left-0 right-0 top-0 z-50 border-b border-border/80 bg-background/95 backdrop-blur-xl">
+      <div className="container mx-auto px-4 py-3 sm:px-6">
+        <div className="flex min-h-10 items-center justify-between gap-3">
+          <Link to="/" className="group flex min-w-0 flex-shrink-0 items-center gap-2.5">
+            <img src={logo} alt="Picrete" className="h-8 w-8 flex-shrink-0 sm:h-9 sm:w-9" />
+            <span className="truncate font-aptos text-lg font-semibold text-foreground sm:text-xl">
               Picrete
             </span>
           </Link>
           
-          <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+          <div className="flex flex-shrink-0 items-center gap-2">
             {isAuth && user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-9 w-9 sm:h-10 sm:w-10 rounded-full p-0">
-                    <Avatar className="h-9 w-9 sm:h-10 sm:w-10 cursor-pointer">
+                  <Button variant="ghost" className="h-10 gap-2 rounded-md px-1.5 sm:px-2">
+                    <Avatar className="h-8 w-8 cursor-pointer">
                       <AvatarFallback className="bg-primary text-primary-foreground">
                         {getInitials(user.full_name)}
                       </AvatarFallback>
                     </Avatar>
+                    <span className="hidden max-w-40 truncate text-sm font-medium sm:inline">
+                      {activeCourseTitle ?? user.full_name}
+                    </span>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
@@ -141,12 +143,12 @@ export const Navbar = () => {
                     </>
                   )}
                   <DropdownMenuItem onClick={() => navigate("/join-course")} className="cursor-pointer">
-                    <User className="mr-2 h-4 w-4" />
+                    <UserPlus className="mr-2 h-4 w-4" />
                     <span>Присоединиться к курсу</span>
                   </DropdownMenuItem>
                   {isAdmin() && (
                     <DropdownMenuItem onClick={openAdmin} className="cursor-pointer">
-                      <User className="mr-2 h-4 w-4" />
+                      <Settings className="mr-2 h-4 w-4" />
                       <span>Админка</span>
                     </DropdownMenuItem>
                   )}
@@ -158,15 +160,20 @@ export const Navbar = () => {
               </DropdownMenu>
             ) : (
               <>
+                <Link to="/demo" className="hidden sm:block">
+                  <Button variant="ghost" size="sm">
+                    Демо
+                  </Button>
+                </Link>
                 <Link to="/login">
-                  <Button variant="ghost" size="sm" className="text-xs sm:text-sm px-2 sm:px-4">
+                  <Button variant="ghost" size="sm" className="px-2 sm:px-3">
                     Войти
                   </Button>
                 </Link>
                 <Link to="/signup">
-                  <Button size="sm" className="text-xs sm:text-sm px-2 sm:px-4">
-                    <span className="hidden sm:inline">Начать работу</span>
-                    <span className="sm:hidden">Начать</span>
+                  <Button size="sm" className="px-3 sm:px-4">
+                    <span className="hidden sm:inline">Создать аккаунт</span>
+                    <span className="sm:hidden">Старт</span>
                   </Button>
                 </Link>
               </>
