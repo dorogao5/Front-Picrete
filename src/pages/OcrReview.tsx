@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   AlertCircle,
-  CheckCircle2,
+  Check,
   ChevronLeft,
   ChevronRight,
-  Flag,
+  Eye,
   Loader2,
-  Plus,
+  Pencil,
+  RotateCcw,
   ScanText,
   Send,
 } from "lucide-react";
@@ -16,36 +17,24 @@ import { toast } from "sonner";
 import OcrImageOverlay from "@/components/OcrImageOverlay";
 import OcrMarkdownPanel from "@/components/OcrMarkdownPanel";
 import { PageShell, PageLoader } from "@/components/PageShell";
-import { StatusBadge } from "@/components/StatusBadge";
 import { ChunkListPanel, ChunkTypeChip } from "@/components/ChunkListPanel";
 import { OcrIssueCard } from "@/components/OcrIssueCard";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   CHUNK_KINDS,
   CORRECTABLE_BLOCK_TYPES,
+  chunkColor,
   chunkDisplayText,
   chunkKindForType,
   extractOcrBlocks,
   OcrChunkBlock,
 } from "@/lib/ocr";
-import { severityMeta } from "@/lib/statuses";
 import { renderTaskText } from "@/lib/renderLatex";
 import { getApiErrorMessage, JsonObject, OcrIssueInput, submissionsAPI } from "@/lib/api";
 import { cn } from "@/lib/utils";
-
-type OcrIssueSeverity = "minor" | "major" | "critical";
 
 interface OcrIssueResponse {
   id: string;
@@ -55,7 +44,7 @@ interface OcrIssueResponse {
   original_text?: string | null;
   suggested_text?: string | null;
   note: string;
-  severity: OcrIssueSeverity;
+  severity: "minor" | "major" | "critical";
   created_at: string;
 }
 
@@ -85,28 +74,12 @@ interface OcrPagesResponse {
   pages: OcrPageData[];
 }
 
-interface PageDraft {
-  page_status?: "approved" | "reported";
-  issues: OcrIssueInput[];
+/* Правка одного блока: текст и/или тип. Хранится только если отличается от оригинала. */
+interface ChunkEdit {
+  text: string;
+  originalText: string;
+  correctedType: string | null;
 }
-
-interface IssueDraftForm {
-  selectedChunkIndex: number | null;
-  correctedType: string;
-  suggestedText: string;
-  note: string;
-  severity: OcrIssueSeverity;
-}
-
-const SAME_TYPE = "__same__";
-
-const EMPTY_ISSUE_FORM: IssueDraftForm = {
-  selectedChunkIndex: null,
-  correctedType: SAME_TYPE,
-  suggestedText: "",
-  note: "",
-  severity: "major",
-};
 
 const toDraftIssue = (issue: OcrIssueResponse): OcrIssueInput => ({
   anchor: (issue.anchor ?? {}) as JsonObject,
@@ -116,19 +89,21 @@ const toDraftIssue = (issue: OcrIssueResponse): OcrIssueInput => ({
   severity: issue.severity,
 });
 
+const blockHasGeometry = (block: OcrChunkBlock): boolean =>
+  Array.isArray(block.bbox) || Array.isArray(block.polygon);
+
 const OcrReview = () => {
   const { courseId, sessionId } = useParams<{ courseId: string; sessionId: string }>();
   const navigate = useNavigate();
 
   const [data, setData] = useState<OcrPagesResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [savingPage, setSavingPage] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
-  const [drafts, setDrafts] = useState<Record<string, PageDraft>>({});
-  const [savedPages, setSavedPages] = useState<Record<string, boolean>>({});
-  const [reportSummary, setReportSummary] = useState("");
-  const [issueForm, setIssueForm] = useState<IssueDraftForm>(EMPTY_ISSUE_FORM);
+  const [edits, setEdits] = useState<Record<string, Record<number, ChunkEdit>>>({});
+  const [extraIssues, setExtraIssues] = useState<Record<string, OcrIssueInput[]>>({});
+  const [visited, setVisited] = useState<Record<string, boolean>>({});
+  const [selectedChunkIndex, setSelectedChunkIndex] = useState<number | null>(null);
   const [showOcrText, setShowOcrText] = useState(false);
 
   const loadPages = useCallback(async () => {
@@ -136,21 +111,19 @@ const OcrReview = () => {
     const response = await submissionsAPI.getOcrPages(sessionId, courseId);
     const payload = response.data as OcrPagesResponse;
     setData(payload);
-    setReportSummary((prev) => prev || (payload.report_summary ?? ""));
-    setDrafts((prev) => {
+    setExtraIssues((prev) => {
       const next = { ...prev };
       for (const page of payload.pages) {
-        next[page.image_id] = {
-          page_status: next[page.image_id]?.page_status ?? page.page_status ?? undefined,
-          issues: next[page.image_id]?.issues ?? page.issues.map(toDraftIssue),
-        };
+        if (next[page.image_id] === undefined) {
+          next[page.image_id] = page.issues.map(toDraftIssue);
+        }
       }
       return next;
     });
-    setSavedPages((prev) => {
+    setVisited((prev) => {
       const next = { ...prev };
       for (const page of payload.pages) {
-        if (page.page_status && next[page.image_id] === undefined) {
+        if (page.page_status) {
           next[page.image_id] = true;
         }
       }
@@ -186,94 +159,111 @@ const OcrReview = () => {
   const pages = useMemo(() => data?.pages ?? [], [data]);
   const currentPage = pages[currentPageIndex];
   const currentImageId = currentPage?.image_id;
-  const currentDraft = currentPage ? drafts[currentPage.image_id] ?? { issues: [] } : { issues: [] };
   const blocks = useMemo(() => extractOcrBlocks(currentPage?.chunks), [currentPage?.chunks]);
-  const selectedBlock =
-    issueForm.selectedChunkIndex !== null ? blocks[issueForm.selectedChunkIndex] ?? null : null;
-  const selectedChunkText = selectedBlock ? chunkDisplayText(selectedBlock) : "";
 
   useEffect(() => {
     if (!currentImageId) return;
-    setIssueForm({
-      selectedChunkIndex: blocks.length > 0 ? 0 : null,
-      correctedType: SAME_TYPE,
-      suggestedText: "",
-      note: "",
-      severity: "major",
-    });
+    setVisited((prev) => (prev[currentImageId] ? prev : { ...prev, [currentImageId]: true }));
+    setSelectedChunkIndex(blocks.length > 0 ? 0 : null);
     setShowOcrText(false);
   }, [blocks.length, currentImageId]);
 
-  const reviewedPagesCount = useMemo(
-    () =>
-      pages.filter((page) => {
-        const draft = drafts[page.image_id];
-        return draft?.page_status === "approved" || draft?.page_status === "reported";
-      }).length,
-    [drafts, pages]
-  );
+  const currentEdits = currentImageId ? edits[currentImageId] ?? {} : {};
+  const editedIndexes = useMemo(() => new Set(Object.keys(currentEdits).map(Number)), [currentEdits]);
 
-  const totalIssuesCount = useMemo(
-    () => pages.reduce((acc, page) => acc + (drafts[page.image_id]?.issues.length ?? 0), 0),
-    [drafts, pages]
-  );
+  const selectedBlock = selectedChunkIndex !== null ? blocks[selectedChunkIndex] ?? null : null;
+  const selectedOriginalText = selectedBlock ? chunkDisplayText(selectedBlock) : "";
+  const selectedEdit = selectedChunkIndex !== null ? currentEdits[selectedChunkIndex] : undefined;
+  const editorText = selectedEdit?.text ?? selectedOriginalText;
+  const effectiveKind = chunkKindForType(selectedEdit?.correctedType ?? selectedBlock?.block_type);
+  const selectedEditable = selectedBlock ? blockHasGeometry(selectedBlock) : false;
 
-  const finalizeAction: "submit" | "report" = totalIssuesCount > 0 ? "report" : "submit";
-  const progress = pages.length > 0 ? (reviewedPagesCount / pages.length) * 100 : 0;
-
-  const markPageDirty = (imageId: string) => {
-    setSavedPages((prev) => ({ ...prev, [imageId]: false }));
+  const applyEdit = (patch: Partial<Pick<ChunkEdit, "text" | "correctedType">>) => {
+    if (!currentImageId || selectedChunkIndex === null || !selectedBlock) return;
+    setEdits((prev) => {
+      const pageEdits = { ...(prev[currentImageId] ?? {}) };
+      const existing = pageEdits[selectedChunkIndex];
+      const next: ChunkEdit = {
+        text: patch.text ?? existing?.text ?? selectedOriginalText,
+        originalText: existing?.originalText ?? selectedOriginalText,
+        correctedType:
+          patch.correctedType !== undefined ? patch.correctedType : existing?.correctedType ?? null,
+      };
+      const unchanged = next.text === next.originalText && next.correctedType === null;
+      if (unchanged) {
+        delete pageEdits[selectedChunkIndex];
+      } else {
+        pageEdits[selectedChunkIndex] = next;
+      }
+      return { ...prev, [currentImageId]: pageEdits };
+    });
   };
 
-  const approveCurrentPage = () => {
-    if (!currentPage) return;
-    setDrafts((prev) => ({
+  const handleTypeChip = (typeValue: string) => {
+    if (!selectedBlock) return;
+    const originalKind = chunkKindForType(selectedBlock.block_type);
+    const clickedKind = chunkKindForType(typeValue);
+    applyEdit({ correctedType: clickedKind === originalKind ? null : typeValue });
+  };
+
+  const revertSelected = () => {
+    applyEdit({ text: selectedOriginalText, correctedType: null });
+  };
+
+  const removeExtraIssue = (imageId: string, index: number) => {
+    setExtraIssues((prev) => ({
       ...prev,
-      [currentPage.image_id]: {
-        page_status: "approved",
-        issues: prev[currentPage.image_id]?.issues ?? currentDraft.issues,
-      },
+      [imageId]: (prev[imageId] ?? []).filter((_, i) => i !== index),
     }));
-    markPageDirty(currentPage.image_id);
   };
 
-  const selectedTypeChanged =
-    issueForm.correctedType !== SAME_TYPE &&
-    selectedBlock !== null &&
-    chunkKindForType(issueForm.correctedType) !== chunkKindForType(selectedBlock.block_type);
+  const fixesByPage = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const page of pages) {
+      const editCount = Object.keys(edits[page.image_id] ?? {}).length;
+      const extraCount = (extraIssues[page.image_id] ?? []).length;
+      counts.set(page.image_id, editCount + extraCount);
+    }
+    return counts;
+  }, [pages, edits, extraIssues]);
 
-  const addIssue = () => {
-    if (!currentPage) return;
-    if (issueForm.selectedChunkIndex === null || !blocks[issueForm.selectedChunkIndex]) {
-      toast.error("Сначала выберите блок на изображении или в списке");
-      return;
-    }
+  const totalFixes = useMemo(
+    () => Array.from(fixesByPage.values()).reduce((acc, n) => acc + n, 0),
+    [fixesByPage]
+  );
 
-    const block = blocks[issueForm.selectedChunkIndex];
-    if (!Array.isArray(block.bbox) && !Array.isArray(block.polygon)) {
-      toast.error("У выбранного блока нет координат — выберите другой");
-      return;
-    }
+  const visitedCount = pages.filter((page) => visited[page.image_id]).length;
+  const allVisited = pages.length > 0 && visitedCount === pages.length;
 
-    let note = issueForm.note.trim();
-    if (!note && selectedTypeChanged) {
-      const kindLabel = CHUNK_KINDS[chunkKindForType(issueForm.correctedType)].label.toLowerCase();
-      note = `Неверно определён тип блока: это ${kindLabel}`;
-    }
-    if (!note) {
-      toast.error("Опишите, что распознано неверно");
-      return;
-    }
+  const buildIssueFromEdit = (
+    block: OcrChunkBlock,
+    edit: ChunkEdit,
+    pageIndex: number
+  ): OcrIssueInput | null => {
+    if (!blockHasGeometry(block)) return null;
+
+    const changedText = edit.text.trim() !== edit.originalText.trim();
+    const changedType = edit.correctedType !== null;
+    const typeLabel = edit.correctedType
+      ? CHUNK_KINDS[chunkKindForType(edit.correctedType)].label.toLowerCase()
+      : "";
+
+    const note =
+      changedText && changedType
+        ? `Исправлены текст и тип блока (это ${typeLabel})`
+        : changedType
+          ? `Неверно определён тип блока: это ${typeLabel}`
+          : "Исправлен текст распознавания";
 
     const anchor: JsonObject = {
       block_type:
         typeof block.block_type === "string" && block.block_type.trim().length > 0
           ? block.block_type
           : "text",
-      page: typeof block.page === "number" ? block.page : currentPageIndex + 1,
+      page: typeof block.page === "number" ? block.page : pageIndex + 1,
     };
-    if (selectedTypeChanged) {
-      anchor.corrected_block_type = issueForm.correctedType;
+    if (changedType && edit.correctedType) {
+      anchor.corrected_block_type = edit.correctedType;
     }
     if (typeof block.id === "string" && block.id.trim().length > 0) {
       anchor.chunk_id = block.id;
@@ -285,110 +275,79 @@ const OcrReview = () => {
       anchor.polygon = block.polygon as unknown as JsonObject[keyof JsonObject];
     }
 
-    const issue: OcrIssueInput = {
+    return {
       anchor,
-      original_text: chunkDisplayText(block),
-      suggested_text: issueForm.suggestedText.trim() || undefined,
+      original_text: edit.originalText,
+      suggested_text: changedText ? edit.text.trim() : undefined,
       note,
-      severity: issueForm.severity,
+      severity: changedType ? "major" : "minor",
     };
-
-    setDrafts((prev) => {
-      const pageDraft = prev[currentPage.image_id] ?? { issues: [] };
-      return {
-        ...prev,
-        [currentPage.image_id]: {
-          page_status: "reported",
-          issues: [...pageDraft.issues, issue],
-        },
-      };
-    });
-    markPageDirty(currentPage.image_id);
-
-    setIssueForm((prev) => ({
-      ...prev,
-      correctedType: SAME_TYPE,
-      suggestedText: "",
-      note: "",
-    }));
-    toast.success("Замечание добавлено");
-  };
-
-  const removeIssue = (index: number) => {
-    if (!currentPage) return;
-    setDrafts((prev) => {
-      const pageDraft = prev[currentPage.image_id] ?? { issues: [] };
-      const issues = pageDraft.issues.filter((_, issueIndex) => issueIndex !== index);
-      return {
-        ...prev,
-        [currentPage.image_id]: {
-          page_status: issues.length > 0 ? "reported" : undefined,
-          issues,
-        },
-      };
-    });
-    markPageDirty(currentPage.image_id);
-  };
-
-  const saveCurrentPage = async (): Promise<boolean> => {
-    if (!currentPage || !sessionId) return false;
-    const pageDraft = drafts[currentPage.image_id];
-    if (!pageDraft?.page_status) {
-      toast.error("Подтвердите страницу или добавьте замечание");
-      return false;
-    }
-
-    setSavingPage(true);
-    try {
-      await submissionsAPI.reviewOcrPage(
-        sessionId,
-        currentPage.image_id,
-        {
-          page_status: pageDraft.page_status,
-          issues: pageDraft.issues,
-        },
-        courseId
-      );
-      setSavedPages((prev) => ({ ...prev, [currentPage.image_id]: true }));
-      toast.success(`Страница ${currentPageIndex + 1} сохранена`);
-      return true;
-    } catch (error: unknown) {
-      toast.error(getApiErrorMessage(error, "Не удалось сохранить страницу"));
-      return false;
-    } finally {
-      setSavingPage(false);
-    }
-  };
-
-  const saveAndNext = async () => {
-    const ok = await saveCurrentPage();
-    if (ok && currentPageIndex < pages.length - 1) {
-      setCurrentPageIndex((prev) => prev + 1);
-    }
   };
 
   const finalize = async () => {
-    if (!sessionId || !data) return;
-    if (reviewedPagesCount < pages.length) {
-      toast.error("Сначала проверьте каждую страницу");
-      return;
-    }
-    if (finalizeAction === "report" && !reportSummary.trim()) {
-      toast.error("Кратко опишите замечания в поле итога");
+    if (!sessionId || !data || finalizing) return;
+    if (!allVisited) {
+      toast.error("Сначала просмотрите все страницы");
       return;
     }
 
     setFinalizing(true);
     try {
+      const fixedPages: number[] = [];
+
+      for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
+        const page = pages[pageIndex];
+        const pageBlocks = extractOcrBlocks(page.chunks);
+        const pageEdits = edits[page.image_id] ?? {};
+        const issues: OcrIssueInput[] = [...(extraIssues[page.image_id] ?? [])];
+
+        for (const [indexKey, edit] of Object.entries(pageEdits)) {
+          const block = pageBlocks[Number(indexKey)];
+          if (!block) continue;
+          const issue = buildIssueFromEdit(block, edit, pageIndex);
+          if (issue) {
+            issues.push(issue);
+          }
+        }
+
+        if (issues.length > 0) {
+          fixedPages.push(pageIndex + 1);
+        }
+
+        try {
+          await submissionsAPI.reviewOcrPage(
+            sessionId,
+            page.image_id,
+            {
+              page_status: issues.length > 0 ? "reported" : "approved",
+              issues,
+            },
+            courseId
+          );
+        } catch (error: unknown) {
+          toast.error(
+            getApiErrorMessage(error, `Не удалось сохранить страницу ${pageIndex + 1}`)
+          );
+          return;
+        }
+      }
+
+      const anyFixes = fixedPages.length > 0;
+      const summary = anyFixes
+        ? `Исправления внесены прямо в распознанный текст. Всего правок: ${totalFixes}, страницы: ${fixedPages.join(", ")}.`
+        : undefined;
+
       await submissionsAPI.finalizeOcrReview(
         sessionId,
         {
-          action: finalizeAction,
-          report_summary: finalizeAction === "report" ? reportSummary.trim() : undefined,
+          action: anyFixes ? "report" : "submit",
+          report_summary: summary,
         },
         courseId
       );
-      toast.success("Проверка распознавания завершена");
+      toast.success(
+        anyFixes ? "Правки отправлены, работа ушла на проверку" : "Распознавание подтверждено"
+      );
       navigate(courseId ? `/c/${courseId}/exam/${sessionId}/result` : "/dashboard");
     } catch (error: unknown) {
       toast.error(getApiErrorMessage(error, "Не удалось завершить проверку"));
@@ -459,53 +418,51 @@ const OcrReview = () => {
     );
   }
 
-  const currentPageSaved = currentImageId ? savedPages[currentImageId] : false;
+  const currentExtra = extraIssues[currentImageId ?? ""] ?? [];
 
   return (
     <PageShell
       width="wide"
       title="Проверка распознавания"
-      subtitle="Убедитесь, что система верно прочитала вашу работу: подтвердите каждую страницу или отметьте ошибки — от этого зависит точность проверки."
+      subtitle="Кликните блок и поправьте текст прямо в нём, если система прочитала неверно. Всё верно — просто отправьте."
     >
       {/* Навигация по страницам */}
-      <div className="mb-4 flex flex-wrap items-center gap-1.5">
-        {pages.map((page, index) => {
-          const draft = drafts[page.image_id];
-          const status = draft?.page_status;
-          return (
-            <button
-              key={page.image_id}
-              type="button"
-              onClick={() => setCurrentPageIndex(index)}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
-                index === currentPageIndex
-                  ? "border-accent/50 bg-accent/10 text-accent"
-                  : "bg-card text-muted-foreground hover:bg-secondary"
-              )}
-            >
-              Стр. {index + 1}
-              {status === "approved" && <CheckCircle2 className="h-3.5 w-3.5 text-success" />}
-              {status === "reported" && <Flag className="h-3.5 w-3.5 text-warning" />}
-            </button>
-          );
-        })}
-        <div className="ml-auto flex items-center gap-3 text-sm text-muted-foreground">
-          <span>
-            Проверено {reviewedPagesCount} из {pages.length}
-          </span>
-          <Progress value={progress} className="h-1.5 w-28" />
+      {pages.length > 1 && (
+        <div className="mb-4 flex flex-wrap items-center gap-1.5">
+          {pages.map((page, index) => {
+            const fixes = fixesByPage.get(page.image_id) ?? 0;
+            return (
+              <button
+                key={page.image_id}
+                type="button"
+                onClick={() => setCurrentPageIndex(index)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
+                  index === currentPageIndex
+                    ? "border-accent/50 bg-accent/10 text-accent"
+                    : "bg-card text-muted-foreground hover:bg-secondary"
+                )}
+              >
+                Стр. {index + 1}
+                {fixes > 0 ? (
+                  <span className="inline-flex items-center gap-0.5 font-mono text-[11px] text-warning">
+                    <Pencil className="h-3 w-3" />
+                    {fixes}
+                  </span>
+                ) : visited[page.image_id] ? (
+                  <Check className="h-3.5 w-3.5 text-success" />
+                ) : null}
+              </button>
+            );
+          })}
         </div>
-      </div>
+      )}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
         {/* Изображение с разметкой */}
         <Card className="h-fit min-w-0 p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <h2 className="font-semibold">Страница {currentPageIndex + 1}</h2>
-              <StatusBadge domain="page" value={currentDraft.page_status ?? "not_reviewed"} />
-            </div>
+            <h2 className="font-semibold">Страница {currentPageIndex + 1}</h2>
             <Button
               type="button"
               variant="ghost"
@@ -513,7 +470,7 @@ const OcrReview = () => {
               className="gap-1.5 text-muted-foreground"
               onClick={() => setShowOcrText((prev) => !prev)}
             >
-              <ScanText className="h-4 w-4" />
+              {showOcrText ? <Eye className="h-4 w-4" /> : <ScanText className="h-4 w-4" />}
               {showOcrText ? "Показать фото" : "Весь текст"}
             </Button>
           </div>
@@ -529,138 +486,122 @@ const OcrReview = () => {
             <OcrImageOverlay
               imageUrl={currentPage.image_view_url}
               blocks={blocks}
-              selectedChunkIndex={issueForm.selectedChunkIndex}
-              onSelectChunk={(index) =>
-                setIssueForm((prev) => ({ ...prev, selectedChunkIndex: index }))
-              }
+              selectedChunkIndex={selectedChunkIndex}
+              onSelectChunk={setSelectedChunkIndex}
               alt={`Страница ${currentPageIndex + 1}`}
               className="max-h-[75vh]"
             />
           )}
         </Card>
 
-        {/* Правая колонка: блоки + замечание */}
+        {/* Правая колонка: редактор выбранного блока + список */}
         <div className="min-w-0 space-y-4">
           <Card className="p-4">
-            <h3 className="mb-2 text-sm font-semibold">Распознанные блоки</h3>
-            <ChunkListPanel
-              blocks={blocks}
-              selectedIndex={issueForm.selectedChunkIndex}
-              onSelect={(index) => setIssueForm((prev) => ({ ...prev, selectedChunkIndex: index }))}
-              listMaxHeight="max-h-[34vh]"
-            />
-          </Card>
-
-          <Card className="p-4">
-            <h3 className="mb-3 text-sm font-semibold">Ошибка в выбранном блоке?</h3>
             {selectedBlock ? (
               <div className="space-y-3">
-                <div className="rounded-md border bg-secondary/40 p-2.5">
-                  <div className="mb-1.5 flex items-center justify-between gap-2">
-                    <ChunkTypeChip blockType={selectedBlock.block_type} />
-                    {issueForm.selectedChunkIndex !== null && (
-                      <span className="font-mono text-[10px] text-muted-foreground">
-                        #{issueForm.selectedChunkIndex + 1}
-                      </span>
-                    )}
-                  </div>
-                  <div className="ocr-rich-text max-h-28 overflow-auto text-xs leading-snug">
-                    {selectedChunkText ? renderTaskText(selectedChunkText) : "(пустой блок)"}
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-xs">Тип блока</Label>
-                  <Select
-                    value={issueForm.correctedType}
-                    onValueChange={(value) =>
-                      setIssueForm((prev) => ({ ...prev, correctedType: value }))
-                    }
-                  >
-                    <SelectTrigger className="mt-1 h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={SAME_TYPE}>Тип определён верно</SelectItem>
-                      {CORRECTABLE_BLOCK_TYPES.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          Это {CHUNK_KINDS[option.kind].label.toLowerCase()}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label className="text-xs">Как должно быть (необязательно)</Label>
-                  <Input
-                    className="mt-1"
-                    placeholder="Правильный текст блока"
-                    value={issueForm.suggestedText}
-                    onChange={(event) =>
-                      setIssueForm((prev) => ({ ...prev, suggestedText: event.target.value }))
-                    }
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-xs">Что не так</Label>
-                  <Textarea
-                    className="mt-1"
-                    rows={2}
-                    placeholder={
-                      selectedTypeChanged
-                        ? "Можно оставить пустым — заполним автоматически"
-                        : "Например: потерян индекс у формулы"
-                    }
-                    value={issueForm.note}
-                    onChange={(event) =>
-                      setIssueForm((prev) => ({ ...prev, note: event.target.value }))
-                    }
-                  />
-                </div>
-
-                <div className="flex items-end gap-2">
-                  <div className="flex-1">
-                    <Label className="text-xs">Серьёзность</Label>
-                    <Select
-                      value={issueForm.severity}
-                      onValueChange={(value) =>
-                        setIssueForm((prev) => ({ ...prev, severity: value as OcrIssueSeverity }))
-                      }
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold">
+                    Блок #{selectedChunkIndex !== null ? selectedChunkIndex + 1 : ""}
+                  </h3>
+                  {selectedEdit ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1 px-2 text-muted-foreground hover:text-foreground"
+                      onClick={revertSelected}
                     >
-                      <SelectTrigger className="mt-1 h-9">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(["minor", "major", "critical"] as const).map((severity) => (
-                          <SelectItem key={severity} value={severity}>
-                            {severityMeta[severity].label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button type="button" onClick={addIssue} className="gap-1.5">
-                    <Plus className="h-4 w-4" />
-                    Добавить
-                  </Button>
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Вернуть как было
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">распознано так</span>
+                  )}
                 </div>
+
+                {/* Тип блока — один клик */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {CORRECTABLE_BLOCK_TYPES.map((option) => {
+                    const active = effectiveKind === option.kind;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => handleTypeChip(option.value)}
+                        disabled={!selectedEditable}
+                        className={cn(
+                          "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50",
+                          active ? "border-transparent" : "border-border bg-card hover:bg-secondary"
+                        )}
+                        style={
+                          active
+                            ? {
+                                color: chunkColor(option.value),
+                                backgroundColor: chunkColor(option.value, 0.12),
+                              }
+                            : undefined
+                        }
+                      >
+                        {CHUNK_KINDS[option.kind].label}
+                      </button>
+                    );
+                  })}
+                  {effectiveKind === "other" && <ChunkTypeChip blockType={selectedBlock.block_type} />}
+                </div>
+
+                {selectedEditable ? (
+                  <>
+                    <Textarea
+                      value={editorText}
+                      onChange={(event) => applyEdit({ text: event.target.value })}
+                      rows={Math.min(10, Math.max(3, editorText.split("\n").length + 1))}
+                      spellCheck={false}
+                      className="font-mono text-xs leading-relaxed"
+                      placeholder="Распознанный текст блока"
+                    />
+                    {editorText.trim() && (
+                      <div className="rounded-md border bg-secondary/30 p-2.5">
+                        <p className="mb-1 text-[11px] font-medium text-muted-foreground">
+                          Как это будет прочитано
+                        </p>
+                        <div className="ocr-rich-text max-h-32 overflow-auto text-xs leading-snug">
+                          {renderTaskText(editorText)}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                    У этого блока нет координат на изображении — исправить его нельзя. Если в нём
+                    ошибка, преподаватель увидит её при проверке.
+                  </div>
+                )}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Выберите блок на изображении или в списке, чтобы сообщить об ошибке.
+                Кликните блок на изображении или выберите его в списке ниже.
               </p>
             )}
           </Card>
 
-          {currentDraft.issues.length > 0 && (
+          <Card className="p-4">
+            <h3 className="mb-2 text-sm font-semibold">Все блоки страницы</h3>
+            <ChunkListPanel
+              blocks={blocks}
+              selectedIndex={selectedChunkIndex}
+              onSelect={setSelectedChunkIndex}
+              listMaxHeight="max-h-[38vh]"
+              editedIndexes={editedIndexes}
+            />
+          </Card>
+
+          {currentExtra.length > 0 && currentImageId && (
             <Card className="p-4">
               <h3 className="mb-2 text-sm font-semibold">
-                Замечания на странице · {currentDraft.issues.length}
+                Ранее добавленные правки · {currentExtra.length}
               </h3>
               <div className="space-y-2">
-                {currentDraft.issues.map((issue, idx) => (
+                {currentExtra.map((issue, idx) => (
                   <OcrIssueCard
                     key={`${idx}-${issue.note}`}
                     issue={{
@@ -670,7 +611,7 @@ const OcrReview = () => {
                       note: issue.note,
                       severity: issue.severity ?? "major",
                     }}
-                    onRemove={() => removeIssue(idx)}
+                    onRemove={() => removeExtraIssue(currentImageId, idx)}
                   />
                 ))}
               </div>
@@ -678,22 +619,6 @@ const OcrReview = () => {
           )}
         </div>
       </div>
-
-      {/* Итог с замечаниями */}
-      {finalizeAction === "report" && (
-        <Card className="mt-6 border-warning/40 p-4">
-          <div className="mb-2 flex items-center gap-2">
-            <Flag className="h-4 w-4 text-warning" />
-            <h3 className="font-semibold">Итог по замечаниям</h3>
-            <span className="text-sm text-muted-foreground">· всего {totalIssuesCount}</span>
-          </div>
-          <Textarea
-            value={reportSummary}
-            onChange={(event) => setReportSummary(event.target.value)}
-            placeholder="Кратко: где система ошиблась и на что преподавателю обратить внимание"
-          />
-        </Card>
-      )}
 
       {/* Панель действий */}
       <div className="sticky bottom-4 mt-6 rounded-lg border bg-card/95 p-3 shadow-elegant backdrop-blur">
@@ -722,39 +647,30 @@ const OcrReview = () => {
             </Button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {currentDraft.page_status !== "approved" && currentDraft.issues.length === 0 && (
-              <Button variant="outline" onClick={approveCurrentPage} className="gap-1.5">
-                <CheckCircle2 className="h-4 w-4 text-success" />
-                Страница распознана верно
-              </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            {pages.length > 1 && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>
+                  Просмотрено {visitedCount} из {pages.length}
+                </span>
+                <Progress value={(visitedCount / pages.length) * 100} className="h-1.5 w-24" />
+              </div>
+            )}
+            {totalFixes > 0 && (
+              <span className="inline-flex items-center gap-1 text-sm font-medium text-warning">
+                <Pencil className="h-3.5 w-3.5" />
+                {totalFixes}
+              </span>
             )}
             <Button
-              onClick={saveAndNext}
-              disabled={savingPage || !currentDraft.page_status || currentPageSaved === true}
-              variant={currentPageSaved ? "secondary" : "default"}
-              className="gap-1.5"
-            >
-              {savingPage ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : currentPageSaved ? (
-                <CheckCircle2 className="h-4 w-4" />
-              ) : null}
-              {currentPageSaved ? "Страница сохранена" : "Сохранить страницу"}
-            </Button>
-            <Button
               onClick={finalize}
-              disabled={finalizing || reviewedPagesCount < pages.length}
-              variant={finalizeAction === "report" ? "destructive" : "success"}
+              disabled={finalizing || !allVisited}
+              variant={totalFixes > 0 ? "accent" : "success"}
               className="gap-1.5"
-              title={
-                reviewedPagesCount < pages.length
-                  ? "Сначала проверьте все страницы"
-                  : undefined
-              }
+              title={!allVisited ? "Сначала просмотрите все страницы" : undefined}
             >
               {finalizing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              {finalizeAction === "report" ? "Отправить с замечаниями" : "Подтвердить и отправить"}
+              {totalFixes > 0 ? `Отправить (${totalFixes} испр.)` : "Всё верно — отправить"}
             </Button>
           </div>
         </div>

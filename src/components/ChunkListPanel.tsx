@@ -68,6 +68,7 @@ interface ChunkListPanelProps {
   onSelect: (index: number) => void;
   listMaxHeight?: string;
   className?: string;
+  editedIndexes?: Set<number>;
 }
 
 export const ChunkListPanel = ({
@@ -76,6 +77,7 @@ export const ChunkListPanel = ({
   onSelect,
   listMaxHeight = "max-h-[46vh]",
   className,
+  editedIndexes,
 }: ChunkListPanelProps) => {
   if (blocks.length === 0) {
     return (
@@ -108,7 +110,14 @@ export const ChunkListPanel = ({
             >
               <div className="flex items-center justify-between gap-2">
                 <ChunkTypeChip blockType={block.block_type} />
-                <span className="font-mono text-[10px] text-muted-foreground">#{index + 1}</span>
+                <span className="flex items-center gap-1.5">
+                  {editedIndexes?.has(index) && (
+                    <span className="rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                      исправлено
+                    </span>
+                  )}
+                  <span className="font-mono text-[10px] text-muted-foreground">#{index + 1}</span>
+                </span>
               </div>
               <div className="mt-1.5 max-h-24 overflow-auto text-muted-foreground">
                 <div className="ocr-rich-text text-[11px] leading-snug">
