@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Navbar } from "@/components/Navbar";
+import { ChevronLeft, ChevronRight, ListPlus, Plus, Save, SearchX, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+
+import { EmptyState } from "@/components/EmptyState";
+import { PageLoader, PageShell } from "@/components/PageShell";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,11 +14,9 @@ import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, Save } from "lucide-react";
 import { examsAPI, getApiErrorMessage, taskBankAPI } from "@/lib/api";
 import type { ExamTaskTypePayload, JsonObject, TaskBankItem, WorkKind } from "@/lib/api";
 import { renderLatex, renderTaskText } from "@/lib/renderLatex";
-import { toast } from "sonner";
 
 interface TaskVariant {
   content: string;
@@ -68,11 +71,14 @@ interface ExamDetailsResponse {
   task_types?: ExamTaskTypeResponse[];
 }
 
+const selectClass =
+  "mt-1 h-11 w-full rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+
 const CreateExam = () => {
   const navigate = useNavigate();
   const { courseId, examId } = useParams<{ courseId: string; examId?: string }>();
   const isEditMode = !!examId;
-  
+
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(isEditMode);
   const [showForceDeleteDialog, setShowForceDeleteDialog] = useState(false);
@@ -80,7 +86,7 @@ const CreateExam = () => {
   const [examStatus, setExamStatus] = useState<"draft" | "published" | "active" | "completed">(
     "draft"
   );
-  
+
   const [examData, setExamData] = useState({
     title: "",
     description: "",
@@ -110,15 +116,15 @@ const CreateExam = () => {
   useEffect(() => {
     const loadExam = async () => {
       if (!examId || !courseId) return;
-      
+
       try {
         const response = await examsAPI.get(examId, courseId);
         const exam = response.data as ExamDetailsResponse;
-        
+
         // Backend returns RFC3339 UTC (e.g. "2025-01-02T10:20:30Z") - parse as-is
         const startTime = new Date(exam.start_time);
         const endTime = new Date(exam.end_time);
-        
+
         // Format for datetime-local input (YYYY-MM-DDTHH:mm)
         const formatForInput = (date: Date) => {
           const year = date.getFullYear();
@@ -128,7 +134,7 @@ const CreateExam = () => {
           const minutes = String(date.getMinutes()).padStart(2, '0');
           return `${year}-${month}-${day}T${hours}:${minutes}`;
         };
-        
+
         setExamData({
           title: exam.title,
           description: exam.description || "",
@@ -144,7 +150,7 @@ const CreateExam = () => {
           llm_precheck_enabled: exam.llm_precheck_enabled ?? true,
         });
         setExamStatus(exam.status ?? "draft");
-        
+
         // Load task types (preserve id — backend не поддерживает обновление, только добавление)
         applyExamTaskTypesFromResponse(exam);
       } catch (error: unknown) {
@@ -154,7 +160,7 @@ const CreateExam = () => {
         setInitialLoading(false);
       }
     };
-    
+
     loadExam();
   }, [courseId, examId, navigate]);
 
@@ -468,7 +474,7 @@ const CreateExam = () => {
 
   const handleDelete = async (forceDelete: boolean = false) => {
     if (!examId || !courseId) return;
-    
+
     setLoading(true);
     try {
       await examsAPI.delete(examId, forceDelete, courseId);
@@ -476,7 +482,7 @@ const CreateExam = () => {
       navigate(`/c/${courseId}/teacher`);
     } catch (error: unknown) {
       const errorDetail = getApiErrorMessage(error, "Ошибка при удалении работы");
-      
+
       // Check if error is about existing submissions
       if (errorDetail && errorDetail.includes("existing submission") && !forceDelete) {
         // Extract count from error message: "Cannot delete exam with X existing submission(s)..."
@@ -499,618 +505,667 @@ const CreateExam = () => {
 
   if (initialLoading) {
     return (
-      <div className="min-h-screen bg-gradient-subtle">
-        <Navbar />
-        <div className="container mx-auto px-6 pt-24 pb-12">
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">Загрузка...</p>
-          </div>
-        </div>
-      </div>
+      <PageShell title={isEditMode ? "Редактирование работы" : "Создание работы"}>
+        <PageLoader label="Загружаем работу..." />
+      </PageShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-subtle">
-      <Navbar />
+    <PageShell
+      backLabel="К списку работ"
+      onBack={() => navigate(courseId ? `/c/${courseId}/teacher` : "/dashboard")}
+      title={isEditMode ? "Редактирование работы" : "Создание работы"}
+      subtitle="Настройте параметры и добавьте задачи"
+      actions={
+        isEditMode ? (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="ghost" className="gap-1.5 text-destructive hover:text-destructive" disabled={loading}>
+                <Trash2 className="h-4 w-4" />
+                Удалить работу
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Удалить работу?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Это действие нельзя отменить. Работа будет удалена навсегда.
+                  {examData.title && ` Будет удалена: «${examData.title}»`}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Отмена</AlertDialogCancel>
+                <AlertDialogAction onClick={() => handleDelete(false)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Удалить
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        ) : undefined
+      }
+    >
+      {/* Force delete confirmation dialog */}
+      {isEditMode && (
+        <AlertDialog open={showForceDeleteDialog} onOpenChange={setShowForceDeleteDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-destructive">
+                Внимание: у работы есть решения студентов
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                У этой работы есть {submissionCount}{" "}
+                {submissionCount === 1 ? "работа студента" : "работы студентов"}. При удалении
+                безвозвратно исчезнут:
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <ul className="list-disc space-y-1 pl-5">
+                <li>Все работы студентов</li>
+                <li>Загруженные файлы и изображения</li>
+                <li>Оценки и комментарии</li>
+                <li>История попыток</li>
+              </ul>
+              <p className="font-semibold text-destructive">Это действие невозможно отменить.</p>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Отмена</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleForceDelete}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Да, удалить всё
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
 
-      <div className="container mx-auto px-6 pt-24 pb-12">
-        <div className="mb-8 flex items-start justify-between">
-          <div>
-            <h1 className="text-4xl font-bold mb-2">
-              {isEditMode ? "Редактирование работы" : "Создание работы"}
-            </h1>
-            <p className="text-muted-foreground">
-              Настройте параметры и добавьте задачи
-            </p>
-          </div>
-          {isEditMode && (
-            <>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" disabled={loading}>
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Удалить работу
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Вы уверены?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Это действие нельзя отменить. Работа будет удалена навсегда.
-                      {examData.title && ` Будет удалена: "${examData.title}"`}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Отмена</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => handleDelete(false)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                      Удалить
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-
-              {/* Force delete confirmation dialog */}
-              <AlertDialog open={showForceDeleteDialog} onOpenChange={setShowForceDeleteDialog}>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle className="text-destructive">⚠️ Внимание! Существуют работы студентов</AlertDialogTitle>
-                    <AlertDialogDescription className="space-y-3">
-                      <p className="font-semibold">
-                        У этой работы есть {submissionCount} {submissionCount === 1 ? 'работа студента' : 'работы студентов'}.
-                      </p>
-                      <p>
-                        При удалении будут безвозвратно удалены:
-                      </p>
-                      <ul className="list-disc list-inside space-y-1 ml-2">
-                        <li>Все работы студентов</li>
-                        <li>Загруженные файлы и изображения</li>
-                        <li>Оценки и комментарии</li>
-                        <li>История попыток</li>
-                      </ul>
-                      <p className="font-semibold text-destructive">
-                        Это действие невозможно отменить!
-                      </p>
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Отмена</AlertDialogCancel>
-                    <AlertDialogAction 
-                      onClick={handleForceDelete} 
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                      Да, удалить всё
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </>
-          )}
-        </div>
-
-        <div className="grid gap-6">
-          {/* Basic Info */}
-          <Card className="p-6">
-            <h2 className="text-2xl font-bold mb-4">Основная информация</h2>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <Label htmlFor="title">Название работы *</Label>
-                <Input
-                  id="title"
-                  value={examData.title}
-                  onChange={(e) =>
-                    setExamData({ ...examData, title: e.target.value })
-                  }
-                  placeholder="Термодинамика и кислотно-основные реакции"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <Label htmlFor="description">Описание</Label>
-                <Textarea
-                  id="description"
-                  value={examData.description}
-                  onChange={(e) =>
-                    setExamData({ ...examData, description: e.target.value })
-                  }
-                  placeholder="Краткое описание работы..."
-                  rows={3}
-                />
-              </div>
+      <div className="space-y-6">
+        {/* Basic Info */}
+        <Card className="p-6">
+          <h2 className="section-rule mb-4 text-xl font-semibold">Основная информация</h2>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <Label htmlFor="title">Название работы *</Label>
+              <Input
+                id="title"
+                className="mt-1"
+                value={examData.title}
+                onChange={(e) =>
+                  setExamData({ ...examData, title: e.target.value })
+                }
+                placeholder="Термодинамика и кислотно-основные реакции"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <Label htmlFor="description">Описание</Label>
+              <Textarea
+                id="description"
+                className="mt-1"
+                value={examData.description}
+                onChange={(e) =>
+                  setExamData({ ...examData, description: e.target.value })
+                }
+                placeholder="Краткое описание работы..."
+                rows={3}
+              />
+            </div>
+            <div>
+              <Label htmlFor="kind">Тип работы *</Label>
+              <select
+                id="kind"
+                className={selectClass}
+                value={examData.kind}
+                onChange={(e) =>
+                  setExamData((prev) => ({
+                    ...prev,
+                    kind: e.target.value as WorkKind,
+                    duration_minutes:
+                      e.target.value === "homework"
+                        ? null
+                        : (prev.duration_minutes ?? 90),
+                  }))
+                }
+              >
+                <option value="control">Контрольная</option>
+                <option value="homework">Домашняя работа</option>
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="start_time">Дата и время начала *</Label>
+              <Input
+                id="start_time"
+                className="mt-1"
+                type="datetime-local"
+                value={examData.start_time}
+                onChange={(e) =>
+                  setExamData({ ...examData, start_time: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <Label htmlFor="end_time">Дата и время окончания *</Label>
+              <Input
+                id="end_time"
+                className="mt-1"
+                type="datetime-local"
+                value={examData.end_time}
+                onChange={(e) =>
+                  setExamData({ ...examData, end_time: e.target.value })
+                }
+              />
+            </div>
+            {examData.kind === "control" ? (
               <div>
-                <Label htmlFor="kind">Тип работы *</Label>
-                <select
-                  id="kind"
-                  className="w-full border rounded-md p-2"
-                  value={examData.kind}
-                  onChange={(e) =>
-                    setExamData((prev) => ({
-                      ...prev,
-                      kind: e.target.value as WorkKind,
-                      duration_minutes:
-                        e.target.value === "homework"
-                          ? null
-                          : (prev.duration_minutes ?? 90),
-                    }))
-                  }
-                >
-                  <option value="control">Контрольная</option>
-                  <option value="homework">Домашняя работа</option>
-                </select>
-              </div>
-              <div>
-                <Label htmlFor="start_time">Дата и время начала *</Label>
+                <Label htmlFor="duration">Длительность (минут) *</Label>
                 <Input
-                  id="start_time"
-                  type="datetime-local"
-                  value={examData.start_time}
-                  onChange={(e) =>
-                    setExamData({ ...examData, start_time: e.target.value })
-                  }
-                />
-              </div>
-              <div>
-                <Label htmlFor="end_time">Дата и время окончания *</Label>
-                <Input
-                  id="end_time"
-                  type="datetime-local"
-                  value={examData.end_time}
-                  onChange={(e) =>
-                    setExamData({ ...examData, end_time: e.target.value })
-                  }
-                />
-              </div>
-              {examData.kind === "control" ? (
-                <div>
-                  <Label htmlFor="duration">Длительность (минут) *</Label>
-                  <Input
-                    id="duration"
-                    type="number"
-                    value={examData.duration_minutes ?? 90}
-                    onChange={(e) =>
-                      setExamData({
-                        ...examData,
-                        duration_minutes: parseInt(e.target.value, 10) || 90,
-                      })
-                    }
-                  />
-                </div>
-              ) : (
-                <div className="rounded border p-3 text-sm text-muted-foreground">
-                  Для домашней работы таймер не используется: действует только окно между start/end.
-                </div>
-              )}
-              <div>
-                <Label htmlFor="max_attempts">Максимум попыток</Label>
-                <Input
-                  id="max_attempts"
+                  id="duration"
+                  className="mt-1"
                   type="number"
-                  value={examData.max_attempts}
+                  value={examData.duration_minutes ?? 90}
                   onChange={(e) =>
                     setExamData({
                       ...examData,
-                      max_attempts: parseInt(e.target.value) || 1,
+                      duration_minutes: parseInt(e.target.value, 10) || 90,
                     })
                   }
                 />
               </div>
-              <div className="md:col-span-2 space-y-4 rounded border p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="ocr-enabled">OCR (DataLab Marker)</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Если выключено, работа сразу попадет преподавателю без OCR и без LLM-препроверки.
-                    </p>
-                  </div>
-                  <Switch
-                    id="ocr-enabled"
-                    checked={examData.ocr_enabled}
-                    onCheckedChange={(checked) =>
-                      setExamData((prev) => ({
-                        ...prev,
-                        ocr_enabled: checked,
-                        llm_precheck_enabled: checked ? prev.llm_precheck_enabled : false,
-                      }))
-                    }
-                  />
+            ) : (
+              <div className="rounded-md border border-info/30 bg-info/10 p-3 text-sm text-muted-foreground">
+                Для домашней работы таймер не используется — действует только окно между началом и окончанием.
+              </div>
+            )}
+            <div>
+              <Label htmlFor="max_attempts">Максимум попыток</Label>
+              <Input
+                id="max_attempts"
+                className="mt-1"
+                type="number"
+                value={examData.max_attempts}
+                onChange={(e) =>
+                  setExamData({
+                    ...examData,
+                    max_attempts: parseInt(e.target.value) || 1,
+                  })
+                }
+              />
+            </div>
+            <div className="space-y-4 rounded-md border bg-muted/40 p-4 md:col-span-2">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <Label htmlFor="ocr-enabled">Распознавание рукописи (OCR)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Если выключено, решение попадёт к вам сразу — без распознавания и AI-препроверки.
+                  </p>
                 </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="llm-precheck-enabled">LLM препроверка</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Запускается после student OCR review и до показа работы преподавателю.
-                    </p>
-                  </div>
-                  <Switch
-                    id="llm-precheck-enabled"
-                    checked={examData.llm_precheck_enabled}
-                    disabled={!examData.ocr_enabled}
-                    onCheckedChange={(checked) =>
-                      setExamData((prev) => ({
-                        ...prev,
-                        llm_precheck_enabled: prev.ocr_enabled ? checked : false,
-                      }))
-                    }
-                  />
+                <Switch
+                  id="ocr-enabled"
+                  checked={examData.ocr_enabled}
+                  onCheckedChange={(checked) =>
+                    setExamData((prev) => ({
+                      ...prev,
+                      ocr_enabled: checked,
+                      llm_precheck_enabled: checked ? prev.llm_precheck_enabled : false,
+                    }))
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <Label htmlFor="llm-precheck-enabled">AI-препроверка</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Запускается после того, как студент подтвердит распознанный текст, и до показа решения вам.
+                  </p>
                 </div>
+                <Switch
+                  id="llm-precheck-enabled"
+                  checked={examData.llm_precheck_enabled}
+                  disabled={!examData.ocr_enabled}
+                  onCheckedChange={(checked) =>
+                    setExamData((prev) => ({
+                      ...prev,
+                      llm_precheck_enabled: prev.ocr_enabled ? checked : false,
+                    }))
+                  }
+                />
               </div>
             </div>
-          </Card>
+          </div>
+        </Card>
 
-          {/* Task Types */}
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-bold">Задачи</h2>
-              <Button onClick={addTaskType}>
-                <Plus className="w-4 h-4 mr-2" />
-                Добавить задачу
-              </Button>
-            </div>
+        {/* Task Types */}
+        <Card className="p-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="section-rule text-xl font-semibold">Задачи</h2>
+            <Button variant="outline" className="gap-1.5" onClick={addTaskType}>
+              <Plus className="h-4 w-4" />
+              Добавить задачу
+            </Button>
+          </div>
 
-            {taskTypes.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">
-                Нажмите "Добавить задачу", чтобы начать
-              </p>
-            ) : (
-              <div className="space-y-6">
-                {taskTypes.map((taskType, taskIndex) => (
-                  <Card key={taskIndex} className="p-4 border-2">
-                    <div className="flex items-start justify-between mb-4">
+          {taskTypes.length === 0 ? (
+            <EmptyState
+              icon={ListPlus}
+              title="Задач пока нет"
+              description="Добавьте задачу вручную или выберите готовые из банка ниже."
+              action={
+                <Button variant="accent" className="gap-1.5" onClick={addTaskType}>
+                  <Plus className="h-4 w-4" />
+                  Добавить задачу
+                </Button>
+              }
+            />
+          ) : (
+            <div className="space-y-6">
+              {taskTypes.map((taskType, taskIndex) => (
+                <Card key={taskIndex} className="border-accent/20 p-5">
+                  <div className="mb-4 flex items-start justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-lg font-semibold">
                         Задача {taskIndex + 1}
                       </h3>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeTaskType(taskIndex)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <span className="rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent">
+                        {taskType.max_score} б.
+                      </span>
+                      {taskType.id && <Badge variant="muted">Сохранена</Badge>}
                     </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => removeTaskType(taskIndex)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
 
-                    <Tabs defaultValue="basic">
-                      <TabsList>
-                        <TabsTrigger value="basic">Основное</TabsTrigger>
-                        <TabsTrigger value="variants">
-                          Варианты ({taskType.variants.length})
-                        </TabsTrigger>
-                        <TabsTrigger value="grading">Оценивание</TabsTrigger>
-                      </TabsList>
+                  <Tabs defaultValue="basic">
+                    <TabsList>
+                      <TabsTrigger value="basic">Основное</TabsTrigger>
+                      <TabsTrigger value="variants">
+                        Варианты ({taskType.variants.length})
+                      </TabsTrigger>
+                      <TabsTrigger value="grading">Оценивание</TabsTrigger>
+                    </TabsList>
 
-                      <TabsContent value="basic" className="space-y-4">
-                        <div>
-                          <Label>Название *</Label>
-                          <Input
-                            value={taskType.title}
-                            onChange={(e) =>
-                              updateTaskType(taskIndex, "title", e.target.value)
-                            }
-                            placeholder="Расчет pH раствора"
-                          />
-                        </div>
-                        <div>
-                          <Label>Условие задачи * {taskType.variants.length === 1 && "(для одного варианта — одно поле)"}</Label>
-                          <Textarea
-                            value={taskType.variants.length === 1
-                              ? (taskType.variants[0]?.content || taskType.description)
-                              : taskType.description}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              updateTaskType(taskIndex, "description", val);
-                              if (taskType.variants.length === 1 && taskType.variants[0]) {
-                                updateVariant(taskIndex, 0, "content", val);
-                              }
-                            }}
-                            placeholder="Текст условия: что должен сделать студент..."
-                            rows={4}
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <Label>Макс. балл</Label>
-                            <Input
-                              type="number"
-                              value={taskType.max_score}
-                              onChange={(e) =>
-                                updateTaskType(
-                                  taskIndex,
-                                  "max_score",
-                                  parseFloat(e.target.value) || 0
-                                )
-                              }
-                            />
-                          </div>
-                          <div>
-                            <Label>Сложность</Label>
-                            <select
-                              className="w-full border rounded-md p-2"
-                              value={taskType.difficulty}
-                              onChange={(e) =>
-                                updateTaskType(
-                                  taskIndex,
-                                  "difficulty",
-                                  e.target.value as TaskType["difficulty"]
-                                )
-                              }
-                            >
-                              <option value="easy">Легкая</option>
-                              <option value="medium">Средняя</option>
-                              <option value="hard">Сложная</option>
-                            </select>
-                          </div>
-                        </div>
-                      </TabsContent>
-
-                      <TabsContent value="variants" className="space-y-4">
-                        {taskType.variants.length === 1 ? (
-                          <p className="text-sm text-muted-foreground">
-                            Один вариант — условие заполняется во вкладке «Основное».
-                            Добавьте варианты, если нужно раздать студентам разные условия.
-                          </p>
-                        ) : null}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => addVariant(taskIndex)}
-                        >
-                          <Plus className="w-4 h-4 mr-2" />
-                          Добавить вариант
-                        </Button>
-
-                        {taskType.variants.map((variant, variantIndex) => (
-                          <Card key={variantIndex} className="p-4">
-                            <div className="flex items-start justify-between mb-4">
-                              <h4 className="font-semibold">
-                                Вариант {variantIndex + 1}
-                              </h4>
-                              {taskType.variants.length > 1 && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() =>
-                                    removeVariant(taskIndex, variantIndex)
-                                  }
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              )}
-                            </div>
-                            <div className="space-y-3">
-                              {taskType.variants.length > 1 && (
-                                <div>
-                                  <Label>Текст варианта *</Label>
-                                  <Textarea
-                                    value={variant.content}
-                                    onChange={(e) =>
-                                      updateVariant(
-                                        taskIndex,
-                                        variantIndex,
-                                        "content",
-                                        e.target.value
-                                      )
-                                    }
-                                    placeholder="Условие для этого варианта..."
-                                    rows={3}
-                                  />
-                                </div>
-                              )}
-                              <div>
-                                <Label>Эталонное решение (необяз.)</Label>
-                                <Textarea
-                                  value={variant.reference_solution}
-                                  onChange={(e) =>
-                                    updateVariant(
-                                      taskIndex,
-                                      variantIndex,
-                                      "reference_solution",
-                                      e.target.value
-                                    )
-                                  }
-                                  placeholder="Пошаговое решение..."
-                                  rows={2}
-                                />
-                              </div>
-                              <div>
-                                <Label>Правильный ответ (необяз.)</Label>
-                                <Input
-                                  value={variant.reference_answer}
-                                  onChange={(e) =>
-                                    updateVariant(
-                                      taskIndex,
-                                      variantIndex,
-                                      "reference_answer",
-                                      e.target.value
-                                    )
-                                  }
-                                  placeholder="pH = 3.14"
-                                />
-                              </div>
-                            </div>
-                          </Card>
-                        ))}
-                      </TabsContent>
-
-                      <TabsContent value="grading">
-                        <div className="space-y-4">
-                          <p className="text-sm text-muted-foreground">
-                            Дополнительно: критерии оценивания (JSON). По умолчанию — стандартные.
-                          </p>
-                          <Textarea
-                            value={JSON.stringify(taskType.rubric, null, 2)}
-                            onChange={(e) => {
-                              try {
-                                const rubric = JSON.parse(e.target.value);
-                                updateTaskType(taskIndex, "rubric", rubric);
-                              } catch (error) {
-                                // Invalid JSON, ignore
-                              }
-                            }}
-                            rows={10}
-                            className="font-mono text-sm"
-                          />
-                        </div>
-                      </TabsContent>
-                    </Tabs>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </Card>
-
-          {/* Task bank integration */}
-          <Card className="p-6">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold">Банк задач</h2>
-                <p className="text-sm text-muted-foreground">
-                  Добавление задач из источника Свиpидова в работу как snapshot
-                </p>
-                {!isEditMode && (
-                  <p className="text-xs text-amber-700 mt-1">
-                    Если работа еще не сохранена, черновик создастся автоматически.
-                  </p>
-                )}
-              </div>
-              <Button
-                onClick={addSelectedBankTasks}
-                disabled={loading || Object.keys(selectedBankItems).length === 0}
-              >
-                Добавить в работу ({Object.keys(selectedBankItems).length})
-              </Button>
-            </div>
-
-            <div className="grid md:grid-cols-3 gap-3 mb-4">
-              <div>
-                <Label htmlFor="bank-paragraph">Параграф</Label>
-                <Input
-                  id="bank-paragraph"
-                  value={bankParagraph}
-                  onChange={(event) => {
-                    setBankParagraph(event.target.value);
-                    setBankSkip(0);
-                  }}
-                  placeholder="Например: 7"
-                />
-              </div>
-              <div>
-                <Label htmlFor="bank-topic">Тема</Label>
-                <Input
-                  id="bank-topic"
-                  value={bankTopic}
-                  onChange={(event) => {
-                    setBankTopic(event.target.value);
-                    setBankSkip(0);
-                  }}
-                  placeholder="Поиск по теме"
-                />
-              </div>
-              <div>
-                <Label htmlFor="bank-answer">Ответ</Label>
-                <select
-                  id="bank-answer"
-                  className="w-full border rounded-md p-2"
-                  value={bankHasAnswer}
-                  onChange={(event) => {
-                    setBankHasAnswer(event.target.value as "all" | "yes" | "no");
-                    setBankSkip(0);
-                  }}
-                >
-                  <option value="all">Все задачи</option>
-                  <option value="yes">Только с ответом</option>
-                  <option value="no">Только без ответа</option>
-                </select>
-              </div>
-            </div>
-
-            <p className="text-sm text-muted-foreground mb-3">
-              Найдено задач: {bankTotalCount}
-            </p>
-
-            {bankLoading ? (
-              <p className="text-muted-foreground">Загрузка банка задач...</p>
-            ) : bankItems.length === 0 ? (
-              <p className="text-muted-foreground">По выбранным фильтрам задач не найдено</p>
-            ) : (
-              <div className="space-y-3">
-                {bankItems.map((item) => (
-                  <Card key={item.id} className="p-4">
-                    <div className="flex items-start justify-between gap-4">
+                    <TabsContent value="basic" className="space-y-4">
                       <div>
-                        <p className="text-sm text-muted-foreground mb-1">
-                          № {item.number} • § {item.paragraph}
-                        </p>
-                        <p className="font-semibold mb-1">{renderLatex(item.topic)}</p>
-                        <div className="text-sm text-muted-foreground line-clamp-3">
-                          {renderTaskText(item.text)}
+                        <Label>Название *</Label>
+                        <Input
+                          className="mt-1"
+                          value={taskType.title}
+                          onChange={(e) =>
+                            updateTaskType(taskIndex, "title", e.target.value)
+                          }
+                          placeholder="Расчёт pH раствора"
+                        />
+                      </div>
+                      <div>
+                        <Label>Условие задачи *</Label>
+                        <Textarea
+                          className="mt-1"
+                          value={taskType.variants.length === 1
+                            ? (taskType.variants[0]?.content || taskType.description)
+                            : taskType.description}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            updateTaskType(taskIndex, "description", val);
+                            if (taskType.variants.length === 1 && taskType.variants[0]) {
+                              updateVariant(taskIndex, 0, "content", val);
+                            }
+                          }}
+                          placeholder="Текст условия: что должен сделать студент..."
+                          rows={4}
+                        />
+                        {taskType.variants.length === 1 && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Пока вариант один — это же условие получат все студенты.
+                          </p>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Максимальный балл</Label>
+                          <Input
+                            className="mt-1"
+                            type="number"
+                            value={taskType.max_score}
+                            onChange={(e) =>
+                              updateTaskType(
+                                taskIndex,
+                                "max_score",
+                                parseFloat(e.target.value) || 0
+                              )
+                            }
+                          />
+                        </div>
+                        <div>
+                          <Label>Сложность</Label>
+                          <select
+                            className={selectClass}
+                            value={taskType.difficulty}
+                            onChange={(e) =>
+                              updateTaskType(
+                                taskIndex,
+                                "difficulty",
+                                e.target.value as TaskType["difficulty"]
+                              )
+                            }
+                          >
+                            <option value="easy">Лёгкая</option>
+                            <option value="medium">Средняя</option>
+                            <option value="hard">Сложная</option>
+                          </select>
                         </div>
                       </div>
+                    </TabsContent>
+
+                    <TabsContent value="variants" className="space-y-4">
+                      {taskType.variants.length === 1 ? (
+                        <p className="text-sm text-muted-foreground">
+                          Один вариант — условие заполняется во вкладке «Основное».
+                          Добавьте варианты, если нужно раздать студентам разные условия.
+                        </p>
+                      ) : null}
                       <Button
-                        variant={selectedBankItems[item.id] ? "default" : "outline"}
-                        onClick={() => toggleBankSelection(item)}
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5"
+                        onClick={() => addVariant(taskIndex)}
                       >
-                        {selectedBankItems[item.id] ? "Выбрано" : "Выбрать"}
+                        <Plus className="h-4 w-4" />
+                        Добавить вариант
                       </Button>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            )}
 
-            <div className="mt-4 flex items-center justify-between">
-              <Button
-                variant="outline"
-                disabled={bankSkip === 0}
-                onClick={() => setBankSkip((prev) => Math.max(0, prev - 20))}
-              >
-                Предыдущая страница
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                Страница {Math.floor(bankSkip / 20) + 1}
-              </span>
-              <Button
-                variant="outline"
-                disabled={bankSkip + 20 >= bankTotalCount}
-                onClick={() => setBankSkip((prev) => prev + 20)}
-              >
-                Следующая страница
-              </Button>
+                      {taskType.variants.map((variant, variantIndex) => (
+                        <Card key={variantIndex} className="p-4">
+                          <div className="mb-4 flex items-start justify-between">
+                            <h4 className="font-semibold">
+                              Вариант {variantIndex + 1}
+                            </h4>
+                            {taskType.variants.length > 1 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() =>
+                                  removeVariant(taskIndex, variantIndex)
+                                }
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                          <div className="space-y-3">
+                            {taskType.variants.length > 1 && (
+                              <div>
+                                <Label>Текст варианта *</Label>
+                                <Textarea
+                                  className="mt-1"
+                                  value={variant.content}
+                                  onChange={(e) =>
+                                    updateVariant(
+                                      taskIndex,
+                                      variantIndex,
+                                      "content",
+                                      e.target.value
+                                    )
+                                  }
+                                  placeholder="Условие для этого варианта..."
+                                  rows={3}
+                                />
+                              </div>
+                            )}
+                            <div>
+                              <Label>Эталонное решение</Label>
+                              <Textarea
+                                className="mt-1"
+                                value={variant.reference_solution}
+                                onChange={(e) =>
+                                  updateVariant(
+                                    taskIndex,
+                                    variantIndex,
+                                    "reference_solution",
+                                    e.target.value
+                                  )
+                                }
+                                placeholder="Пошаговое решение..."
+                                rows={2}
+                              />
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Необязательно — помогает AI-препроверке точнее оценивать.
+                              </p>
+                            </div>
+                            <div>
+                              <Label>Правильный ответ</Label>
+                              <Input
+                                className="mt-1"
+                                value={variant.reference_answer}
+                                onChange={(e) =>
+                                  updateVariant(
+                                    taskIndex,
+                                    variantIndex,
+                                    "reference_answer",
+                                    e.target.value
+                                  )
+                                }
+                                placeholder="pH = 3.14"
+                              />
+                              <p className="mt-1 text-xs text-muted-foreground">Необязательно</p>
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
+                    </TabsContent>
+
+                    <TabsContent value="grading">
+                      <div className="space-y-4">
+                        <p className="text-sm text-muted-foreground">
+                          Дополнительно: критерии оценивания (JSON). По умолчанию — стандартные.
+                        </p>
+                        <Textarea
+                          value={JSON.stringify(taskType.rubric, null, 2)}
+                          onChange={(e) => {
+                            try {
+                              const rubric = JSON.parse(e.target.value);
+                              updateTaskType(taskIndex, "rubric", rubric);
+                            } catch (error) {
+                              // Invalid JSON, ignore
+                            }
+                          }}
+                          rows={10}
+                          className="font-mono text-sm"
+                        />
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </Card>
+              ))}
             </div>
-          </Card>
+          )}
+        </Card>
 
-          {/* Actions */}
-          <div className="flex gap-4 justify-end">
-            <Button variant="outline" onClick={() => navigate(courseId ? `/c/${courseId}/teacher` : "/dashboard")} disabled={loading}>
-              Отмена
+        {/* Task bank integration */}
+        <Card className="p-6">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="section-rule text-xl font-semibold">Банк задач</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Задачи из источника Свиридова добавляются в работу как снимок.
+              </p>
+              {!isEditMode && (
+                <p className="mt-1 text-xs text-warning">
+                  Если работа ещё не сохранена, черновик создастся автоматически.
+                </p>
+              )}
+            </div>
+            <Button
+              variant="accent"
+              onClick={addSelectedBankTasks}
+              disabled={loading || Object.keys(selectedBankItems).length === 0}
+            >
+              Добавить в работу ({Object.keys(selectedBankItems).length})
             </Button>
-            {!isEditMode ? (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={() => handleSubmit(false)}
-                  disabled={loading}
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  Сохранить черновик
-                </Button>
-                <Button onClick={() => handleSubmit(true)} disabled={loading}>
-                  Опубликовать
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="outline" onClick={() => handleSubmit(false)} disabled={loading}>
-                  Сохранить изменения
-                </Button>
-                {examStatus === "draft" && (
-                  <Button onClick={() => handleSubmit(true)} disabled={loading}>
-                    Сохранить и опубликовать
-                  </Button>
-                )}
-              </>
-            )}
           </div>
+
+          <div className="mb-4 grid gap-3 md:grid-cols-3">
+            <div>
+              <Label htmlFor="bank-paragraph">Параграф</Label>
+              <Input
+                id="bank-paragraph"
+                className="mt-1"
+                value={bankParagraph}
+                onChange={(event) => {
+                  setBankParagraph(event.target.value);
+                  setBankSkip(0);
+                }}
+                placeholder="Например: 7"
+              />
+            </div>
+            <div>
+              <Label htmlFor="bank-topic">Тема</Label>
+              <Input
+                id="bank-topic"
+                className="mt-1"
+                value={bankTopic}
+                onChange={(event) => {
+                  setBankTopic(event.target.value);
+                  setBankSkip(0);
+                }}
+                placeholder="Поиск по теме"
+              />
+            </div>
+            <div>
+              <Label htmlFor="bank-answer">Наличие ответа</Label>
+              <select
+                id="bank-answer"
+                className={selectClass}
+                value={bankHasAnswer}
+                onChange={(event) => {
+                  setBankHasAnswer(event.target.value as "all" | "yes" | "no");
+                  setBankSkip(0);
+                }}
+              >
+                <option value="all">Все задачи</option>
+                <option value="yes">Только с ответом</option>
+                <option value="no">Только без ответа</option>
+              </select>
+            </div>
+          </div>
+
+          <p className="mb-3 text-sm text-muted-foreground">
+            Найдено задач: {bankTotalCount}
+          </p>
+
+          {bankLoading ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              Загружаем банк задач...
+            </p>
+          ) : bankItems.length === 0 ? (
+            <EmptyState
+              icon={SearchX}
+              title="По выбранным фильтрам задач нет"
+              description="Попробуйте изменить параграф или тему."
+            />
+          ) : (
+            <div className="space-y-3">
+              {bankItems.map((item) => (
+                <Card key={item.id} className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary">{item.number}</Badge>
+                        <Badge variant="outline">§ {item.paragraph}</Badge>
+                      </div>
+                      <p className="mb-1 font-semibold">{renderLatex(item.topic)}</p>
+                      <div className="line-clamp-3 text-sm text-muted-foreground">
+                        {renderTaskText(item.text)}
+                      </div>
+                    </div>
+                    <Button
+                      variant={selectedBankItems[item.id] ? "default" : "outline"}
+                      onClick={() => toggleBankSelection(item)}
+                    >
+                      {selectedBankItems[item.id] ? "Выбрано" : "Выбрать"}
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-4 flex items-center justify-between">
+            <Button
+              variant="outline"
+              className="gap-1.5"
+              disabled={bankSkip === 0}
+              onClick={() => setBankSkip((prev) => Math.max(0, prev - 20))}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Назад
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Страница {Math.floor(bankSkip / 20) + 1}
+            </span>
+            <Button
+              variant="outline"
+              className="gap-1.5"
+              disabled={bankSkip + 20 >= bankTotalCount}
+              onClick={() => setBankSkip((prev) => prev + 20)}
+            >
+              Вперёд
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </Card>
+
+        {/* Actions */}
+        <div className="flex flex-wrap justify-end gap-3">
+          <Button
+            variant="ghost"
+            onClick={() => navigate(courseId ? `/c/${courseId}/teacher` : "/dashboard")}
+            disabled={loading}
+          >
+            Отмена
+          </Button>
+          {!isEditMode ? (
+            <>
+              <Button
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => handleSubmit(false)}
+                disabled={loading}
+              >
+                <Save className="h-4 w-4" />
+                Сохранить черновик
+              </Button>
+              <Button variant="accent" onClick={() => handleSubmit(true)} disabled={loading}>
+                Опубликовать
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant={examStatus === "draft" ? "outline" : "accent"}
+                className="gap-1.5"
+                onClick={() => handleSubmit(false)}
+                disabled={loading}
+              >
+                <Save className="h-4 w-4" />
+                Сохранить изменения
+              </Button>
+              {examStatus === "draft" && (
+                <Button variant="accent" onClick={() => handleSubmit(true)} disabled={loading}>
+                  Сохранить и опубликовать
+                </Button>
+              )}
+            </>
+          )}
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 };
 

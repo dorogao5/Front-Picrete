@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { ChevronLeft, ChevronRight, Dumbbell, SearchX, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 
 import AuthImage from "@/components/AuthImage";
 import ImageLightbox from "@/components/ImageLightbox";
-import { Navbar } from "@/components/Navbar";
+import { EmptyState } from "@/components/EmptyState";
+import { PageLoader, PageShell } from "@/components/PageShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,9 +15,11 @@ import { Label } from "@/components/ui/label";
 import { fetchImageAsBlobUrl, getApiErrorMessage, taskBankAPI, trainerAPI } from "@/lib/api";
 import type { TaskBankItem, TaskBankSource, TrainerSet } from "@/lib/api";
 import { renderLatex, renderTaskText } from "@/lib/renderLatex";
-import { toast } from "sonner";
 
 const PAGE_SIZE = 40;
+
+const selectClass =
+  "mt-1 h-11 w-full rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
 const TaskBank = () => {
   const { courseId } = useParams<{ courseId: string }>();
@@ -143,7 +148,7 @@ const TaskBank = () => {
         courseId
       );
       const trainerSet = response.data as TrainerSet;
-      toast.success("Ручной набор создан");
+      toast.success("Набор из выбранных задач создан");
       navigate(`/c/${courseId}/trainer/${trainerSet.id}`);
     } catch (error: unknown) {
       toast.error(getApiErrorMessage(error, "Ошибка создания ручного набора"));
@@ -175,189 +180,201 @@ const TaskBank = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-subtle">
-      <Navbar />
-      <div className="container mx-auto px-6 pt-24 pb-12">
-        <div className="mb-8 flex items-center justify-between">
+    <PageShell
+      title="Банк задач"
+      subtitle="Фильтруйте задачи и собирайте тренировочные наборы"
+      actions={
+        <Link to={`/c/${courseId}/trainer`}>
+          <Button variant="outline" className="gap-1.5">
+            <Dumbbell className="h-4 w-4" />
+            Мои тренажёры
+          </Button>
+        </Link>
+      }
+    >
+      <Card className="mb-6 p-6">
+        <div className="grid gap-4 md:grid-cols-5">
           <div>
-            <h1 className="text-4xl font-bold mb-2">Банк задач</h1>
-            <p className="text-muted-foreground">Фильтрация задач и создание тренажерных наборов</p>
+            <Label htmlFor="source">Источник</Label>
+            <select
+              id="source"
+              className={selectClass}
+              value={sourceFilter}
+              onChange={(event) => {
+                setSourceFilter(event.target.value);
+                setSkip(0);
+              }}
+            >
+              {sources.map((source) => (
+                <option key={source.id} value={source.code}>
+                  {source.title}
+                </option>
+              ))}
+            </select>
           </div>
-          <Link to={`/c/${courseId}/trainer`}>
-            <Button variant="outline">Мои тренажеры</Button>
-          </Link>
-        </div>
-
-        <Card className="p-6 mb-6">
-          <div className="grid md:grid-cols-5 gap-4">
-            <div>
-              <Label htmlFor="source">Источник</Label>
-              <select
-                id="source"
-                className="w-full border rounded-md p-2"
-                value={sourceFilter}
-                onChange={(event) => {
-                  setSourceFilter(event.target.value);
-                  setSkip(0);
-                }}
-              >
-                {sources.map((source) => (
-                  <option key={source.id} value={source.code}>
-                    {source.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label htmlFor="paragraph">Параграф</Label>
-              <Input
-                id="paragraph"
-                value={paragraphFilter}
-                onChange={(event) => {
-                  setParagraphFilter(event.target.value);
-                  setSkip(0);
-                }}
-                placeholder="Например: 7"
-              />
-            </div>
-            <div>
-              <Label htmlFor="topic">Тема</Label>
-              <Input
-                id="topic"
-                value={topicFilter}
-                onChange={(event) => {
-                  setTopicFilter(event.target.value);
-                  setSkip(0);
-                }}
-                placeholder="Поиск по теме"
-              />
-            </div>
-            <div>
-              <Label htmlFor="answer">Наличие ответа</Label>
-              <select
-                id="answer"
-                className="w-full border rounded-md p-2"
-                value={hasAnswerFilter}
-                onChange={(event) => {
-                  setHasAnswerFilter(event.target.value as "all" | "yes" | "no");
-                  setSkip(0);
-                }}
-              >
-                <option value="all">Все</option>
-                <option value="yes">С ответом</option>
-                <option value="no">Без ответа</option>
-              </select>
-            </div>
-            <div>
-              <Label htmlFor="count">Количество в генерации</Label>
-              <Input
-                id="count"
-                type="number"
-                min={1}
-                max={100}
-                value={generateCount}
-                onChange={(event) => setGenerateCount(Math.max(1, Number(event.target.value) || 1))}
-              />
-            </div>
-          </div>
-          <div className="mt-4 grid md:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="paragraph">Параграф</Label>
             <Input
+              id="paragraph"
+              className="mt-1"
+              value={paragraphFilter}
+              onChange={(event) => {
+                setParagraphFilter(event.target.value);
+                setSkip(0);
+              }}
+              placeholder="Например: 7"
+            />
+          </div>
+          <div>
+            <Label htmlFor="topic">Тема</Label>
+            <Input
+              id="topic"
+              className="mt-1"
+              value={topicFilter}
+              onChange={(event) => {
+                setTopicFilter(event.target.value);
+                setSkip(0);
+              }}
+              placeholder="Поиск по теме"
+            />
+          </div>
+          <div>
+            <Label htmlFor="answer">Наличие ответа</Label>
+            <select
+              id="answer"
+              className={selectClass}
+              value={hasAnswerFilter}
+              onChange={(event) => {
+                setHasAnswerFilter(event.target.value as "all" | "yes" | "no");
+                setSkip(0);
+              }}
+            >
+              <option value="all">Все</option>
+              <option value="yes">С ответом</option>
+              <option value="no">Без ответа</option>
+            </select>
+          </div>
+          <div>
+            <Label htmlFor="count">Задач в подборке</Label>
+            <Input
+              id="count"
+              className="mt-1"
+              type="number"
+              min={1}
+              max={100}
+              value={generateCount}
+              onChange={(event) => setGenerateCount(Math.max(1, Number(event.target.value) || 1))}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">Для автоматической подборки</p>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div>
+            <Label htmlFor="set-title">Название набора</Label>
+            <Input
+              id="set-title"
+              className="mt-1"
               value={setTitle}
               onChange={(event) => setSetTitle(event.target.value)}
-              placeholder="Название набора (необязательно)"
+              placeholder="Необязательно — придумаем сами"
             />
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={createGeneratedSet}>
-                Сгенерировать набор
-              </Button>
-              <Button onClick={createManualSet}>
-                Создать ручной набор ({selectedNumbers.length})
-              </Button>
-            </div>
           </div>
-        </Card>
-
-        <div className="mb-3 text-sm text-muted-foreground">
-          Найдено: {totalCount} задач. Показано: {items.length}.
+          <div className="flex flex-wrap items-end justify-end gap-2">
+            <Button variant="outline" className="gap-1.5" onClick={createGeneratedSet}>
+              <Sparkles className="h-4 w-4" />
+              Сгенерировать набор
+            </Button>
+            <Button variant="accent" onClick={createManualSet}>
+              Создать из выбранных ({selectedNumbers.length})
+            </Button>
+          </div>
         </div>
+      </Card>
 
-        {loading ? (
-          <Card className="p-8 text-center">
-            <p className="text-muted-foreground">Загрузка...</p>
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {items.map((item) => (
-              <Card key={item.id} className="p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex flex-wrap items-center gap-2 mb-3">
-                      <Badge variant="secondary">{item.number}</Badge>
-                      <Badge variant="outline">§ {item.paragraph}</Badge>
-                      {item.has_answer ? (
-                        <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
-                          С ответом
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">
-                          Без ответа
-                        </Badge>
-                      )}
-                    </div>
-                    <h3 className="font-semibold mb-2">{renderLatex(item.topic)}</h3>
-                    <div className="text-sm text-muted-foreground whitespace-pre-wrap">
-                      {renderTaskText(item.text)}
-                    </div>
-                    {item.images.length > 0 && (
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {item.images.map((image, index) => (
-                          <button
-                            key={image.id}
-                            type="button"
-                            onClick={() => openLightbox(item, index)}
-                            className="border rounded overflow-hidden"
-                          >
-                            <AuthImage
-                              src={image.thumbnail_url}
-                              alt={`Задача ${item.number}`}
-                              className="h-20 w-20 object-cover"
-                            />
-                          </button>
-                        ))}
-                      </div>
+      <div className="mb-3 text-sm text-muted-foreground">
+        Найдено задач: {totalCount} · на странице: {items.length}
+      </div>
+
+      {loading ? (
+        <PageLoader label="Загружаем задачи..." />
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon={SearchX}
+          title="По этим фильтрам задач нет"
+          description="Попробуйте изменить источник, параграф или тему поиска."
+        />
+      ) : (
+        <div className="space-y-4">
+          {items.map((item) => (
+            <Card key={item.id} className="p-5 transition-shadow hover:shadow-elegant">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary">{item.number}</Badge>
+                    <Badge variant="outline">§ {item.paragraph}</Badge>
+                    {item.has_answer ? (
+                      <Badge variant="success">С ответом</Badge>
+                    ) : (
+                      <Badge variant="muted">Без ответа</Badge>
                     )}
                   </div>
-                  <Button
-                    variant={selectedItems[item.id] ? "default" : "outline"}
-                    onClick={() => toggleSelection(item)}
-                  >
-                    {selectedItems[item.id] ? "Выбрано" : "Выбрать"}
-                  </Button>
+                  <h3 className="mb-2 font-semibold">{renderLatex(item.topic)}</h3>
+                  <div className="whitespace-pre-wrap text-sm text-muted-foreground">
+                    {renderTaskText(item.text)}
+                  </div>
+                  {item.images.length > 0 && (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {item.images.map((image, index) => (
+                        <button
+                          key={image.id}
+                          type="button"
+                          onClick={() => openLightbox(item, index)}
+                          className="overflow-hidden rounded-md border transition-shadow hover:shadow-soft"
+                        >
+                          <AuthImage
+                            src={image.thumbnail_url}
+                            alt={`Задача ${item.number}`}
+                            className="h-20 w-20 object-cover"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        <div className="mt-6 flex items-center justify-between">
-          <Button
-            variant="outline"
-            disabled={skip === 0}
-            onClick={() => setSkip((prev) => Math.max(0, prev - PAGE_SIZE))}
-          >
-            Предыдущая страница
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            Страница {Math.floor(skip / PAGE_SIZE) + 1}
-          </span>
-          <Button
-            variant="outline"
-            disabled={skip + PAGE_SIZE >= totalCount}
-            onClick={() => setSkip((prev) => prev + PAGE_SIZE)}
-          >
-            Следующая страница
-          </Button>
+                <Button
+                  variant={selectedItems[item.id] ? "default" : "outline"}
+                  onClick={() => toggleSelection(item)}
+                >
+                  {selectedItems[item.id] ? "Выбрано" : "Выбрать"}
+                </Button>
+              </div>
+            </Card>
+          ))}
         </div>
+      )}
+
+      <div className="mt-6 flex items-center justify-between">
+        <Button
+          variant="outline"
+          className="gap-1.5"
+          disabled={skip === 0}
+          onClick={() => setSkip((prev) => Math.max(0, prev - PAGE_SIZE))}
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Назад
+        </Button>
+        <span className="text-sm text-muted-foreground">
+          Страница {Math.floor(skip / PAGE_SIZE) + 1}
+        </span>
+        <Button
+          variant="outline"
+          className="gap-1.5"
+          disabled={skip + PAGE_SIZE >= totalCount}
+          onClick={() => setSkip((prev) => prev + PAGE_SIZE)}
+        >
+          Вперёд
+          <ChevronRight className="h-4 w-4" />
+        </Button>
       </div>
 
       {lightboxOpen && (
@@ -367,7 +384,7 @@ const TaskBank = () => {
           onClose={closeLightbox}
         />
       )}
-    </div>
+    </PageShell>
   );
 };
 

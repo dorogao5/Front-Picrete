@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { GraduationCap, KeyRound, RefreshCw, Trash2, Users } from "lucide-react";
+import { toast } from "sonner";
 
-import { Navbar } from "@/components/Navbar";
+import { EmptyState } from "@/components/EmptyState";
+import { PageShell } from "@/components/PageShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -11,8 +14,6 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { coursesAPI, getApiErrorMessage, usersAPI } from "@/lib/api";
 import type { Membership } from "@/lib/auth";
-import { toast } from "sonner";
-import { RefreshCw, Trash2 } from "lucide-react";
 
 interface AdminUser {
   id: string;
@@ -113,7 +114,7 @@ const AdminDashboard = () => {
       const next = { [field]: !user[field] };
       await usersAPI.update(user.id, next);
       setUsers((prev) => prev.map((item) => (item.id === user.id ? { ...item, ...next } : item)));
-      toast.success("Пользователь обновлен");
+      toast.success("Пользователь обновлён");
     } catch (error: unknown) {
       toast.error(getApiErrorMessage(error, "Не удалось обновить пользователя"));
     }
@@ -140,7 +141,7 @@ const AdminDashboard = () => {
     try {
       await usersAPI.update(userId, { password });
       setResetPasswords((prev) => ({ ...prev, [userId]: "" }));
-      toast.success("Пароль обновлен");
+      toast.success("Пароль обновлён");
     } catch (error: unknown) {
       toast.error(getApiErrorMessage(error, "Не удалось обновить пароль"));
     }
@@ -238,9 +239,11 @@ const AdminDashboard = () => {
           [role]: inviteCode,
         },
       }));
-      toast.success(`Invite-код для ${role === "teacher" ? "преподавателя" : "студента"} обновлен`);
+      toast.success(
+        `Код приглашения для ${role === "teacher" ? "преподавателя" : "студента"} обновлён`
+      );
     } catch (error: unknown) {
-      toast.error(getApiErrorMessage(error, "Не удалось ротировать invite-код"));
+      toast.error(getApiErrorMessage(error, "Не удалось обновить код приглашения"));
     }
   };
 
@@ -251,7 +254,7 @@ const AdminDashboard = () => {
     try {
       ruleConfig = draft.rule_config.trim() ? JSON.parse(draft.rule_config) : {};
     } catch {
-      toast.error("rule_config должен быть валидным JSON");
+      toast.error("Настройки правила должны быть валидным JSON");
       return;
     }
 
@@ -260,15 +263,15 @@ const AdminDashboard = () => {
         rule_type: draft.rule_type,
         rule_config: ruleConfig,
       });
-      toast.success("Identity policy обновлена");
+      toast.success("Политика идентификации обновлена");
     } catch (error: unknown) {
-      toast.error(getApiErrorMessage(error, "Не удалось обновить identity policy"));
+      toast.error(getApiErrorMessage(error, "Не удалось обновить политику идентификации"));
     }
   };
 
   const handleDeleteUser = async (user: AdminUser) => {
     const confirmed = window.confirm(
-      `Удалить пользователя @${user.username}? Это действие полностью удалит пользователя из БД и связанные membership-записи.`
+      `Удалить пользователя @${user.username}? Он будет полностью удалён из базы вместе с записями об участии в курсах.`
     );
     if (!confirmed) return;
 
@@ -281,7 +284,7 @@ const AdminDashboard = () => {
         delete next[user.id];
         return next;
       });
-      toast.success("Пользователь удален");
+      toast.success("Пользователь удалён");
     } catch (error: unknown) {
       toast.error(getApiErrorMessage(error, "Не удалось удалить пользователя"));
     } finally {
@@ -291,7 +294,7 @@ const AdminDashboard = () => {
 
   const handleDeleteCourse = async (membership: Membership) => {
     const confirmed = window.confirm(
-      `Удалить курс "${membership.course_title}" (${membership.course_slug})? Это действие полностью удалит курс и все связанные данные из БД.`
+      `Удалить курс «${membership.course_title}» (${membership.course_slug})? Курс и все связанные данные будут полностью удалены из базы.`
     );
     if (!confirmed) return;
 
@@ -309,7 +312,7 @@ const AdminDashboard = () => {
         delete next[membership.course_id];
         return next;
       });
-      toast.success("Курс удален");
+      toast.success("Курс удалён");
     } catch (error: unknown) {
       toast.error(getApiErrorMessage(error, "Не удалось удалить курс"));
     } finally {
@@ -329,199 +332,216 @@ const AdminDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-subtle">
-      <Navbar />
-      <div className="container mx-auto px-6 pt-24 pb-12 space-y-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-4xl font-bold mb-2">Админ-панель</h1>
-            <p className="text-muted-foreground">Пользователи, курсы и invite-политики</p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={fetchUsers} disabled={loadingUsers}>
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Пользователи
-            </Button>
-            <Button variant="outline" onClick={fetchCourses} disabled={loadingCourses}>
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Курсы
-            </Button>
-          </div>
-        </div>
+    <PageShell
+      width="wide"
+      title="Админ-панель"
+      subtitle="Пользователи, курсы и коды приглашений"
+      actions={
+        <>
+          <Button variant="outline" className="gap-1.5" onClick={fetchUsers} disabled={loadingUsers}>
+            <RefreshCw className="h-4 w-4" />
+            Обновить пользователей
+          </Button>
+          <Button variant="outline" className="gap-1.5" onClick={fetchCourses} disabled={loadingCourses}>
+            <RefreshCw className="h-4 w-4" />
+            Обновить курсы
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-10">
+        <section>
+          <h2 className="section-rule mb-4 text-xl font-semibold">Поиск пользователей</h2>
+          <Card className="p-6">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label>Логин</Label>
+                <Input
+                  placeholder="petrov_2026"
+                  value={filters.username}
+                  onChange={(event) => setFilters((prev) => ({ ...prev, username: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Права</Label>
+                <Select
+                  value={filters.isPlatformAdmin}
+                  onValueChange={(value) =>
+                    setFilters((prev) => ({ ...prev, isPlatformAdmin: value as "all" | "true" | "false" }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Все</SelectItem>
+                    <SelectItem value="true">Только админы</SelectItem>
+                    <SelectItem value="false">Без прав админа</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Статус</Label>
+                <Select
+                  value={filters.isActive}
+                  onValueChange={(value) =>
+                    setFilters((prev) => ({ ...prev, isActive: value as "all" | "true" | "false" }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Все</SelectItem>
+                    <SelectItem value="true">Активные</SelectItem>
+                    <SelectItem value="false">Заблокированные</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </Card>
+        </section>
 
-        <Card className="p-6 space-y-4">
-          <h2 className="text-xl font-semibold">Фильтр пользователей</h2>
-          <div className="grid md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label>Username</Label>
-              <Input
-                placeholder="petrov_2026"
-                value={filters.username}
-                onChange={(event) => setFilters((prev) => ({ ...prev, username: event.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Platform Admin</Label>
-              <Select
-                value={filters.isPlatformAdmin}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({ ...prev, isPlatformAdmin: value as "all" | "true" | "false" }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Все</SelectItem>
-                  <SelectItem value="true">Только админы</SelectItem>
-                  <SelectItem value="false">Не админы</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Активность</Label>
-              <Select
-                value={filters.isActive}
-                onValueChange={(value) =>
-                  setFilters((prev) => ({ ...prev, isActive: value as "all" | "true" | "false" }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Все</SelectItem>
-                  <SelectItem value="true">Активные</SelectItem>
-                  <SelectItem value="false">Заблокированные</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </Card>
+        <section>
+          <h2 className="section-rule mb-4 text-xl font-semibold">Новый пользователь</h2>
+          <Card className="p-6">
+            <form className="grid gap-4 md:grid-cols-3" onSubmit={handleCreateUser}>
+              <div className="space-y-2">
+                <Label>Логин</Label>
+                <Input
+                  value={createUserForm.username}
+                  onChange={(event) =>
+                    setCreateUserForm((prev) => ({ ...prev, username: event.target.value }))
+                  }
+                  required
+                  minLength={3}
+                  maxLength={64}
+                  placeholder="petrov_2026"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>ФИО</Label>
+                <Input
+                  value={createUserForm.full_name}
+                  onChange={(event) =>
+                    setCreateUserForm((prev) => ({ ...prev, full_name: event.target.value }))
+                  }
+                  required
+                  placeholder="Пётр Петров"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Пароль</Label>
+                <Input
+                  type="password"
+                  value={createUserForm.password}
+                  onChange={(event) =>
+                    setCreateUserForm((prev) => ({ ...prev, password: event.target.value }))
+                  }
+                  required
+                  minLength={8}
+                />
+                <p className="text-xs text-muted-foreground">Минимум 8 символов</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Switch
+                  checked={createUserForm.is_platform_admin}
+                  onCheckedChange={(value) =>
+                    setCreateUserForm((prev) => ({ ...prev, is_platform_admin: value }))
+                  }
+                />
+                <Label>Админ платформы</Label>
+              </div>
+              <div className="flex items-center gap-3">
+                <Switch
+                  checked={createUserForm.is_active}
+                  onCheckedChange={(value) => setCreateUserForm((prev) => ({ ...prev, is_active: value }))}
+                />
+                <Label>Активен</Label>
+              </div>
+              <div className="space-y-2">
+                <Label>Курс</Label>
+                <Select
+                  value={createUserForm.course_id}
+                  onValueChange={(value) =>
+                    setCreateUserForm((prev) => ({ ...prev, course_id: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Без курса" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_COURSE_VALUE}>Без курса</SelectItem>
+                    {memberships.map((membership) => (
+                      <SelectItem key={membership.course_id} value={membership.course_id}>
+                        {membership.course_title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Роль в курсе</Label>
+                <Select
+                  value={createUserForm.course_role}
+                  onValueChange={(value) =>
+                    setCreateUserForm((prev) => ({ ...prev, course_role: value as CourseRoleChoice }))
+                  }
+                  disabled={createUserForm.course_id === NO_COURSE_VALUE}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="teacher">Преподаватель</SelectItem>
+                    <SelectItem value="student">Студент</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="md:col-span-3">
+                <Button type="submit" variant="accent">
+                  Создать пользователя
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </section>
 
-        <Card className="p-6 space-y-4">
-          <h2 className="text-xl font-semibold">Создать пользователя</h2>
-          <form className="grid md:grid-cols-3 gap-4" onSubmit={handleCreateUser}>
-            <div className="space-y-2">
-              <Label>Username</Label>
-              <Input
-                value={createUserForm.username}
-                onChange={(event) =>
-                  setCreateUserForm((prev) => ({ ...prev, username: event.target.value }))
-                }
-                required
-                minLength={3}
-                maxLength={64}
-                placeholder="petrov_2026"
-              />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label>ФИО</Label>
-              <Input
-                value={createUserForm.full_name}
-                onChange={(event) =>
-                  setCreateUserForm((prev) => ({ ...prev, full_name: event.target.value }))
-                }
-                required
-                placeholder="Петр Петров"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Пароль</Label>
-              <Input
-                type="password"
-                value={createUserForm.password}
-                onChange={(event) =>
-                  setCreateUserForm((prev) => ({ ...prev, password: event.target.value }))
-                }
-                required
-                minLength={8}
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <Switch
-                checked={createUserForm.is_platform_admin}
-                onCheckedChange={(value) =>
-                  setCreateUserForm((prev) => ({ ...prev, is_platform_admin: value }))
-                }
-              />
-              <Label>Platform Admin</Label>
-            </div>
-            <div className="flex items-center gap-3">
-              <Switch
-                checked={createUserForm.is_active}
-                onCheckedChange={(value) => setCreateUserForm((prev) => ({ ...prev, is_active: value }))}
-              />
-              <Label>Активен</Label>
-            </div>
-            <div className="space-y-2">
-              <Label>Курс</Label>
-              <Select
-                value={createUserForm.course_id}
-                onValueChange={(value) =>
-                  setCreateUserForm((prev) => ({ ...prev, course_id: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Без курса" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_COURSE_VALUE}>Без курса</SelectItem>
-                  {memberships.map((membership) => (
-                    <SelectItem key={membership.course_id} value={membership.course_id}>
-                      {membership.course_title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Роль в курсе</Label>
-              <Select
-                value={createUserForm.course_role}
-                onValueChange={(value) =>
-                  setCreateUserForm((prev) => ({ ...prev, course_role: value as CourseRoleChoice }))
-                }
-                disabled={createUserForm.course_id === NO_COURSE_VALUE}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="teacher">Преподаватель</SelectItem>
-                  <SelectItem value="student">Студент</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="md:col-span-3">
-              <Button type="submit">Создать</Button>
-            </div>
-          </form>
-        </Card>
-
-        <Card className="p-6 space-y-4">
-          <h2 className="text-xl font-semibold">Пользователи</h2>
+        <section>
+          <h2 className="section-rule mb-4 flex items-center gap-2 text-xl font-semibold">
+            Пользователи
+            {!loadingUsers && <Badge variant="muted">{users.length}</Badge>}
+          </h2>
           {loadingUsers ? (
-            <div className="py-8 text-center text-muted-foreground">Загрузка...</div>
+            <Card className="p-8 text-center text-sm text-muted-foreground">
+              Загружаем пользователей...
+            </Card>
           ) : users.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">Пользователи не найдены</div>
+            <EmptyState
+              icon={Users}
+              title="Никого не нашли"
+              description="Попробуйте изменить фильтры поиска или создайте пользователя выше."
+            />
           ) : (
             <div className="space-y-3">
               {users.map((user) => (
-                <Card key={user.id} className="p-4 border border-border/60">
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
+                <Card key={user.id} className="p-5">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-lg font-semibold">{user.full_name}</h3>
-                        <Badge variant={user.is_platform_admin ? "default" : "secondary"}>
-                          {user.is_platform_admin ? "Platform Admin" : "User"}
-                        </Badge>
+                        {user.is_platform_admin ? (
+                          <Badge variant="accent">Админ платформы</Badge>
+                        ) : (
+                          <Badge variant="muted">Пользователь</Badge>
+                        )}
+                        {!user.is_active && <Badge variant="destructive">Заблокирован</Badge>}
                       </div>
-                      <p className="text-sm text-muted-foreground">@{user.username}</p>
+                      <p className="mt-0.5 text-sm text-muted-foreground">@{user.username}</p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-4">
                       <div className="flex items-center gap-2">
-                        <Label className="text-sm">Platform Admin</Label>
+                        <Label className="text-sm">Админ платформы</Label>
                         <Switch
                           checked={user.is_platform_admin}
                           onCheckedChange={(value) => handlePlatformAdmin(user, value)}
@@ -533,7 +553,7 @@ const AdminDashboard = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto] md:items-end">
+                  <div className="mt-4 grid gap-3 border-t pt-4 md:grid-cols-[minmax(0,1fr)_180px_auto] md:items-end">
                     <div className="space-y-2">
                       <Label className="text-sm">Назначить в курс</Label>
                       <Select
@@ -592,8 +612,8 @@ const AdminDashboard = () => {
                       Назначить
                     </Button>
                   </div>
-                  <div className="mt-4 flex flex-col md:flex-row md:items-end gap-3">
-                    <div className="space-y-2 flex-1">
+                  <div className="mt-4 flex flex-col gap-3 border-t pt-4 md:flex-row md:items-end">
+                    <div className="flex-1 space-y-2">
                       <Label className="text-sm">Новый пароль</Label>
                       <div className="flex items-center gap-2">
                         <Input
@@ -610,66 +630,78 @@ const AdminDashboard = () => {
                       </div>
                     </div>
                     <Button
-                      variant="destructive"
+                      variant="ghost"
+                      className="gap-1.5 text-destructive hover:text-destructive"
                       onClick={() => handleDeleteUser(user)}
                       disabled={deletingUserId === user.id}
-                      className="gap-2"
                     >
-                      <Trash2 className="w-4 h-4" />
-                      {deletingUserId === user.id ? "Удаление..." : "Удалить пользователя"}
+                      <Trash2 className="h-4 w-4" />
+                      {deletingUserId === user.id ? "Удаляем..." : "Удалить пользователя"}
                     </Button>
                   </div>
                 </Card>
               ))}
             </div>
           )}
-        </Card>
+        </section>
 
-        <Card className="p-6 space-y-4">
-          <h2 className="text-xl font-semibold">Создать курс</h2>
-          <form className="grid md:grid-cols-3 gap-4" onSubmit={handleCreateCourse}>
-            <div className="space-y-2">
-              <Label>Slug</Label>
-              <Input
-                value={courseForm.slug}
-                onChange={(event) => setCourseForm((prev) => ({ ...prev, slug: event.target.value }))}
-                placeholder="itmo-chem-2026"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Название</Label>
-              <Input
-                value={courseForm.title}
-                onChange={(event) => setCourseForm((prev) => ({ ...prev, title: event.target.value }))}
-                placeholder="ITMO Chemistry 2026"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Организация</Label>
-              <Input
-                value={courseForm.organization}
-                onChange={(event) =>
-                  setCourseForm((prev) => ({ ...prev, organization: event.target.value }))
-                }
-                placeholder="ITMO"
-              />
-            </div>
-            <div className="md:col-span-3">
-              <Button type="submit">Создать курс</Button>
-            </div>
-          </form>
-        </Card>
+        <section>
+          <h2 className="section-rule mb-4 text-xl font-semibold">Новый курс</h2>
+          <Card className="p-6">
+            <form className="grid gap-4 md:grid-cols-3" onSubmit={handleCreateCourse}>
+              <div className="space-y-2">
+                <Label>Идентификатор (slug)</Label>
+                <Input
+                  value={courseForm.slug}
+                  onChange={(event) => setCourseForm((prev) => ({ ...prev, slug: event.target.value }))}
+                  placeholder="itmo-chem-2026"
+                  required
+                />
+                <p className="text-xs text-muted-foreground">Латиницей, попадёт в адрес курса</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Название</Label>
+                <Input
+                  value={courseForm.title}
+                  onChange={(event) => setCourseForm((prev) => ({ ...prev, title: event.target.value }))}
+                  placeholder="Химия ИТМО 2026"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Организация</Label>
+                <Input
+                  value={courseForm.organization}
+                  onChange={(event) =>
+                    setCourseForm((prev) => ({ ...prev, organization: event.target.value }))
+                  }
+                  placeholder="ITMO"
+                />
+              </div>
+              <div className="md:col-span-3">
+                <Button type="submit" variant="accent">
+                  Создать курс
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </section>
 
-        <Card className="p-6 space-y-4">
-          <h2 className="text-xl font-semibold">Курсы и invite-политики</h2>
+        <section>
+          <h2 className="section-rule mb-4 flex items-center gap-2 text-xl font-semibold">
+            Курсы и приглашения
+            {!loadingCourses && <Badge variant="muted">{memberships.length}</Badge>}
+          </h2>
           {loadingCourses ? (
-            <div className="py-8 text-center text-muted-foreground">Загрузка...</div>
+            <Card className="p-8 text-center text-sm text-muted-foreground">
+              Загружаем курсы...
+            </Card>
           ) : memberships.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">
-              Нет курсов. Создайте курс выше или присоединитесь по invite-коду.
-            </div>
+            <EmptyState
+              icon={GraduationCap}
+              title="Курсов пока нет"
+              description="Создайте первый курс в форме выше или присоединитесь по коду приглашения."
+            />
           ) : (
             <div className="space-y-4">
               {memberships.map((membership) => {
@@ -680,25 +712,29 @@ const AdminDashboard = () => {
                 const codes = inviteCodes[membership.course_id];
 
                 return (
-                  <Card key={membership.course_id} className="p-4 border border-border/60 space-y-4">
-                    <div className="flex items-center justify-between">
+                  <Card key={membership.course_id} className="space-y-4 p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-lg font-semibold">{membership.course_title}</p>
                         <p className="text-sm text-muted-foreground">
-                          slug: {membership.course_slug} | roles: {membership.roles.join(", ")}
+                          {membership.course_slug} · роли: {membership.roles.join(", ")}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="secondary">{membership.status}</Badge>
+                        {membership.status === "active" ? (
+                          <Badge variant="success">Активен</Badge>
+                        ) : (
+                          <Badge variant="muted">{membership.status}</Badge>
+                        )}
                         <Button
-                          variant="destructive"
+                          variant="ghost"
                           size="sm"
-                          className="gap-2"
+                          className="gap-1.5 text-destructive hover:text-destructive"
                           onClick={() => handleDeleteCourse(membership)}
                           disabled={deletingCourseId === membership.course_id}
                         >
-                          <Trash2 className="w-4 h-4" />
-                          {deletingCourseId === membership.course_id ? "Удаление..." : "Удалить"}
+                          <Trash2 className="h-4 w-4" />
+                          {deletingCourseId === membership.course_id ? "Удаляем..." : "Удалить"}
                         </Button>
                       </div>
                     </div>
@@ -706,28 +742,44 @@ const AdminDashboard = () => {
                     <div className="flex flex-wrap gap-2">
                       <Button
                         variant="outline"
+                        size="sm"
+                        className="gap-1.5"
                         onClick={() => handleRotateInvite(membership.course_id, "teacher")}
                       >
-                        Rotate teacher invite
+                        <KeyRound className="h-4 w-4" />
+                        Новый код для преподавателя
                       </Button>
                       <Button
                         variant="outline"
+                        size="sm"
+                        className="gap-1.5"
                         onClick={() => handleRotateInvite(membership.course_id, "student")}
                       >
-                        Rotate student invite
+                        <KeyRound className="h-4 w-4" />
+                        Новый код для студента
                       </Button>
                     </div>
 
                     {(codes?.teacher || codes?.student) && (
-                      <div className="rounded border border-border/60 p-3 text-sm space-y-1">
-                        {codes.teacher && <p>Teacher invite: {codes.teacher}</p>}
-                        {codes.student && <p>Student invite: {codes.student}</p>}
+                      <div className="space-y-1 rounded-md border border-accent/25 bg-accent/5 p-3 text-sm">
+                        {codes.teacher && (
+                          <p>
+                            Код преподавателя:{" "}
+                            <span className="select-all font-mono font-semibold">{codes.teacher}</span>
+                          </p>
+                        )}
+                        {codes.student && (
+                          <p>
+                            Код студента:{" "}
+                            <span className="select-all font-mono font-semibold">{codes.student}</span>
+                          </p>
+                        )}
                       </div>
                     )}
 
-                    <div className="grid md:grid-cols-3 gap-3">
+                    <div className="grid gap-3 border-t pt-4 md:grid-cols-3">
                       <div className="space-y-2">
-                        <Label>Policy type</Label>
+                        <Label>Правило идентификации</Label>
                         <Select
                           value={draft.rule_type}
                           onValueChange={(value) =>
@@ -738,16 +790,20 @@ const AdminDashboard = () => {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="none">none</SelectItem>
-                            <SelectItem value="isu_6_digits">isu_6_digits</SelectItem>
-                            <SelectItem value="email_domain">email_domain</SelectItem>
-                            <SelectItem value="custom_text_validator">custom_text_validator</SelectItem>
+                            <SelectItem value="none">Без проверки</SelectItem>
+                            <SelectItem value="isu_6_digits">Номер ИСУ (6 цифр)</SelectItem>
+                            <SelectItem value="email_domain">Домен почты</SelectItem>
+                            <SelectItem value="custom_text_validator">Свой валидатор</SelectItem>
                           </SelectContent>
                         </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Что студент указывает при входе по коду
+                        </p>
                       </div>
-                      <div className="md:col-span-2 space-y-2">
-                        <Label>rule_config (JSON)</Label>
+                      <div className="space-y-2 md:col-span-2">
+                        <Label>Настройки правила (JSON)</Label>
                         <Textarea
+                          className="font-mono text-sm"
                           value={draft.rule_config}
                           onChange={(event) =>
                             updatePolicyDraft(membership.course_id, { rule_config: event.target.value })
@@ -756,17 +812,17 @@ const AdminDashboard = () => {
                         />
                       </div>
                     </div>
-                    <Button onClick={() => handleUpdatePolicy(membership.course_id)}>
-                      Сохранить identity policy
+                    <Button variant="outline" onClick={() => handleUpdatePolicy(membership.course_id)}>
+                      Сохранить политику
                     </Button>
                   </Card>
                 );
               })}
             </div>
           )}
-        </Card>
+        </section>
       </div>
-    </div>
+    </PageShell>
   );
 };
 
