@@ -64,6 +64,14 @@ const OcrImageOverlay = ({
     [blocks, imageSize]
   );
 
+  // Новая картинка — чистое состояние: поворот и замеры не должны утекать между страницами
+  useEffect(() => {
+    userRotatedRef.current = false;
+    setViewRotation(0);
+    setImageSize(null);
+    setRenderedSize(null);
+  }, [imageUrl]);
+
   useEffect(() => {
     if (userRotatedRef.current) return;
     // Разворачиваем картинку так, чтобы текст был вертикально (обратный поворот)
@@ -114,22 +122,31 @@ const OcrImageOverlay = ({
     );
   }
 
-  const rotated = viewRotation % 180 !== 0;
+  // Поворот применяем только после замера — иначе absolute-центрирование
+  // схлопывает контейнер до того, как изображение получит размеры.
+  const appliedRotation = renderedSize ? viewRotation : 0;
+  const rotatedOdd = appliedRotation % 180 !== 0;
   const outerStyle =
-    rotated && renderedSize
-      ? { width: renderedSize.height, height: renderedSize.width }
+    appliedRotation !== 0 && renderedSize
+      ? rotatedOdd
+        ? { width: renderedSize.height, height: renderedSize.width }
+        : { width: renderedSize.width, height: renderedSize.height }
       : undefined;
   const innerStyle =
-    viewRotation === 0
-      ? undefined
-      : rotated
-        ? {
-            position: "absolute" as const,
-            left: "50%",
-            top: "50%",
-            transform: `translate(-50%, -50%) rotate(${viewRotation}deg)`,
-          }
-        : { transform: `rotate(${viewRotation}deg)` };
+    appliedRotation !== 0 && renderedSize
+      ? {
+          position: "absolute" as const,
+          left: "50%",
+          top: "50%",
+          width: renderedSize.width,
+          height: renderedSize.height,
+          transform: `translate(-50%, -50%) rotate(${appliedRotation}deg)`,
+        }
+      : undefined;
+  const imageStyle =
+    appliedRotation !== 0 && renderedSize
+      ? { width: renderedSize.width, height: renderedSize.height }
+      : undefined;
 
   return (
     <div className="relative inline-block max-w-full self-start">
@@ -140,6 +157,7 @@ const OcrImageOverlay = ({
             src={imageUrl}
             alt={alt}
             className={`block h-auto w-auto max-w-full rounded object-contain ${className ?? ""}`.trim()}
+            style={imageStyle}
             onLoad={(event) => {
               const target = event.currentTarget;
               if (target.naturalWidth > 0 && target.naturalHeight > 0) {
@@ -161,7 +179,7 @@ const OcrImageOverlay = ({
                 // rect уже повёрнут трансформацией — приводим клик к координатам содержимого
                 const u = ((event.clientX - rect.left) / rect.width) * 100;
                 const v = ((event.clientY - rect.top) / rect.height) * 100;
-                const { x, y } = unrotatePoint(u, v, viewRotation);
+                const { x, y } = unrotatePoint(u, v, appliedRotation);
                 const target = findBestHitTarget(x, y, hitTargets);
                 if (target !== null) {
                   onSelectChunk(target);
