@@ -15,7 +15,10 @@ export default {
     },
     extend: {
       fontFamily: {
-        aptos: ['Aptos', 'Inter', 'system-ui', 'sans-serif'],
+        sans: ['"Golos Text"', 'system-ui', 'sans-serif'],
+        display: ['"STIX Two Text"', 'Georgia', 'serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+        aptos: ['"Golos Text"', 'system-ui', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -35,6 +38,25 @@ export default {
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
+        },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
+        },
+        chunk: {
+          equation: "hsl(var(--chunk-equation))",
+          figure: "hsl(var(--chunk-figure))",
+          text: "hsl(var(--chunk-text))",
+          table: "hsl(var(--chunk-table))",
+          other: "hsl(var(--chunk-other))",
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",

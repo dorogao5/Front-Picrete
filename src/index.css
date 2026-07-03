@@ -2,109 +2,146 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here.
-All colors MUST be HSL. */
+/*
+  Дизайн-система Picrete — «лабораторный журнал».
+  Бумага и чернила как основа, фирменный фиолетовый — только для интерактива,
+  функциональные цвета взяты из химии: малахит, бром, фенолфталеин, медный купорос.
+  Все цвета — HSL-триплеты для hsl(var(--token) / alpha).
+*/
 
 @layer base {
   :root {
-    --background: 42 18% 97%;
-    --foreground: 220 18% 12%;
+    /* Бумага и чернила */
+    --background: 42 32% 96%;
+    --foreground: 233 28% 15%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 220 18% 12%;
+    --card: 40 40% 99%;
+    --card-foreground: 233 28% 15%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 18% 12%;
+    --popover: 40 40% 99%;
+    --popover-foreground: 233 28% 15%;
 
-    --primary: 220 18% 12%;
-    --primary-foreground: 0 0% 100%;
-    --primary-glow: 220 18% 18%;
+    --primary: 233 28% 17%;
+    --primary-foreground: 40 40% 98%;
+    --primary-glow: 233 28% 24%;
 
-    --secondary: 38 18% 90%;
-    --secondary-foreground: 220 15% 18%;
+    --secondary: 42 22% 90%;
+    --secondary-foreground: 233 22% 20%;
 
-    --muted: 38 14% 91%;
-    --muted-foreground: 220 8% 42%;
+    --muted: 42 18% 91%;
+    --muted-foreground: 233 10% 42%;
 
-    --accent: 42 56% 39%;
-    --accent-foreground: 0 0% 100%;
+    /* Фирменный фиолетовый (логотип) — интерактив, выделение, ссылки */
+    --accent: 256 50% 46%;
+    --accent-foreground: 40 40% 98%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
+    /* Функциональные цвета из химии */
+    --destructive: 348 70% 43%;        /* фенолфталеин */
+    --destructive-foreground: 40 40% 98%;
+    --success: 161 55% 30%;            /* малахит */
+    --success-foreground: 40 40% 98%;
+    --warning: 35 90% 34%;             /* бром */
+    --warning-foreground: 40 40% 98%;
+    --info: 206 65% 38%;               /* медный купорос */
+    --info-foreground: 40 40% 98%;
 
-    --border: 36 14% 80%;
-    --input: 36 14% 80%;
-    --ring: 220 18% 12%;
+    --border: 40 16% 82%;
+    --input: 40 16% 78%;
+    --ring: 256 50% 46%;
 
     --radius: 0.5rem;
 
-    --gradient-primary: linear-gradient(180deg, hsl(220 18% 12%), hsl(220 18% 12%));
-    --gradient-subtle: linear-gradient(180deg, hsl(42 18% 97%), hsl(42 18% 97%));
-    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
-    
-    --shadow-elegant: 0 18px 50px -28px hsl(220 18% 12% / 0.28);
-    --shadow-soft: 0 10px 30px -22px hsl(220 18% 12% / 0.22);
-    --shadow-glow: 0 18px 50px -32px hsl(220 18% 12% / 0.26);
-    
+    /* Цвета типов OCR-блоков */
+    --chunk-equation: 256 62% 50%;
+    --chunk-figure: 206 72% 40%;
+    --chunk-text: 161 45% 32%;
+    --chunk-table: 30 85% 38%;
+    --chunk-other: 233 12% 46%;
+
+    /* Клетка тетради */
+    --grid-line: 215 35% 50%;
+
+    --gradient-primary: linear-gradient(180deg, hsl(233 28% 17%), hsl(233 28% 17%));
+    --gradient-subtle: linear-gradient(180deg, hsl(42 32% 96%), hsl(42 32% 96%));
+    --gradient-card: linear-gradient(180deg, hsl(40 40% 99%), hsl(40 40% 99%));
+
+    --shadow-elegant: 0 2px 4px -2px hsl(233 28% 15% / 0.1), 0 12px 32px -16px hsl(233 28% 15% / 0.18);
+    --shadow-soft: 0 1px 2px hsl(233 28% 15% / 0.06), 0 4px 12px -6px hsl(233 28% 15% / 0.1);
+    --shadow-glow: 0 0 0 1px hsl(256 50% 46% / 0.25), 0 8px 24px -12px hsl(256 50% 46% / 0.35);
+
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-spring: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 
-    --sidebar-background: 42 18% 97%;
-    --sidebar-foreground: 220 15% 18%;
-    --sidebar-primary: 220 18% 12%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 38 18% 90%;
-    --sidebar-accent-foreground: 220 15% 18%;
-    --sidebar-border: 36 14% 80%;
-    --sidebar-ring: 220 18% 12%;
+    --sidebar-background: 42 32% 96%;
+    --sidebar-foreground: 233 22% 20%;
+    --sidebar-primary: 233 28% 17%;
+    --sidebar-primary-foreground: 40 40% 98%;
+    --sidebar-accent: 42 22% 90%;
+    --sidebar-accent-foreground: 233 22% 20%;
+    --sidebar-border: 40 16% 82%;
+    --sidebar-ring: 256 50% 46%;
   }
 
   .dark {
-    --background: 240 15% 8%;
-    --foreground: 0 0% 98%;
+    --background: 233 22% 10%;
+    --foreground: 40 25% 92%;
 
-    --card: 240 12% 12%;
-    --card-foreground: 0 0% 98%;
+    --card: 233 18% 13%;
+    --card-foreground: 40 25% 92%;
 
-    --popover: 240 12% 12%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 233 18% 13%;
+    --popover-foreground: 40 25% 92%;
 
-    --primary: 42 18% 90%;
-    --primary-foreground: 0 0% 100%;
-    --primary-glow: 270 90% 75%;
+    --primary: 40 25% 92%;
+    --primary-foreground: 233 22% 12%;
+    --primary-glow: 40 25% 82%;
 
-    --secondary: 240 10% 20%;
-    --secondary-foreground: 42 18% 90%;
+    --secondary: 233 14% 19%;
+    --secondary-foreground: 40 20% 88%;
 
-    --muted: 240 10% 18%;
-    --muted-foreground: 240 5% 65%;
+    --muted: 233 14% 17%;
+    --muted-foreground: 233 8% 62%;
 
-    --accent: 42 56% 54%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 256 65% 68%;
+    --accent-foreground: 233 22% 12%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 348 70% 56%;
+    --destructive-foreground: 233 22% 10%;
+    --success: 161 45% 46%;
+    --success-foreground: 233 22% 10%;
+    --warning: 35 85% 52%;
+    --warning-foreground: 233 22% 10%;
+    --info: 206 70% 56%;
+    --info-foreground: 233 22% 10%;
 
-    --border: 240 10% 20%;
-    --input: 240 10% 20%;
-    --ring: 42 18% 90%;
+    --border: 233 12% 22%;
+    --input: 233 12% 26%;
+    --ring: 256 65% 68%;
 
-    --gradient-primary: linear-gradient(180deg, hsl(42 18% 90%), hsl(42 18% 90%));
-    --gradient-subtle: linear-gradient(180deg, hsl(240 15% 8%), hsl(240 15% 8%));
-    --gradient-card: linear-gradient(180deg, hsl(240 12% 12%), hsl(240 12% 12%));
-    
-    --shadow-elegant: 0 18px 50px -24px hsl(0 0% 0% / 0.45);
-    --shadow-soft: 0 10px 30px -20px hsl(0 0% 0% / 0.38);
-    --shadow-glow: 0 20px 60px -35px hsl(0 0% 0% / 0.45);
+    --chunk-equation: 256 70% 70%;
+    --chunk-figure: 206 75% 60%;
+    --chunk-text: 161 45% 52%;
+    --chunk-table: 30 85% 56%;
+    --chunk-other: 233 10% 62%;
 
-    --sidebar-background: 240 12% 10%;
-    --sidebar-foreground: 240 5% 90%;
-    --sidebar-primary: 42 18% 90%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 10% 20%;
-    --sidebar-accent-foreground: 42 18% 90%;
-    --sidebar-border: 240 10% 20%;
-    --sidebar-ring: 42 18% 90%;
+    --grid-line: 215 30% 70%;
+
+    --gradient-primary: linear-gradient(180deg, hsl(40 25% 92%), hsl(40 25% 92%));
+    --gradient-subtle: linear-gradient(180deg, hsl(233 22% 10%), hsl(233 22% 10%));
+    --gradient-card: linear-gradient(180deg, hsl(233 18% 13%), hsl(233 18% 13%));
+
+    --shadow-elegant: 0 2px 4px -2px hsl(0 0% 0% / 0.4), 0 16px 40px -20px hsl(0 0% 0% / 0.5);
+    --shadow-soft: 0 1px 2px hsl(0 0% 0% / 0.3), 0 4px 12px -6px hsl(0 0% 0% / 0.35);
+    --shadow-glow: 0 0 0 1px hsl(256 65% 68% / 0.3), 0 8px 24px -12px hsl(256 65% 68% / 0.4);
+
+    --sidebar-background: 233 20% 11%;
+    --sidebar-foreground: 40 20% 88%;
+    --sidebar-primary: 40 25% 92%;
+    --sidebar-primary-foreground: 233 22% 12%;
+    --sidebar-accent: 233 14% 19%;
+    --sidebar-accent-foreground: 40 20% 88%;
+    --sidebar-border: 233 12% 22%;
+    --sidebar-ring: 256 65% 68%;
   }
 }
 
@@ -113,19 +150,55 @@ All colors MUST be HSL. */
     @apply border-border;
   }
 
+  html {
+    @apply scroll-smooth;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
     font-feature-settings: "liga" 1, "kern" 1;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
 
+  h1, h2 {
+    @apply font-display;
+    letter-spacing: -0.01em;
+  }
+
   ::selection {
-    background: hsl(var(--primary) / 0.16);
+    background: hsl(var(--accent) / 0.18);
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
 @layer components {
+  /* Клетка тетради — фирменный фон рабочих экранов */
+  .bg-notebook {
+    background-color: hsl(var(--background));
+    background-image:
+      linear-gradient(hsl(var(--grid-line) / 0.07) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--grid-line) / 0.07) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  /* Заголовок секции с «полем тетради» */
+  .section-rule {
+    @apply border-l-2 border-accent/60 pl-3;
+  }
+
   .task-rich-text table {
     @apply w-full border-collapse text-sm;
   }
