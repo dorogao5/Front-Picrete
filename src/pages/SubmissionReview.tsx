@@ -527,6 +527,7 @@ const SubmissionReview = () => {
                               }))
                             }
                             listMaxHeight="max-h-[52vh]"
+                            hideEmpty
                           />
                         </div>
                       </div>
@@ -671,7 +672,26 @@ const SubmissionReview = () => {
           </Card>
 
           {/* AI-анализ */}
-          {submission.llm_precheck_status !== "skipped" && (
+          {submission.llm_precheck_status === "failed" ? (
+            <Card className="p-4 sm:p-6">
+              <h2 className="section-rule mb-4 text-xl font-semibold">Отчёт AI-проверки</h2>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-destructive" />
+                  <div>
+                    <p className="text-sm font-medium">AI-проверка не выполнилась</p>
+                    <p className="text-sm text-muted-foreground">
+                      Попробуйте переоценить или выставьте балл вручную — работа студента от этого не пострадает.
+                    </p>
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" onClick={handleRegrade} disabled={regrading}>
+                  <RefreshCw className={cn("h-4 w-4", regrading && "animate-spin")} />
+                  Повторить AI-проверку
+                </Button>
+              </div>
+            </Card>
+          ) : submission.llm_precheck_status !== "skipped" && (
             <Card className="p-4 sm:p-6">
               <h2 className="section-rule mb-4 text-xl font-semibold">Отчёт AI-проверки</h2>
 
@@ -840,18 +860,8 @@ const SubmissionReview = () => {
                 )}
 
                 <div className="flex flex-col gap-2">
-                  {submission.status !== "approved" && (
-                    <Button
-                      onClick={handleApprove}
-                      variant="success"
-                      className="w-full"
-                      disabled={submission.ai_score === null}
-                      title={
-                        submission.ai_score === null
-                          ? "Оценки AI ещё нет — выставьте балл вручную"
-                          : undefined
-                      }
-                    >
+                  {submission.status !== "approved" && submission.ai_score !== null && (
+                    <Button onClick={handleApprove} variant="success" className="w-full">
                       <CheckCircle className="h-4 w-4" />
                       Принять оценку AI
                     </Button>

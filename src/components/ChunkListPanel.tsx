@@ -69,6 +69,8 @@ interface ChunkListPanelProps {
   listMaxHeight?: string;
   className?: string;
   editedIndexes?: Set<number>;
+  editedTexts?: Record<number, string>;
+  hideEmpty?: boolean;
 }
 
 export const ChunkListPanel = ({
@@ -78,6 +80,8 @@ export const ChunkListPanel = ({
   listMaxHeight = "max-h-[46vh]",
   className,
   editedIndexes,
+  editedTexts,
+  hideEmpty = false,
 }: ChunkListPanelProps) => {
   if (blocks.length === 0) {
     return (
@@ -92,7 +96,10 @@ export const ChunkListPanel = ({
       <ChunkLegend blocks={blocks} />
       <div className={cn("space-y-1.5 overflow-y-auto rounded-md border bg-card p-1.5", listMaxHeight)}>
         {blocks.map((block, index) => {
-          const rendered = chunkDisplayText(block);
+          const rendered = editedTexts?.[index] ?? chunkDisplayText(block);
+          if (hideEmpty && !rendered.trim() && !editedIndexes?.has(index)) {
+            return null;
+          }
           const selected = selectedIndex === index;
           return (
             <button

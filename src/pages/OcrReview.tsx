@@ -458,7 +458,7 @@ const OcrReview = () => {
         </div>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
         {/* Изображение с разметкой */}
         <Card className="h-fit min-w-0 p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -592,6 +592,10 @@ const OcrReview = () => {
               onSelect={setSelectedChunkIndex}
               listMaxHeight="max-h-[38vh]"
               editedIndexes={editedIndexes}
+              editedTexts={Object.fromEntries(
+                Object.entries(currentEdits).map(([index, edit]) => [index, edit.text])
+              )}
+              hideEmpty
             />
           </Card>
 
