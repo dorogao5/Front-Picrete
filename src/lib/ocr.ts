@@ -153,17 +153,127 @@ export const anchorSummary = (anchor: Record<string, unknown>): string => {
   return `page ${page}, ${blockType}`;
 };
 
+/* Поворот (в градусах CW), который надо применить к координатам OCR,
+   чтобы они совпали с изображением, как его отрисовал браузер.
+   Нужен, когда фото имеет EXIF-ориентацию: браузер поворачивает пиксели,
+   а OCR считает координаты по сырым — кадры расходятся на 90°/180°. */
+export type OcrOrientation = 0 | 90 | 180 | 270;
+
+const orientPoint = (x: number, y: number, orientation: OcrOrientation): { x: number; y: number } => {
+  switch (orientation) {
+    case 90:
+      return { x: 100 - y, y: x };
+    case 180:
+      return { x: 100 - x, y: 100 - y };
+    case 270:
+      return { x: y, y: 100 - x };
+    default:
+      return { x, y };
+  }
+};
+
+const orientBbox = (bbox: NormalizedBbox, orientation: OcrOrientation): NormalizedBbox => {
+  if (orientation === 0) return bbox;
+  const corners = [
+    orientPoint(bbox.left, bbox.top, orientation),
+    orientPoint(bbox.left + bbox.width, bbox.top, orientation),
+    orientPoint(bbox.left + bbox.width, bbox.top + bbox.height, orientation),
+    orientPoint(bbox.left, bbox.top + bbox.height, orientation),
+  ];
+  const xs = corners.map((c) => c.x);
+  const ys = corners.map((c) => c.y);
+  const left = Math.min(...xs);
+  const top = Math.min(...ys);
+  return { left, top, width: Math.max(...xs) - left, height: Math.max(...ys) - top };
+};
+
 export const geometryForBlock = (
   block: OcrChunkBlock,
   naturalWidth: number | null,
-  naturalHeight: number | null
+  naturalHeight: number | null,
+  orientation: OcrOrientation = 0
 ): NormalizedGeometry | null => {
   const frame = coordinateFrameForPage(block.page_bbox);
   const bbox = normalizeBbox(block.bbox, naturalWidth, naturalHeight, frame) ?? undefined;
   const polygon =
     normalizePolygon(block.polygon, naturalWidth, naturalHeight, frame) ?? undefined;
   if (!bbox && !polygon) return null;
-  return { bbox, polygon };
+  if (orientation === 0) return { bbox, polygon };
+  return {
+    bbox: bbox ? orientBbox(bbox, orientation) : undefined,
+    polygon: polygon
+      ? polygon.map((point) => orientPoint(point.x, point.y, orientation))
+      : undefined,
+  };
+};
+
+const pearsonWithIndex = (values: number[]): number => {
+  const n = values.length;
+  if (n < 2) return 0;
+  const meanX = (n - 1) / 2;
+  const meanY = values.reduce((a, b) => a + b, 0) / n;
+  let num = 0;
+  let dx = 0;
+  let dy = 0;
+  for (let i = 0; i < n; i += 1) {
+    num += (i - meanX) * (values[i] - meanY);
+    dx += (i - meanX) ** 2;
+    dy += (values[i] - meanY) ** 2;
+  }
+  return dx > 0 && dy > 0 ? num / Math.sqrt(dx * dy) : 0;
+};
+
+/* Самодиагностика рассинхрона кадров OCR и изображения.
+   1. Если аспект кадра OCR не совпадает с аспектом изображения — кадры повёрнуты на 90°.
+   2. Направление выбираем по порядку чтения: DataLab отдаёт блоки в порядке чтения,
+      значит при верной ориентации их центры монотонно спускаются вниз по странице. */
+export const detectOcrOrientation = (
+  blocks: OcrChunkBlock[],
+  naturalWidth: number | null,
+  naturalHeight: number | null
+): OcrOrientation => {
+  if (!naturalWidth || !naturalHeight) return 0;
+
+  const frameBlock = blocks.find((block) => coordinateFrameForPage(block.page_bbox));
+  const frame = frameBlock ? coordinateFrameForPage(frameBlock.page_bbox) : null;
+
+  const imageRatio = naturalWidth / naturalHeight;
+  const frameRatio = frame ? frame.width / frame.height : imageRatio;
+  const bothNonSquare = Math.abs(imageRatio - 1) > 0.05 && Math.abs(frameRatio - 1) > 0.05;
+  const swapped = bothNonSquare && (imageRatio > 1) !== (frameRatio > 1);
+
+  const centers: Array<{ x: number; y: number }> = [];
+  for (const block of blocks) {
+    const geometry = geometryForBlock(block, naturalWidth, naturalHeight, 0);
+    if (!geometry) continue;
+    if (geometry.bbox) {
+      centers.push({
+        x: geometry.bbox.left + geometry.bbox.width / 2,
+        y: geometry.bbox.top + geometry.bbox.height / 2,
+      });
+    } else if (geometry.polygon && geometry.polygon.length > 0) {
+      const cx = geometry.polygon.reduce((a, p) => a + p.x, 0) / geometry.polygon.length;
+      const cy = geometry.polygon.reduce((a, p) => a + p.y, 0) / geometry.polygon.length;
+      centers.push({ x: cx, y: cy });
+    }
+  }
+
+  // 90° и 270° по одной геометрии неразличимы (разница только в EXIF),
+  // поэтому берём EXIF Orientation=6 — подавляющее большинство телефонных фото.
+  if (swapped) {
+    return 90;
+  }
+
+  if (centers.length < 4) {
+    return 0;
+  }
+
+  const score = (orientation: OcrOrientation) =>
+    pearsonWithIndex(centers.map((c) => orientPoint(c.x, c.y, orientation).y));
+
+  // Кадры совпадают по аспекту: остаётся случай 180°. Переворачиваем только при
+  // уверенном перевесе, чтобы не трогать нормальные страницы.
+  return score(180) > score(0) + 0.35 ? 180 : 0;
 };
 
 const collectBlocks = (
