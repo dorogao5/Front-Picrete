@@ -143,9 +143,9 @@ const Landing = () => {
         <section className="px-4 py-12 sm:px-6 sm:py-16">
           <div className="container mx-auto max-w-6xl">
             <div className="max-w-2xl">
-              <p className="text-sm font-semibold uppercase tracking-wide text-accent">Основной контур</p>
+              <p className="text-sm font-semibold uppercase tracking-wide text-accent">Как это работает</p>
               <h2 className="mt-2 text-3xl font-semibold leading-tight sm:text-4xl">
-                Не чат с промптом, а рабочий процесс проверки
+                От фото решения до оценки в ведомости
               </h2>
               <p className="mt-3 text-muted-foreground">
                 Интерфейс построен вокруг курса, варианта, загруженной работы, критериев и финального решения.

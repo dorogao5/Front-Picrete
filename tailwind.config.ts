@@ -16,7 +16,7 @@ export default {
     extend: {
       fontFamily: {
         sans: ['"Golos Text"', 'system-ui', 'sans-serif'],
-        display: ['"STIX Two Text"', 'Georgia', 'serif'],
+        display: ['"Golos Text"', 'system-ui', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
         aptos: ['"Golos Text"', 'system-ui', 'sans-serif'],
       },
