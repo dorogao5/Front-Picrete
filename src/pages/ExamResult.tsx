@@ -1,12 +1,15 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { Navbar } from "@/components/Navbar";
+import { AlertTriangle, Clock, FileText, Lightbulb, RefreshCw, ScanText, XCircle } from "lucide-react";
+import { toast } from "sonner";
+
+import { PageShell, PageLoader } from "@/components/PageShell";
+import { StatusBadge } from "@/components/StatusBadge";
+import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle, XCircle, Clock, FileText, RefreshCw, Award } from "lucide-react";
 import { getApiErrorMessage, submissionsAPI } from "@/lib/api";
-import { toast } from "sonner";
 import AiAnalysis from "@/components/AiAnalysis";
 import { renderLatex, renderTaskText } from "@/lib/renderLatex";
 
@@ -76,7 +79,7 @@ const ExamResult = () => {
         const response = await submissionsAPI.getResult(sessionId!, courseId);
         setSubmission(response.data as SubmissionResult);
       } catch (error: unknown) {
-        toast.error(getApiErrorMessage(error, "Ошибка при загрузке результата"));
+        toast.error(getApiErrorMessage(error, "Не удалось загрузить результат"));
       } finally {
         setLoading(false);
       }
@@ -92,9 +95,7 @@ const ExamResult = () => {
       return;
     }
 
-    const ocrReviewPath = courseId
-      ? `/c/${courseId}/exam/${sessionId}/ocr-review`
-      : "/dashboard";
+    const ocrReviewPath = courseId ? `/c/${courseId}/exam/${sessionId}/ocr-review` : "/dashboard";
 
     if (submissionOcrStatus === "in_review") {
       navigate(ocrReviewPath, { replace: true });
@@ -127,38 +128,34 @@ const ExamResult = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-subtle">
-        <Navbar />
-        <div className="container mx-auto px-6 pt-24 pb-12">
-          <p>Загрузка результатов...</p>
-        </div>
-      </div>
+      <PageShell title="Результат работы">
+        <PageLoader label="Загружаем результат..." />
+      </PageShell>
     );
   }
 
   if (!submission) {
     return (
-      <div className="min-h-screen bg-gradient-subtle">
-        <Navbar />
-        <div className="container mx-auto px-6 pt-24 pb-12">
-          <Card className="p-8 text-center">
-            <XCircle className="w-16 h-16 mx-auto mb-4 text-red-500" />
-            <h2 className="text-2xl font-bold mb-2">Результат не найден</h2>
-            <p className="text-muted-foreground mb-6">
-              Возможно, работа еще не была сдана
-            </p>
+      <PageShell title="Результат работы">
+        <EmptyState
+          icon={XCircle}
+          title="Результат не найден"
+          description="Возможно, работа ещё не была сдана."
+          action={
             <Link to={courseId ? `/c/${courseId}/student` : "/dashboard"}>
-              <Button>Вернуться к списку</Button>
+              <Button variant="outline">К списку работ</Button>
             </Link>
-          </Card>
-        </div>
-      </div>
+          }
+        />
+      </PageShell>
     );
   }
 
-  const scorePercent = submission.max_score > 0
-    ? ((submission.final_score || submission.ai_score || 0) / submission.max_score) * 100
-    : 0;
+  const displayScore = submission.final_score ?? submission.ai_score;
+  const scorePercent =
+    submission.max_score > 0 && displayScore !== null
+      ? (displayScore / submission.max_score) * 100
+      : 0;
 
   const retakeContext =
     submission.exam && submission.session
@@ -177,301 +174,242 @@ const ExamResult = () => {
   const remainingAttempts = retakeContext
     ? retakeContext.maxAttempts - retakeContext.totalAttempts
     : 0;
-  const recommendations = submission.ai_analysis && Array.isArray(submission.ai_analysis.recommendations)
-    ? submission.ai_analysis.recommendations.filter((item): item is string => typeof item === "string")
-    : [];
+  const recommendations =
+    submission.ai_analysis && Array.isArray(submission.ai_analysis.recommendations)
+      ? submission.ai_analysis.recommendations.filter((item): item is string => typeof item === "string")
+      : [];
   const needsOcrReview = submission.ocr_overall_status === "in_review";
   const waitingOcr =
     submission.ocr_overall_status === "pending" || submission.ocr_overall_status === "processing";
+  const isPreliminary = submission.status === "preliminary";
 
   const handleRetake = () => {
     if (!retakeContext) return;
     setRetaking(true);
     navigate(courseId ? `/c/${courseId}/exam/${retakeContext.examId}` : "/dashboard");
-    toast.success("Начинаем новую попытку...");
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "approved": return "text-green-600";
-      case "processing": return "text-yellow-600";
-      case "preliminary": return "text-blue-600";
-      case "flagged": return "text-red-600";
-      default: return "text-gray-600";
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "approved": return "Проверено";
-      case "processing": return "В обработке";
-      case "preliminary": return "Предварительная проверка";
-      case "flagged": return "Требует внимания";
-      case "rejected": return "Отклонено";
-      case "uploaded": return "Загружено";
-      default: return status;
-    }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-subtle">
-      <Navbar />
-
-      <div className="container mx-auto px-6 pt-24 pb-12">
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-bold mb-2">Результаты работы</h1>
-              <p className="text-muted-foreground">
-                Сдано: {new Date(submission.submitted_at).toLocaleString("ru-RU")}
+    <PageShell
+      backLabel="К списку работ"
+      onBack={() => navigate(courseId ? `/c/${courseId}/student` : "/dashboard")}
+      title="Результат работы"
+      subtitle={
+        <span className="inline-flex flex-wrap items-center gap-2">
+          <StatusBadge domain="workKind" value={submission.exam?.kind} />
+          <span>Сдана {new Date(submission.submitted_at).toLocaleString("ru-RU")}</span>
+          {submission.exam && submission.session && (
+            <span>· попытка {submission.session.attempt_number} из {submission.exam.max_attempts}</span>
+          )}
+        </span>
+      }
+    >
+      {/* Балл */}
+      <Card className="mb-6 p-6 sm:p-8">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="mb-1 text-sm text-muted-foreground">Ваш балл</p>
+            <p className="font-display text-6xl font-semibold leading-none">
+              {displayScore ?? "—"}
+              <span className="ml-2 text-2xl text-muted-foreground">/ {submission.max_score}</span>
+            </p>
+            {isPreliminary && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Предварительная оценка AI — преподаватель ещё проверит работу
               </p>
-              {submission.exam && submission.session && (
-                <p className="text-sm text-muted-foreground mt-1">
-                  Попытка {submission.session.attempt_number} из {submission.exam.max_attempts}
-                </p>
-              )}
-              {submission.exam?.kind && (
-                <p className="text-sm text-muted-foreground mt-1">
-                  Тип: {submission.exam.kind === "homework" ? "Домашняя работа" : "Контрольная"}
-                </p>
-              )}
-            </div>
-            {canRetake && (
-              <Button
-                size="lg"
-                onClick={handleRetake}
-                disabled={retaking}
-                className="gap-2"
-              >
-                <RefreshCw className={`w-5 h-5 ${retaking ? 'animate-spin' : ''}`} />
-                Пройти повторно
-              </Button>
+            )}
+          </div>
+          <div className="text-right">
+            <StatusBadge domain="submission" value={submission.status} />
+            {displayScore !== null && (
+              <p className="mt-2 font-display text-3xl font-semibold">{scorePercent.toFixed(0)}%</p>
             )}
           </div>
         </div>
+        {displayScore !== null && <Progress value={scorePercent} className="mt-5 h-2" />}
+      </Card>
 
-        {/* Score Card */}
-        <Card className="p-8 mb-8 bg-gradient-card">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">Ваш балл</p>
-              <h2 className="text-5xl font-bold">
-                {submission.final_score || submission.ai_score || 0}{" "}
-                <span className="text-2xl text-muted-foreground">
-                  / {submission.max_score}
-                </span>
-              </h2>
+      {/* Требуется проверка OCR */}
+      {needsOcrReview && (
+        <Card className="mb-6 border-accent/50 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <ScanText className="h-7 w-7 text-accent" />
+              <div>
+                <h3 className="font-semibold">Проверьте распознавание</h3>
+                <p className="text-sm text-muted-foreground">
+                  Подтвердите, что система верно прочитала вашу работу — без этого проверка не начнётся.
+                </p>
+              </div>
             </div>
-            <div className="text-right">
-              <p className={`text-lg font-semibold ${getStatusColor(submission.status)}`}>
-                {getStatusText(submission.status)}
+            <Link to={courseId ? `/c/${courseId}/exam/${sessionId}/ocr-review` : "/dashboard"}>
+              <Button variant="accent">Перейти к проверке</Button>
+            </Link>
+          </div>
+        </Card>
+      )}
+
+      {/* Обработка */}
+      {(submission.status === "processing" || waitingOcr) && (
+        <Card className="mb-6 border-info/40 p-5">
+          <div className="flex items-center gap-3">
+            <Clock className="h-7 w-7 animate-pulse text-info" />
+            <div>
+              <h3 className="font-semibold">Работа обрабатывается</h3>
+              <p className="text-sm text-muted-foreground">
+                {waitingOcr
+                  ? "Распознаём загруженные страницы — страница обновится автоматически."
+                  : "AI анализирует ваше решение. Обычно это занимает несколько минут."}
               </p>
-              <p className="text-3xl font-bold mt-2">{scorePercent.toFixed(1)}%</p>
             </div>
           </div>
-          <Progress value={scorePercent} className="h-3" />
         </Card>
+      )}
 
-        {/* OCR Review Required */}
-        {needsOcrReview && (
-          <Card className="p-6 mb-8 border-primary">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <Clock className="w-8 h-8 text-primary" />
-                <div>
-                  <h3 className="font-semibold text-lg">Требуется валидация OCR</h3>
-                  <p className="text-muted-foreground">
-                    Перед финальной отправкой нужно подтвердить OCR по каждой странице.
-                  </p>
-                </div>
-              </div>
-              <Link to={courseId ? `/c/${courseId}/exam/${sessionId}/ocr-review` : "/dashboard"}>
-                <Button>Перейти к OCR Review</Button>
-              </Link>
-            </div>
-          </Card>
-        )}
+      {submission.report_flag && (
+        <Card className="mb-6 border-warning/40 p-5">
+          <h3 className="mb-1 font-semibold">Ваши замечания к распознаванию отправлены</h3>
+          <div className="ocr-rich-text text-sm text-muted-foreground">
+            {renderTaskText(
+              submission.report_summary || "Преподаватель увидит отмеченные ошибки распознавания."
+            )}
+          </div>
+        </Card>
+      )}
 
-        {/* Processing Status */}
-        {(submission.status === "processing" || waitingOcr) && (
-          <Card className="p-6 mb-8 border-yellow-500">
-            <div className="flex items-center gap-4">
-              <Clock className="w-8 h-8 text-yellow-600 animate-pulse" />
-              <div>
-                <h3 className="font-semibold text-lg">Работа обрабатывается</h3>
-                <p className="text-muted-foreground">
-                  {waitingOcr
-                    ? "Пожалуйста, подождите. OCR обрабатывает загруженные изображения."
-                    : "Пожалуйста, подождите. LLM анализирует OCR-расшифровку. Это может занять несколько минут."}
-                </p>
-              </div>
-            </div>
-          </Card>
-        )}
+      {/* Комментарий преподавателя */}
+      {submission.teacher_comments && (
+        <Card className="mb-6 border-l-2 border-l-accent p-5">
+          <h3 className="mb-3 flex items-center gap-2 font-semibold">
+            <FileText className="h-4 w-4 text-accent" />
+            Комментарий преподавателя
+          </h3>
+          <div className="whitespace-pre-wrap text-sm leading-relaxed">
+            {renderLatex(submission.teacher_comments)}
+          </div>
+        </Card>
+      )}
 
-        {submission.report_flag && (
-          <Card className="p-6 mb-8 border-destructive/40">
-            <h3 className="text-xl font-bold mb-2">REPORT отправлен</h3>
-            <div className="ocr-rich-text text-sm text-muted-foreground">
-              {renderTaskText(submission.report_summary || "Студент отметил OCR-проблемы для преподавателя.")}
-            </div>
-          </Card>
-        )}
+      {/* Комментарий AI */}
+      {submission.ai_comments && (
+        <Card className="mb-6 p-5">
+          <h3 className="mb-3 flex items-center gap-2 font-semibold">
+            <FileText className="h-4 w-4" />
+            Разбор AI
+          </h3>
+          <div className="whitespace-pre-wrap text-sm leading-relaxed">
+            {renderLatex(submission.ai_comments)}
+          </div>
+        </Card>
+      )}
 
-        {/* AI Comments */}
-        {submission.ai_comments && (
-          <Card className="p-6 mb-8">
-            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <FileText className="w-5 h-5" />
-              Комментарии AI
-            </h3>
-            <div className="prose max-w-none">
-              <p className="whitespace-pre-wrap">{renderLatex(submission.ai_comments)}</p>
-            </div>
-          </Card>
-        )}
+      {/* Разбалловка */}
+      {submission.scores && submission.scores.length > 0 && (
+        <Card className="mb-6 p-5 sm:p-6">
+          <h3 className="section-rule mb-5 text-xl font-semibold">Разбалловка по заданиям</h3>
+          <div className="space-y-5">
+            {submission.scores.map((score, index) => {
+              const taskScore = score.final_score !== null ? score.final_score : score.ai_score || 0;
+              const taskPercent = score.max_score > 0 ? (taskScore / score.max_score) * 100 : 0;
 
-        {/* Teacher Comments */}
-        {submission.teacher_comments && (
-          <Card className="p-6 mb-8 border-primary">
-            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-primary" />
-              Комментарии преподавателя
-            </h3>
-            <div className="prose max-w-none">
-              <p className="whitespace-pre-wrap">{renderLatex(submission.teacher_comments)}</p>
-            </div>
-          </Card>
-        )}
-
-        {/* Detailed Scores by Task/Question */}
-        {submission.scores && submission.scores.length > 0 && (
-          <Card className="p-6 mb-8 border-primary/20">
-            <div className="flex items-center gap-2 mb-6">
-              <Award className="w-6 h-6 text-primary" />
-              <h3 className="text-2xl font-bold">Разбалловка по заданиям</h3>
-            </div>
-            <div className="space-y-6">
-              {submission.scores.map((score, index) => {
-                const taskScore = score.final_score !== null ? score.final_score : score.ai_score || 0;
-                const taskPercent = score.max_score > 0 ? (taskScore / score.max_score) * 100 : 0;
-
-                return (
-                  <div key={index} className="border rounded-lg p-4 bg-gradient-to-r from-background to-muted/20">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex-1">
-                        <h4 className="font-bold text-lg">{score.criterion_name}</h4>
-                        {score.criterion_description && (
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {score.criterion_description}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-right ml-4">
-                        <div className="text-2xl font-bold text-primary">
-                          {taskScore.toFixed(1)} / {score.max_score}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {taskPercent.toFixed(0)}%
-                        </div>
-                      </div>
+              return (
+                <div key={index} className="border-b pb-5 last:border-0 last:pb-0">
+                  <div className="mb-2 flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <h4 className="font-semibold">{score.criterion_name}</h4>
+                      {score.criterion_description && (
+                        <p className="mt-0.5 text-sm text-muted-foreground">
+                          {score.criterion_description}
+                        </p>
+                      )}
                     </div>
-
-                    <Progress value={taskPercent} className="h-2 mb-3" />
-
-                    {score.teacher_comment && (
-                      <div className="mt-3 p-3 bg-primary/10 border border-primary/20 rounded">
-                        <p className="text-sm font-semibold text-primary mb-1">
-                          Комментарий преподавателя:
-                        </p>
-                        <p className="text-sm whitespace-pre-wrap">{score.teacher_comment}</p>
-                      </div>
-                    )}
-
-                    {!score.teacher_comment && score.ai_comment && (
-                      <div className="mt-3 p-3 bg-secondary/50 rounded">
-                        <p className="text-sm font-semibold mb-1">
-                          Комментарий AI:
-                        </p>
-                        <div className="text-sm whitespace-pre-wrap">{renderLatex(score.ai_comment)}</div>
-                      </div>
-                    )}
+                    <div className="whitespace-nowrap text-right">
+                      <span className="font-display text-xl font-semibold">
+                        {taskScore.toFixed(1)} / {score.max_score}
+                      </span>
+                      <p className="text-xs text-muted-foreground">{taskPercent.toFixed(0)}%</p>
+                    </div>
                   </div>
-                );
-              })}
+
+                  <Progress value={taskPercent} className="mb-3 h-1.5" />
+
+                  {score.teacher_comment && (
+                    <div className="rounded-md border-l-2 border-l-accent bg-accent/5 p-3">
+                      <p className="mb-1 text-xs font-medium text-accent">Комментарий преподавателя</p>
+                      <p className="whitespace-pre-wrap text-sm">{score.teacher_comment}</p>
+                    </div>
+                  )}
+
+                  {!score.teacher_comment && score.ai_comment && (
+                    <div className="rounded-md bg-secondary/50 p-3">
+                      <p className="mb-1 text-xs font-medium text-muted-foreground">Комментарий AI</p>
+                      <div className="whitespace-pre-wrap text-sm">{renderLatex(score.ai_comment)}</div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* Детальный анализ */}
+      {submission.ai_analysis && (
+        <Card className="mb-6 p-5 sm:p-6">
+          <h3 className="section-rule mb-4 text-xl font-semibold">Детальный анализ</h3>
+          <AiAnalysis data={submission.ai_analysis} />
+        </Card>
+      )}
+
+      {/* Рекомендации */}
+      {recommendations.length > 0 && (
+        <Card className="mb-6 border-info/30 bg-info/5 p-5">
+          <h3 className="mb-3 flex items-center gap-2 font-semibold">
+            <Lightbulb className="h-4 w-4 text-info" />
+            Над чем поработать
+          </h3>
+          <ul className="list-inside list-disc space-y-1.5 text-sm">
+            {recommendations.map((rec, i) => (
+              <li key={i}>{renderLatex(rec)}</li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      {/* Системные отметки */}
+      {submission.is_flagged && submission.flag_reasons.length > 0 && (
+        <Card className="mb-6 border-warning/40 p-5">
+          <h3 className="mb-2 flex items-center gap-2 font-semibold">
+            <AlertTriangle className="h-4 w-4 text-warning" />
+            Отметки системы
+          </h3>
+          <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
+            {submission.flag_reasons.map((reason: string, i: number) => (
+              <li key={i}>{reason}</li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      {/* Повторная попытка */}
+      {canRetake && retakeContext && (
+        <Card className="mb-6 border-accent/40 bg-accent/5 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h3 className="font-semibold">Можно попробовать ещё раз</h3>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Осталось попыток: {remainingAttempts} из {retakeContext.maxAttempts}. Новая попытка может
+                улучшить результат.
+              </p>
             </div>
-          </Card>
-        )}
-
-        {/* AI Analysis */}
-        {submission.ai_analysis && (
-          <Card className="p-6 mb-8">
-            <h3 className="text-xl font-bold mb-4">Детальный анализ</h3>
-            <AiAnalysis data={submission.ai_analysis} />
-          </Card>
-        )}
-
-        {/* Recommendations */}
-        {recommendations.length > 0 && (
-            <Card className="p-6 mb-8 bg-blue-50 dark:bg-blue-950">
-              <h3 className="text-xl font-bold mb-4">Рекомендации</h3>
-              <ul className="list-disc list-inside space-y-2">
-                {recommendations.map((rec, i) => (
-                  <li key={i}>{renderLatex(rec)}</li>
-                ))}
-              </ul>
-            </Card>
-          )}
-
-        {/* Flags */}
-        {submission.is_flagged && submission.flag_reasons.length > 0 && (
-          <Card className="p-6 mb-8 border-yellow-500 bg-yellow-50 dark:bg-yellow-950">
-            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <XCircle className="w-5 h-5 text-yellow-600" />
-              Отметки системы
-            </h3>
-            <ul className="list-disc list-inside space-y-1">
-              {submission.flag_reasons.map((reason: string, i: number) => (
-                <li key={i}>{reason}</li>
-              ))}
-            </ul>
-          </Card>
-        )}
-
-        {/* Retake Notice */}
-        {canRetake && retakeContext && (
-          <Card className="p-6 mb-8 bg-gradient-to-r from-primary/10 to-accent/10 border-primary/30">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
-                <RefreshCw className="w-6 h-6 text-primary" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-bold text-lg mb-1">Доступна повторная попытка</h3>
-                <p className="text-sm text-muted-foreground">
-                  У вас осталось {remainingAttempts} попыток из {retakeContext.maxAttempts}.
-                  Вы можете пройти контрольную работу еще раз для улучшения результата.
-                </p>
-              </div>
-              <Button
-                size="lg"
-                onClick={handleRetake}
-                disabled={retaking}
-                className="gap-2"
-              >
-                <RefreshCw className={`w-5 h-5 ${retaking ? 'animate-spin' : ''}`} />
-                Начать новую попытку
-              </Button>
-            </div>
-          </Card>
-        )}
-
-        <div className="text-center">
-          <Link to={courseId ? `/c/${courseId}/student` : "/dashboard"}>
-            <Button size="lg" variant="outline">Вернуться к списку работ</Button>
-          </Link>
-        </div>
-      </div>
-    </div>
+            <Button variant="accent" onClick={handleRetake} disabled={retaking} className="gap-2">
+              <RefreshCw className={retaking ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+              Начать новую попытку
+            </Button>
+          </div>
+        </Card>
+      )}
+    </PageShell>
   );
 };
 

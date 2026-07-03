@@ -1,15 +1,35 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Navbar } from "@/components/Navbar";
+import {
+  AlertCircle,
+  BookOpen,
+  CheckCircle,
+  Clock,
+  Image as ImageIcon,
+  Loader2,
+  Send,
+  Smartphone,
+  Trash2,
+  Upload,
+} from "lucide-react";
+import { toast } from "sonner";
+
+import { PageShell, PageLoader } from "@/components/PageShell";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Clock, Upload, CheckCircle, AlertCircle, Image as ImageIcon, Trash2, Smartphone } from "lucide-react";
-import { getApiErrorMessage, getApiErrorStatus, materialsAPI, submissionsAPI, type SessionImage, type WorkKind } from "@/lib/api";
-import { toast } from "sonner";
+import {
+  getApiErrorMessage,
+  getApiErrorStatus,
+  materialsAPI,
+  submissionsAPI,
+  type SessionImage,
+  type WorkKind,
+} from "@/lib/api";
 import { renderLatex, renderTaskText } from "@/lib/renderLatex";
+import { cn } from "@/lib/utils";
 
 interface ExamSession {
   id: string;
@@ -75,6 +95,7 @@ const TakeExam = () => {
   const [showTimeoutDialog, setShowTimeoutDialog] = useState(false);
   const [openingMaterials, setOpeningMaterials] = useState(false);
   const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
 
   const sessionId = session?.id;
   const isTimedWork = workKind === "control";
@@ -154,7 +175,7 @@ const TakeExam = () => {
       const waitStartedAt = Date.now();
       while (uploadQueueRef.current.some((item) => item.status === "uploading")) {
         if (Date.now() - waitStartedAt >= 30_000) {
-          toast.error("Загрузка изображений не завершилась за 30 секунд. Дождитесь завершения и повторите.");
+          toast.error("Загрузка фото не завершилась за 30 секунд. Дождитесь завершения и повторите.");
           return;
         }
         await new Promise((resolve) => setTimeout(resolve, 200));
@@ -166,7 +187,7 @@ const TakeExam = () => {
       toast.success("Работа отправлена на проверку");
       navigateAfterSubmit(sessionId, nextStep);
     } catch (error: unknown) {
-      toast.error(getApiErrorMessage(error, "Ошибка при отправке работы"));
+      toast.error(getApiErrorMessage(error, "Не удалось отправить работу"));
     } finally {
       setSubmitting(false);
     }
@@ -180,7 +201,7 @@ const TakeExam = () => {
       const waitStartedAt = Date.now();
       while (uploadQueueRef.current.some((item) => item.status === "uploading")) {
         if (Date.now() - waitStartedAt >= 30_000) {
-          toast.error("Часть загрузок еще выполняется, отправляем работу с уже загруженными изображениями.");
+          toast.error("Часть загрузок ещё выполняется — отправляем работу с уже сохранёнными фото.");
           break;
         }
         await new Promise((resolve) => setTimeout(resolve, 200));
@@ -189,10 +210,10 @@ const TakeExam = () => {
       const response = await submissionsAPI.submit(sessionId, courseId);
       const payload = response.data as SubmitResponse;
       const nextStep = await resolveSubmitNextStep(sessionId, payload.next_step);
-      toast.success("Работа автоматически отправлена");
+      toast.success("Время вышло — работа отправлена автоматически");
       navigateAfterSubmit(sessionId, nextStep);
     } catch (error: unknown) {
-      toast.error(getApiErrorMessage(error, "Ошибка при автоматической отправке работы"));
+      toast.error(getApiErrorMessage(error, "Не удалось автоматически отправить работу"));
     } finally {
       setSubmitting(false);
     }
@@ -205,14 +226,7 @@ const TakeExam = () => {
       try {
         await submissionsAPI.uploadImage(sessionId, file, undefined, courseId);
         setUploadQueue((prev) =>
-          prev.map((item) =>
-            item.id === queueId
-              ? {
-                  ...item,
-                  status: "uploaded",
-                }
-              : item
-          )
+          prev.map((item) => (item.id === queueId ? { ...item, status: "uploaded" as const } : item))
         );
         await refreshSessionImages();
 
@@ -231,7 +245,7 @@ const TakeExam = () => {
             item.id === queueId
               ? {
                   ...item,
-                  status: "error",
+                  status: "error" as const,
                   error: getApiErrorMessage(error, "Ошибка загрузки"),
                 }
               : item
@@ -245,7 +259,7 @@ const TakeExam = () => {
   const handleFilesSelected = useCallback(
     (files: FileList | null) => {
       if (!canModifyImages) {
-        toast.error("Загрузка недоступна для завершенной сессии");
+        toast.error("Работа уже завершена — загрузка недоступна");
         return;
       }
 
@@ -256,7 +270,7 @@ const TakeExam = () => {
       );
 
       if (accepted.length === 0) {
-        toast.error("Разрешены только JPEG и PNG");
+        toast.error("Подходят только фото в JPEG или PNG");
         return;
       }
 
@@ -293,9 +307,9 @@ const TakeExam = () => {
       try {
         await submissionsAPI.deleteSessionImage(sessionId, imageId, courseId);
         await refreshSessionImages();
-        toast.success("Изображение удалено");
+        toast.success("Фото удалено");
       } catch (error: unknown) {
-        toast.error(getApiErrorMessage(error, "Не удалось удалить изображение"));
+        toast.error(getApiErrorMessage(error, "Не удалось удалить фото"));
       } finally {
         setDeletingImageId(null);
       }
@@ -309,7 +323,7 @@ const TakeExam = () => {
     try {
       await materialsAPI.openAdditionPdf(courseId);
     } catch (error: unknown) {
-      toast.error(getApiErrorMessage(error, "Не удалось открыть дополнительные материалы"));
+      toast.error(getApiErrorMessage(error, "Не удалось открыть справочные материалы"));
     } finally {
       setOpeningMaterials(false);
     }
@@ -370,7 +384,7 @@ const TakeExam = () => {
         }
       } catch (error: unknown) {
         if (getApiErrorStatus(error) !== 401) {
-          toast.error(getApiErrorMessage(error, "Ошибка при входе в экзамен"));
+          toast.error(getApiErrorMessage(error, "Не удалось открыть работу"));
           navigate(courseId ? `/c/${courseId}/student` : "/dashboard");
         }
       }
@@ -442,172 +456,163 @@ const TakeExam = () => {
 
   if (!session || tasks.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-subtle">
-        <Navbar />
-        <div className="container mx-auto px-6 pt-24 pb-12">
-          <p>Загрузка экзамена...</p>
-        </div>
-      </div>
+      <PageShell title="Работа">
+        <PageLoader label="Открываем вашу работу..." />
+      </PageShell>
     );
   }
 
   const total = initialRemainingRef.current ?? timeRemaining ?? 0;
-  const progressPercent =
-    total > 0 && timeRemaining !== null ? (timeRemaining / total) * 100 : 0;
+  const progressPercent = total > 0 && timeRemaining !== null ? (timeRemaining / total) * 100 : 0;
+  const lowTime = isTimedWork && timeRemaining !== null && timeRemaining < 600 && !isTimeUp;
 
   return (
-    <div className="min-h-screen bg-gradient-subtle">
-      <Navbar />
-
-      {isTimedWork && (
-        <div className="fixed top-16 left-0 right-0 z-40 bg-background border-b shadow-md">
-          <div className="container mx-auto px-6 py-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <Clock className="w-5 h-5" />
-                <span className="font-semibold">Оставшееся время:</span>
-                <span
-                  className={`text-2xl font-mono ${
-                    (timeRemaining ?? 0) < 600 ? "text-red-500" : "text-primary"
-                  }`}
-                >
-                  {timeRemaining !== null ? formatTime(timeRemaining) : "--:--:--"}
-                </span>
-              </div>
-              <Button
-                onClick={handleSubmit}
-                disabled={submitting || isTimeUp || hasUploadsInProgress}
-                variant="default"
-              >
-                <CheckCircle className="w-4 h-4 mr-2" />
-                {isTimeUp ? "Время истекло" : "Завершить работу"}
-              </Button>
-            </div>
-            <Progress value={progressPercent} className="h-2" />
-          </div>
+    <PageShell
+      width="wide"
+      title={isTimedWork ? "Контрольная работа" : "Домашняя работа"}
+      subtitle={
+        <span className="inline-flex flex-wrap items-center gap-2">
+          <StatusBadge domain="workKind" value={workKind} />
+          {!isTimedWork && hardDeadline && (
+            <span>
+              Дедлайн: {new Date(hardDeadline).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })}
+            </span>
+          )}
+        </span>
+      }
+      actions={
+        <Button variant="outline" onClick={handleOpenMaterials} disabled={openingMaterials} className="gap-1.5">
+          <BookOpen className="h-4 w-4" />
+          {openingMaterials ? "Открываем..." : "Справочные материалы"}
+        </Button>
+      }
+    >
+      {isTimeUp && (
+        <div className="mb-6 rounded-lg border border-destructive/40 bg-destructive/10 p-4">
+          <p className="flex items-center gap-2 font-medium">
+            <AlertCircle className="h-5 w-5 text-destructive" />
+            Время вышло — работа отправляется автоматически, действия заблокированы.
+          </p>
         </div>
       )}
 
-      <div className={`container mx-auto px-6 pb-12 ${isTimedWork ? "pt-40" : "pt-24"}`}>
-        {!isTimedWork && hardDeadline && (
-          <Alert className="mb-6 border-blue-400 bg-blue-50 dark:bg-blue-950">
-            <Clock className="h-4 w-4" />
-            <AlertDescription>
-              Домашняя работа без таймера. Жесткий дедлайн:{" "}
-              {new Date(hardDeadline).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })}.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {serverImages.length > 0 && (
-          <Alert className="mb-6 border-green-500 bg-green-50 dark:bg-green-950">
-            <CheckCircle className="h-4 w-4" />
-            <AlertDescription>
-              Уже загружено на сервер: {serverImages.length} изображений.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {isTimedWork && timeRemaining !== null && timeRemaining < 600 && timeRemaining > 0 && !isTimeUp && (
-          <Alert className="mb-6 border-red-500">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Осталось менее 10 минут! Не забудьте завершить работу.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {isTimeUp && (
-          <Alert className="mb-6 border-red-500 bg-red-50 dark:bg-red-950">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Время экзамена истекло! Все действия заблокированы. Работа отправляется автоматически.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {!isTimedWork && (
-          <div className="mb-6 flex justify-end">
-            <Button onClick={handleSubmit} disabled={submitting || isTimeUp || hasUploadsInProgress}>
-              <CheckCircle className="w-4 h-4 mr-2" />
-              Сдать домашнюю работу
-            </Button>
-          </div>
-        )}
-
-        <div className="mb-6 flex justify-end">
-          <Button variant="outline" onClick={handleOpenMaterials} disabled={openingMaterials}>
-            {openingMaterials ? "Открытие..." : "Дополнительные материалы"}
-          </Button>
-        </div>
-
-        <div className="space-y-8">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        {/* Задачи */}
+        <div className="min-w-0 space-y-4">
           {tasks.map((task, index) => {
             const descriptionText = (task.task_type.description || "").trim();
             const variantText = (task.variant.content || "").trim();
             const showVariantBlock = variantText.length > 0 && variantText !== descriptionText;
 
             return (
-              <Card key={task.task_type.id} className="p-6">
-                <div className="mb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h2 className="text-2xl font-bold">
-                      Задача {index + 1}. {task.task_type.title}
-                    </h2>
-                    <span className="text-sm font-semibold px-3 py-1 rounded-full bg-primary/10 text-primary">
-                      {task.task_type.max_score} баллов
-                    </span>
-                  </div>
-
-                  <div className="prose max-w-none">
-                    <div className="text-muted-foreground mb-4">
-                      {renderTaskText(task.task_type.description)}
-                    </div>
-
-                    {showVariantBlock && (
-                      <div className="bg-secondary/50 p-4 rounded-lg mb-4">
-                        <h3 className="font-semibold mb-2">Ваш вариант:</h3>
-                        <div>{renderTaskText(task.variant.content)}</div>
-                      </div>
-                    )}
-                  </div>
-
-                  {task.task_type.formulas.length > 0 && (
-                    <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg mb-4">
-                      <h4 className="font-semibold mb-2">Формулы:</h4>
-                      <div className="space-y-1">
-                        {task.task_type.formulas.map((formula: string, i: number) => (
-                          <div key={i}>{renderLatex(formula)}</div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+              <Card key={task.task_type.id} className="p-5 sm:p-6">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <h2 className="text-lg font-semibold">
+                    Задача {index + 1}. {task.task_type.title}
+                  </h2>
+                  <span className="whitespace-nowrap rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent">
+                    {task.task_type.max_score} б.
+                  </span>
                 </div>
+
+                {descriptionText && (
+                  <div className="task-rich-text mb-3 text-sm leading-relaxed">
+                    {renderTaskText(task.task_type.description)}
+                  </div>
+                )}
+
+                {showVariantBlock && (
+                  <div className="mb-3 rounded-md border-l-2 border-accent/60 bg-accent/5 p-3">
+                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-accent">
+                      Ваш вариант
+                    </p>
+                    <div className="task-rich-text text-sm">{renderTaskText(task.variant.content)}</div>
+                  </div>
+                )}
+
+                {task.task_type.formulas.length > 0 && (
+                  <div className="rounded-md bg-info/5 p-3">
+                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-info">
+                      Справочные формулы
+                    </p>
+                    <div className="space-y-1 text-sm">
+                      {task.task_type.formulas.map((formula: string, i: number) => (
+                        <div key={i}>{renderLatex(formula)}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </Card>
             );
           })}
         </div>
 
-        <Card className="p-6 mt-8">
-          <h3 className="font-semibold mb-3 flex items-center gap-2">
-            <ImageIcon className="w-5 h-5" />
-            Фото решения
-          </h3>
+        {/* Sticky-панель: таймер, загрузка, отправка */}
+        <aside className="h-fit space-y-4 lg:sticky lg:top-24">
+          {isTimedWork && (
+            <Card className={cn("p-5", lowTime && "border-destructive/50")}>
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <Clock className="h-4 w-4" />
+                  Осталось времени
+                </span>
+              </div>
+              <p
+                className={cn(
+                  "mt-1 font-mono text-4xl font-semibold tabular-nums",
+                  lowTime ? "text-destructive" : "text-foreground"
+                )}
+              >
+                {timeRemaining !== null ? formatTime(timeRemaining) : "--:--:--"}
+              </p>
+              <Progress
+                value={progressPercent}
+                className={cn("mt-3 h-1.5", lowTime && "[&>div]:bg-destructive")}
+              />
+              {lowTime && (
+                <p className="mt-2 text-xs font-medium text-destructive">
+                  Меньше 10 минут — не забудьте завершить работу
+                </p>
+              )}
+            </Card>
+          )}
 
-          <div className="mb-4">
+          <Card className="p-5">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+              <ImageIcon className="h-4 w-4" />
+              Фото решения
+              {serverImages.length > 0 && (
+                <span className="ml-auto rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+                  {serverImages.length} загружено
+                </span>
+              )}
+            </h3>
+
             <label className="block">
               <div
-                className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (canModifyImages) setDragActive(true);
+                }}
+                onDragLeave={() => setDragActive(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragActive(false);
+                  handleFilesSelected(e.dataTransfer.files);
+                }}
+                className={cn(
+                  "rounded-md border-2 border-dashed p-5 text-center transition-colors",
                   canModifyImages
-                    ? "cursor-pointer hover:border-primary"
-                    : "cursor-not-allowed opacity-50 bg-gray-100 dark:bg-gray-800"
-                }`}
+                    ? "cursor-pointer hover:border-accent/60 hover:bg-accent/5"
+                    : "cursor-not-allowed bg-muted/50 opacity-60",
+                  dragActive && "border-accent bg-accent/10"
+                )}
               >
-                <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
+                <Upload className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">
                   {canModifyImages
-                    ? "Нажмите или перетащите изображения (JPEG, PNG). Файлы отправляются сразу."
-                    : "Загрузка недоступна для завершенной сессии"}
+                    ? "Нажмите или перетащите фото (JPEG, PNG) — они сохраняются сразу"
+                    : "Загрузка недоступна: работа завершена"}
                 </p>
                 <input
                   type="file"
@@ -622,94 +627,101 @@ const TakeExam = () => {
                 />
               </div>
             </label>
-          </div>
 
-          {uploadQueue.length > 0 && (
-            <div className="mb-6">
-              <p className="text-sm font-medium mb-2">Текущие загрузки</p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {uploadQueue.length > 0 && (
+              <div className="mt-3 space-y-1.5">
                 {uploadQueue.map((item) => (
-                  <div key={item.id} className="border rounded-lg overflow-hidden">
-                    <img src={item.previewUrl} alt={item.file.name} className="w-full h-32 object-cover" />
-                    <div className="p-2 text-xs">
-                      <div className="truncate">{item.file.name}</div>
-                      <div className="mt-1">
-                        {item.status === "uploading" && "Загрузка..."}
-                        {item.status === "uploaded" && "Загружено"}
-                        {item.status === "error" && (
-                          <span className="text-red-500">Ошибка: {item.error || "неизвестно"}</span>
-                        )}
-                      </div>
-                      {item.status === "error" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="mt-2"
-                          onClick={() => handleRemoveQueueItem(item.id)}
-                        >
-                          Убрать
-                        </Button>
+                  <div key={item.id} className="flex items-center gap-2 rounded-md border p-1.5 text-xs">
+                    <img
+                      src={item.previewUrl}
+                      alt={item.file.name}
+                      className="h-9 w-9 flex-shrink-0 rounded object-cover"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate">{item.file.name}</p>
+                      {item.status === "uploading" && (
+                        <p className="inline-flex items-center gap-1 text-muted-foreground">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Загружаем...
+                        </p>
                       )}
+                      {item.status === "uploaded" && (
+                        <p className="inline-flex items-center gap-1 text-success">
+                          <CheckCircle className="h-3 w-3" />
+                          Готово
+                        </p>
+                      )}
+                      {item.status === "error" && (
+                        <p className="truncate text-destructive">{item.error || "Ошибка"}</p>
+                      )}
+                    </div>
+                    {item.status === "error" && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-1.5"
+                        onClick={() => handleRemoveQueueItem(item.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {serverImages.length > 0 && (
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {serverImages.map((image) => (
+                  <div key={image.id} className="group relative overflow-hidden rounded-md border">
+                    {image.view_url ? (
+                      <img src={image.view_url} alt={image.filename} className="h-20 w-full object-cover" />
+                    ) : (
+                      <div className="flex h-20 w-full items-center justify-center bg-secondary px-1 text-center text-[10px] text-muted-foreground">
+                        {image.filename}
+                      </div>
+                    )}
+                    {canModifyImages && (
+                      <button
+                        type="button"
+                        className="absolute right-1 top-1 rounded bg-card/90 p-1 text-destructive opacity-0 shadow-soft transition-opacity group-hover:opacity-100 disabled:opacity-40"
+                        onClick={() => handleDeleteServerImage(image.id)}
+                        disabled={deletingImageId === image.id}
+                        title="Удалить фото"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    <div className="absolute bottom-0 left-0 right-0 bg-foreground/60 px-1 py-0.5 text-center text-[10px] text-background">
+                      #{image.order_index + 1}
+                      {image.upload_source === "telegram" && " · TG"}
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
 
-          <p className="text-sm font-medium mb-2">Загруженные изображения</p>
-          {serverImages.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Пока нет загруженных изображений.</p>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {serverImages.map((image) => (
-                <div key={image.id} className="relative border rounded-lg overflow-hidden group">
-                  {image.view_url ? (
-                    <img
-                      src={image.view_url}
-                      alt={image.filename}
-                      className="w-full h-32 object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-32 flex items-center justify-center bg-secondary text-muted-foreground text-xs px-2 text-center">
-                      {image.filename}
-                    </div>
-                  )}
-                  {canModifyImages && (
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => handleDeleteServerImage(image.id)}
-                      disabled={deletingImageId === image.id}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  )}
-                  <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 text-center truncate">
-                    #{image.order_index + 1} · {image.upload_source}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        <Card className="p-4 mt-4 border-dashed">
-          <p className="text-sm flex items-start gap-2 text-muted-foreground">
-            <Smartphone className="w-4 h-4 mt-0.5" />
-            Можно загружать фото с телефона через Telegram-бота. Сначала начните работу на сайте, затем в боте: /login → /works → /use.
-          </p>
-        </Card>
-
-        <div className="fixed bottom-6 right-6">
-          <Card className="p-3 shadow-lg">
-            <p className="text-xs text-muted-foreground">
-              <CheckCircle className="w-3 h-3 inline mr-1" />
-              Автосохранение активно
+            <p className="mt-3 flex items-start gap-1.5 border-t pt-3 text-xs text-muted-foreground">
+              <Smartphone className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+              Фото можно прислать с телефона через Telegram-бота: /login → /works → /use
             </p>
           </Card>
-        </div>
+
+          <Button
+            onClick={handleSubmit}
+            disabled={submitting || isTimeUp || hasUploadsInProgress}
+            variant="accent"
+            size="lg"
+            className="w-full gap-2"
+            title={hasUploadsInProgress ? "Дождитесь завершения загрузки фото" : undefined}
+          >
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {isTimeUp ? "Время истекло" : submitting ? "Отправляем..." : "Сдать работу"}
+          </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            Автосохранение включено — фото сохраняются сразу после загрузки
+          </p>
+        </aside>
       </div>
 
       {isTimedWork && (
@@ -717,14 +729,14 @@ const TakeExam = () => {
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-red-500" />
+                <Clock className="h-5 w-5 text-destructive" />
                 Время истекло
               </DialogTitle>
               <DialogDescription>
-                Время экзамена закончилось. Работа отправлена на проверку.
+                Время работы закончилось. Всё, что вы успели загрузить, отправлено на проверку.
               </DialogDescription>
             </DialogHeader>
-            <div className="flex justify-end gap-2 mt-4">
+            <div className="mt-4 flex justify-end gap-2">
               <Button onClick={handleTimeoutConfirm} className="w-full">
                 Понятно
               </Button>
@@ -732,7 +744,7 @@ const TakeExam = () => {
           </DialogContent>
         </Dialog>
       )}
-    </div>
+    </PageShell>
   );
 };
 
