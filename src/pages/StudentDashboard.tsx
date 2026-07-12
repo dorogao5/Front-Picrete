@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
-import { BookOpen, Calendar, CheckCircle, Clock, Dumbbell, ScanText } from "lucide-react";
+import { BookOpen, Bot, Calendar, CheckCircle, Clock, Dumbbell, ScanText } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -160,6 +160,12 @@ const StudentDashboard = () => {
             <Button variant="outline" className="gap-1.5">
               <Dumbbell className="h-4 w-4" />
               Тренажёры
+            </Button>
+          </Link>
+          <Link to={`/c/${courseId}/assistant`}>
+            <Button variant="accent" className="gap-1.5">
+              <Bot className="h-4 w-4" />
+              Ассистент
             </Button>
           </Link>
         </>

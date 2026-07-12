@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
-import { BookOpen, FileText, Plus } from "lucide-react";
+import { BookOpen, Bot, FileText, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -108,6 +108,12 @@ const TeacherDashboard = () => {
             <Button variant="outline" className="gap-1.5">
               <BookOpen className="h-4 w-4" />
               Банк задач
+            </Button>
+          </Link>
+          <Link to={`/c/${courseId}/assistant`}>
+            <Button variant="outline" className="gap-1.5">
+              <Bot className="h-4 w-4" />
+              Ассистент
             </Button>
           </Link>
           <Link to={`/c/${courseId}/create-exam`}>

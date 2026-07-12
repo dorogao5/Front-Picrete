@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import { BookOpen, Check, ChevronDown, Dumbbell, GraduationCap, LogOut, Settings, User, UserPlus } from "lucide-react";
+import { BookOpen, Bot, Check, ChevronDown, Dumbbell, GraduationCap, LogOut, Settings, User, UserPlus } from "lucide-react";
 import logo from "@/assets/logo.png";
 import {
   getActiveCourseId,
@@ -159,6 +159,13 @@ export const Navbar = () => {
                       >
                         <Dumbbell className="mr-2 h-4 w-4" />
                         Тренажёры
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => navigate(`/c/${activeCourseId}/assistant`)}
+                        className="cursor-pointer"
+                      >
+                        <Bot className="mr-2 h-4 w-4" />
+                        Ассистент курса
                       </DropdownMenuItem>
                     </>
                   )}

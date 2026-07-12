@@ -26,6 +26,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfUse from "./pages/TermsOfUse";
 import DataProcessingConsent from "./pages/DataProcessingConsent";
+import CourseAssistant from "./pages/CourseAssistant";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -80,6 +81,7 @@ const App = () => (
             <Route path="/c/:courseId/exam/:examId/submissions" element={<ProtectedRoute roles={["teacher", "admin"]}><ExamSubmissions /></ProtectedRoute>} />
             <Route path="/c/:courseId/submission/:submissionId" element={<ProtectedRoute roles={["teacher", "admin"]}><SubmissionReview /></ProtectedRoute>} />
             <Route path="/c/:courseId/task-bank" element={<ProtectedRoute roles={["student", "teacher", "admin"]}><TaskBank /></ProtectedRoute>} />
+            <Route path="/c/:courseId/assistant" element={<ProtectedRoute roles={["student", "teacher", "admin"]}><CourseAssistant /></ProtectedRoute>} />
 
             <Route path="/c/:courseId/student" element={<ProtectedRoute roles={["student", "admin"]}><StudentDashboard /></ProtectedRoute>} />
             <Route path="/c/:courseId/trainer" element={<ProtectedRoute roles={["student", "admin"]}><TrainerSets /></ProtectedRoute>} />

@@ -88,6 +88,28 @@ export interface TrainerSet {
   items: TaskBankItem[];
 }
 
+export interface CourseAssistantStatus {
+  available: boolean;
+  name: string | null;
+  discipline: string | null;
+  snapshot_version: string | null;
+  synced_at: string | null;
+}
+
+export interface AssistantChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface AssistantChatThread {
+  id: string;
+  title: string;
+  messages: AssistantChatMessage[];
+  snapshot_version: string;
+  created_at: string;
+  updated_at: string;
+}
+
 interface ExamVariantPayload {
   content: string;
   parameters: JsonObject;
@@ -276,6 +298,15 @@ export const coursesAPI = {
 
   join: (data: { invite_code: string; identity_payload?: Record<string, unknown> }) =>
     api.post("/courses/join", data),
+};
+
+export const courseAssistantAPI = {
+  status: (courseId?: string) =>
+    api.get<CourseAssistantStatus>(`${coursePrefix(courseId)}/assistant`),
+  threads: (courseId?: string) =>
+    api.get<AssistantChatThread[]>(`${coursePrefix(courseId)}/assistant/threads`),
+  chat: (data: { thread_id?: string; message: string }, courseId?: string) =>
+    api.post<AssistantChatThread>(`${coursePrefix(courseId)}/assistant/chat`, data),
 };
 
 export const examsAPI = {
