@@ -1,5 +1,5 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
-import { Bot, Loader2, MessageSquarePlus, Send, UserRound } from "lucide-react";
+import { AlertCircle, Bot, Loader2, MessageSquarePlus, RefreshCw, Send, UserRound } from "lucide-react";
 import { useParams } from "react-router-dom";
 
 import { PageLoader, PageShell } from "@/components/PageShell";
@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   AssistantChatMessage,
   AssistantChatThread,
+  AssistantChatThreadSummary,
   CourseAssistantStatus,
   courseAssistantAPI,
   getApiErrorMessage,
@@ -73,23 +74,30 @@ function ChatMessage({ message }: { message: AssistantChatMessage }) {
 export default function CourseAssistant() {
   const { courseId } = useParams<{ courseId: string }>();
   const [status, setStatus] = useState<CourseAssistantStatus | null>(null);
-  const [threads, setThreads] = useState<AssistantChatThread[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [threads, setThreads] = useState<AssistantChatThreadSummary[]>([]);
+  const [activeThread, setActiveThread] = useState<AssistantChatThread | null>(null);
+  const [threadLoading, setThreadLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
 
-  const activeThread = threads.find((thread) => thread.id === activeId) ?? null;
-
   useEffect(() => {
     if (!courseId) return;
     Promise.all([courseAssistantAPI.status(courseId), courseAssistantAPI.threads(courseId)])
-      .then(([statusResponse, threadsResponse]) => {
+      .then(async ([statusResponse, threadsResponse]) => {
         setStatus(statusResponse.data);
         setThreads(threadsResponse.data);
-        setActiveId(threadsResponse.data[0]?.id ?? null);
+        const latest = threadsResponse.data[0];
+        if (latest) {
+          setThreadLoading(true);
+          try {
+            setActiveThread((await courseAssistantAPI.thread(latest.id, courseId)).data);
+          } finally {
+            setThreadLoading(false);
+          }
+        }
       })
       .catch((reason) => setError(getApiErrorMessage(reason, "Не удалось открыть ассистента")))
       .finally(() => setLoading(false));
@@ -112,14 +120,33 @@ export default function CourseAssistant() {
       );
       setMessage("");
       setThreads((current) => [
-        response.data,
+        {
+          id: response.data.id,
+          title: response.data.title,
+          snapshot_version: response.data.snapshot_version,
+          created_at: response.data.created_at,
+          updated_at: response.data.updated_at,
+        },
         ...current.filter((item) => item.id !== response.data.id),
       ]);
-      setActiveId(response.data.id);
+      setActiveThread(response.data);
     } catch (reason) {
       setError(getApiErrorMessage(reason, "Ассистент не смог ответить — попробуйте ещё раз"));
     } finally {
       setSending(false);
+    }
+  };
+
+  const selectThread = async (threadId: string) => {
+    if (!courseId || threadId === activeThread?.id || threadLoading) return;
+    setThreadLoading(true);
+    setError("");
+    try {
+      setActiveThread((await courseAssistantAPI.thread(threadId, courseId)).data);
+    } catch (reason) {
+      setError(getApiErrorMessage(reason, "Не удалось загрузить диалог"));
+    } finally {
+      setThreadLoading(false);
     }
   };
 
@@ -135,6 +162,23 @@ export default function CourseAssistant() {
     return (
       <PageShell>
         <PageLoader label="Открываем ассистента…" />
+      </PageShell>
+    );
+  }
+
+  if (!status && error) {
+    return (
+      <PageShell title="Ассистент курса" subtitle="Разбор задач и обратная связь по материалам преподавателя">
+        <Card className="mx-auto max-w-2xl p-8 text-center sm:p-12">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+            <AlertCircle className="h-6 w-6" />
+          </div>
+          <h2 className="mt-5 text-xl font-semibold">Не удалось открыть ассистента</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">{error}</p>
+          <Button className="mt-5 gap-2" variant="outline" onClick={() => window.location.reload()}>
+            <RefreshCw className="h-4 w-4" /> Повторить
+          </Button>
+        </Card>
       </PageShell>
     );
   }
@@ -171,7 +215,7 @@ export default function CourseAssistant() {
           <Button
             variant="outline"
             className="w-full justify-start gap-2"
-            onClick={() => setActiveId(null)}
+            onClick={() => setActiveThread(null)}
           >
             <MessageSquarePlus className="h-4 w-4" />
             Новый диалог
@@ -183,11 +227,11 @@ export default function CourseAssistant() {
                 type="button"
                 className={cn(
                   "min-w-56 rounded-lg px-3 py-2.5 text-left text-sm transition-colors lg:w-full lg:min-w-0",
-                  thread.id === activeId
+                  thread.id === activeThread?.id
                     ? "bg-muted font-medium"
                     : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
                 )}
-                onClick={() => setActiveId(thread.id)}
+                onClick={() => void selectThread(thread.id)}
               >
                 <span className="block truncate">{thread.title}</span>
                 <span className="mt-0.5 block text-xs opacity-70">
@@ -200,7 +244,7 @@ export default function CourseAssistant() {
 
         <Card className="flex h-[calc(100dvh-5rem)] min-h-[32rem] min-w-0 flex-col overflow-hidden lg:h-auto lg:min-h-0">
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-6" aria-live="polite">
-            {!activeThread && (
+            {!activeThread && !threadLoading && (
               <div className="mx-auto flex h-full max-w-xl flex-col items-center justify-center py-16 text-center">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/15 text-accent">
                   <Bot className="h-6 w-6" />
@@ -210,6 +254,11 @@ export default function CourseAssistant() {
                   Пришлите условие, свой ход решения или укажите место, которое осталось
                   непонятным. Ассистент опирается на материалы этого курса.
                 </p>
+              </div>
+            )}
+            {threadLoading && (
+              <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Загружаем диалог…
               </div>
             )}
             {activeThread?.messages.map((item, index) => (

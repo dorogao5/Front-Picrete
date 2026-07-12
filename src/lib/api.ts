@@ -110,6 +110,8 @@ export interface AssistantChatThread {
   updated_at: string;
 }
 
+export type AssistantChatThreadSummary = Omit<AssistantChatThread, "messages">;
+
 interface ExamVariantPayload {
   content: string;
   parameters: JsonObject;
@@ -304,7 +306,9 @@ export const courseAssistantAPI = {
   status: (courseId?: string) =>
     api.get<CourseAssistantStatus>(`${coursePrefix(courseId)}/assistant`),
   threads: (courseId?: string) =>
-    api.get<AssistantChatThread[]>(`${coursePrefix(courseId)}/assistant/threads`),
+    api.get<AssistantChatThreadSummary[]>(`${coursePrefix(courseId)}/assistant/threads`),
+  thread: (threadId: string, courseId?: string) =>
+    api.get<AssistantChatThread>(`${coursePrefix(courseId)}/assistant/threads/${threadId}`),
   chat: (data: { thread_id?: string; message: string }, courseId?: string) =>
     api.post<AssistantChatThread>(`${coursePrefix(courseId)}/assistant/chat`, data),
 };
