@@ -198,7 +198,7 @@ export default function CourseAssistant() {
           </div>
         </aside>
 
-        <Card className="flex min-h-[32rem] min-w-0 flex-col overflow-hidden lg:min-h-0">
+        <Card className="flex h-[calc(100dvh-5rem)] min-h-[32rem] min-w-0 flex-col overflow-hidden lg:h-auto lg:min-h-0">
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-6" aria-live="polite">
             {!activeThread && (
               <div className="mx-auto flex h-full max-w-xl flex-col items-center justify-center py-16 text-center">
