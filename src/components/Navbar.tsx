@@ -153,13 +153,15 @@ export const Navbar = () => {
                         <BookOpen className="mr-2 h-4 w-4" />
                         Банк задач
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => navigate(`/c/${activeCourseId}/trainer`)}
-                        className="cursor-pointer"
-                      >
-                        <Dumbbell className="mr-2 h-4 w-4" />
-                        Тренажёры
-                      </DropdownMenuItem>
+                      {(isAdmin() || activeMembership?.roles.includes("student")) && (
+                        <DropdownMenuItem
+                          onClick={() => navigate(`/c/${activeCourseId}/trainer`)}
+                          className="cursor-pointer"
+                        >
+                          <Dumbbell className="mr-2 h-4 w-4" />
+                          Тренажёры
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem
                         onClick={() => navigate(`/c/${activeCourseId}/assistant`)}
                         className="cursor-pointer"
