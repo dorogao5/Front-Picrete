@@ -92,6 +92,7 @@ export default function CourseAssistant() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
+  const renderedThreadIdRef = useRef<string | null>(null);
   const canConfigureAssistant = isAdmin() || (courseId ? hasCourseRole(courseId, "teacher") : false);
 
   useEffect(() => {
@@ -115,8 +116,13 @@ export default function CourseAssistant() {
   }, [courseId]);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [activeThread?.messages.length, sending]);
+    const threadId = activeThread?.id ?? null;
+    const threadWasAlreadyOpen = threadId !== null && renderedThreadIdRef.current === threadId;
+    renderedThreadIdRef.current = threadId;
+    if (threadWasAlreadyOpen || sending) {
+      endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [activeThread?.id, activeThread?.messages.length, sending]);
 
   const submit = async (event?: FormEvent) => {
     event?.preventDefault();
@@ -262,8 +268,8 @@ export default function CourseAssistant() {
           </div>
         </aside>
 
-        <Card className="flex h-[calc(100dvh-5rem)] min-h-[32rem] min-w-0 flex-col overflow-hidden lg:h-auto lg:min-h-0">
-          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-6" aria-live="polite">
+        <Card className="flex min-w-0 flex-col lg:h-auto lg:min-h-0 lg:overflow-hidden">
+          <div className="space-y-5 p-4 sm:p-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto" aria-live="polite">
             {!activeThread && !threadLoading && (
               <div className="mx-auto flex h-full max-w-xl flex-col items-center justify-center py-16 text-center">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/15 text-accent">
@@ -310,7 +316,7 @@ export default function CourseAssistant() {
                 rows={2}
                 placeholder="Опишите вопрос или вставьте своё решение…"
                 aria-label="Сообщение ассистенту"
-                className="min-h-[3.25rem] max-h-40 resize-none"
+                className="min-h-[3.25rem] max-h-40 resize-none text-base sm:text-sm"
                 disabled={sending}
               />
               <Button

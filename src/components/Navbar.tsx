@@ -1,4 +1,5 @@
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import {
@@ -32,10 +33,17 @@ const roleLabelForMembership = (membership: Membership): string => {
 
 export const Navbar = () => {
   const navigate = useNavigate();
+  const { courseId: routeCourseId } = useParams<{ courseId?: string }>();
   const isAuth = isAuthenticated();
   const user = getUser();
-  const activeCourseId = getActiveCourseId();
   const memberships = getMemberships().filter((membership) => membership.status === "active");
+  const activeCourseId = memberships.some((membership) => membership.course_id === routeCourseId)
+    ? routeCourseId!
+    : getActiveCourseId();
+
+  useEffect(() => {
+    if (routeCourseId) setActiveCourseId(routeCourseId);
+  }, [routeCourseId]);
 
   const getInitials = (fullName: string) => {
     const names = fullName.split(" ");
