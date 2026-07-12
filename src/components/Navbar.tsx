@@ -71,7 +71,7 @@ export const Navbar = () => {
       <div className="container mx-auto min-w-0 px-4 py-2.5 sm:px-6">
         <div className="flex min-h-10 w-full min-w-0 items-center justify-between gap-2 sm:gap-3">
           <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-            <Link to="/" className="flex flex-shrink-0 items-center gap-2.5">
+            <Link to="/" className="flex min-h-11 flex-shrink-0 items-center gap-2.5 sm:min-h-0">
               <img src={logo} alt="Picrete" className="h-8 w-8 flex-shrink-0" />
               <span className="hidden font-display text-xl font-semibold tracking-tight sm:inline">
                 Picrete
@@ -83,7 +83,11 @@ export const Navbar = () => {
                 <span className="mx-1 hidden h-5 w-px bg-border sm:block" />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="min-w-0 max-w-full gap-1.5 px-2 text-sm font-medium">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-11 min-w-0 max-w-full gap-1.5 px-2 text-sm font-medium sm:h-9"
+                    >
                       <GraduationCap className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                       <span className="min-w-0 max-w-44 truncate">
                         {activeMembership?.course_title ?? "Выбрать курс"}
@@ -127,7 +131,7 @@ export const Navbar = () => {
             {isAuth && user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="h-10 gap-2 rounded-md px-1.5 sm:px-2">
+                  <Button variant="ghost" className="h-11 gap-2 rounded-md px-1.5 sm:h-10 sm:px-2">
                     <Avatar className="h-8 w-8">
                       <AvatarFallback className="bg-accent text-xs font-semibold text-accent-foreground">
                         {getInitials(user.full_name)}

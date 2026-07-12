@@ -389,6 +389,7 @@ const TaskBank = () => {
                 </div>
                 <Button
                   variant={selectedItems[item.id] ? "default" : "outline"}
+                  className="min-h-11 sm:min-h-10"
                   onClick={() => toggleSelection(item)}
                 >
                   {selectedItems[item.id] ? "Выбрано" : "Выбрать"}
