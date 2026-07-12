@@ -1,5 +1,14 @@
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
-import { AlertCircle, Bot, Loader2, MessageSquarePlus, RefreshCw, Send, UserRound } from "lucide-react";
+import {
+  AlertCircle,
+  Bot,
+  ExternalLink,
+  Loader2,
+  MessageSquarePlus,
+  RefreshCw,
+  Send,
+  UserRound,
+} from "lucide-react";
 import { useParams } from "react-router-dom";
 
 import { PageLoader, PageShell } from "@/components/PageShell";
@@ -15,6 +24,7 @@ import {
   getApiErrorMessage,
 } from "@/lib/api";
 import { renderLatex } from "@/lib/renderLatex";
+import { hasCourseRole, isAdmin } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 function MessageContent({ content }: { content: string }) {
@@ -82,6 +92,7 @@ export default function CourseAssistant() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
+  const canConfigureAssistant = isAdmin() || (courseId ? hasCourseRole(courseId, "teacher") : false);
 
   useEffect(() => {
     if (!courseId) return;
@@ -195,9 +206,18 @@ export default function CourseAssistant() {
           </div>
           <h2 className="mt-5 text-xl font-semibold">Ассистент ещё не опубликован</h2>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-            Преподаватель сможет подготовить и протестировать его в Picrete Studio, затем
-            опубликовать в этот курс.
+            {canConfigureAssistant
+              ? "Подготовьте и протестируйте ассистента в Picrete Studio, затем опубликуйте его в этот курс."
+              : "Преподаватель курса ещё готовит ассистента. Он появится здесь после публикации."}
           </p>
+          {canConfigureAssistant && (
+            <Button asChild variant="accent" className="mt-5 gap-2">
+              <a href="https://dev.picrete.com" target="_blank" rel="noreferrer">
+                Открыть Picrete Studio
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            </Button>
+          )}
           {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
         </Card>
       </PageShell>

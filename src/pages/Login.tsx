@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import logo from "@/assets/logo.png";
-import { authAPI, getApiErrorMessage } from "@/lib/api";
+import { authAPI, getApiErrorMessage, getApiErrorStatus } from "@/lib/api";
 import { getDefaultAppPath, setAuthSession } from "@/lib/auth";
 import { toast } from "sonner";
 import { ArrowLeft, LogIn, ShieldCheck } from "lucide-react";
@@ -36,7 +36,11 @@ const Login = () => {
 
       navigate(getDefaultAppPath(), { replace: true });
     } catch (error: unknown) {
-      toast.error(getApiErrorMessage(error, "Не удалось войти"));
+      const message =
+        getApiErrorStatus(error) === 401
+          ? "Неверный логин или пароль"
+          : getApiErrorMessage(error, "Не удалось войти");
+      toast.error(message);
       setLoading(false);
     }
   };

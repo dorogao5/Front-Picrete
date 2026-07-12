@@ -45,6 +45,13 @@ const DashboardRedirect = () => {
   return <Navigate to={getDefaultAppPath()} replace />;
 };
 
+const HomeRoute = () => {
+  if (isAuthenticated()) {
+    return <Navigate to={getDefaultAppPath()} replace />;
+  }
+  return <Landing />;
+};
+
 const App = () => (
   <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
@@ -53,7 +60,7 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             {/* Public routes */}
-            <Route path="/" element={<Landing />} />
+            <Route path="/" element={<HomeRoute />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/demo" element={<Demo />} />

@@ -207,6 +207,20 @@
     @apply border border-border px-2 py-1 align-top;
   }
 
+  /* Длинная формула прокручивается внутри своего блока и не расширяет страницу. */
+  .latex-scroll {
+    @apply min-w-0 max-w-full overflow-x-auto overflow-y-hidden;
+    scrollbar-width: thin;
+  }
+
+  .latex-scroll .katex-display {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    margin: 0.5rem 0;
+    padding-bottom: 0.125rem;
+  }
+
   .ocr-rich-text {
     @apply min-w-0 max-w-full;
   }

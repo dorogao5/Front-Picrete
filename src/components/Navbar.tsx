@@ -59,10 +59,10 @@ export const Navbar = () => {
       : "";
 
   return (
-    <nav className="fixed left-0 right-0 top-0 z-50 border-b bg-background/90 backdrop-blur-xl">
-      <div className="container mx-auto px-4 py-2.5 sm:px-6">
-        <div className="flex min-h-10 items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
+    <nav className="fixed left-0 right-0 top-0 z-50 max-w-full overflow-x-clip border-b bg-background/90 backdrop-blur-xl">
+      <div className="container mx-auto min-w-0 px-4 py-2.5 sm:px-6">
+        <div className="flex min-h-10 w-full min-w-0 items-center justify-between gap-2 sm:gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
             <Link to="/" className="flex flex-shrink-0 items-center gap-2.5">
               <img src={logo} alt="Picrete" className="h-8 w-8 flex-shrink-0" />
               <span className="hidden font-display text-xl font-semibold tracking-tight sm:inline">
@@ -75,9 +75,9 @@ export const Navbar = () => {
                 <span className="mx-1 hidden h-5 w-px bg-border sm:block" />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="min-w-0 gap-1.5 px-2 text-sm font-medium">
+                    <Button variant="ghost" size="sm" className="min-w-0 max-w-full gap-1.5 px-2 text-sm font-medium">
                       <GraduationCap className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                      <span className="max-w-44 truncate">
+                      <span className="min-w-0 max-w-44 truncate">
                         {activeMembership?.course_title ?? "Выбрать курс"}
                       </span>
                       <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />

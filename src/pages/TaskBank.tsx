@@ -16,7 +16,13 @@ import { fetchImageAsBlobUrl, getApiErrorMessage, taskBankAPI, trainerAPI } from
 import type { TaskBankItem, TaskBankSource, TrainerSet } from "@/lib/api";
 import { renderLatex, renderTaskText } from "@/lib/renderLatex";
 
-const PAGE_SIZE = 40;
+const MOBILE_PAGE_SIZE = 16;
+const DESKTOP_PAGE_SIZE = 40;
+
+const getPageSize = () =>
+  typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches
+    ? MOBILE_PAGE_SIZE
+    : DESKTOP_PAGE_SIZE;
 
 const selectClass =
   "mt-1 h-11 w-full rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
@@ -26,12 +32,14 @@ const TaskBank = () => {
   const navigate = useNavigate();
 
   const [sources, setSources] = useState<TaskBankSource[]>([]);
+  const [sourcesLoading, setSourcesLoading] = useState(true);
   const [items, setItems] = useState<TaskBankItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [skip, setSkip] = useState(0);
+  const [pageSize, setPageSize] = useState(getPageSize);
 
-  const [sourceFilter, setSourceFilter] = useState("sviridov");
+  const [sourceFilter, setSourceFilter] = useState("");
   const [paragraphFilter, setParagraphFilter] = useState("");
   const [topicFilter, setTopicFilter] = useState("");
   const [hasAnswerFilter, setHasAnswerFilter] = useState<"all" | "yes" | "no">("all");
@@ -44,26 +52,46 @@ const TaskBank = () => {
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
+    const media = window.matchMedia("(max-width: 639px)");
+    const updatePageSize = () => {
+      setPageSize(media.matches ? MOBILE_PAGE_SIZE : DESKTOP_PAGE_SIZE);
+      setSkip(0);
+    };
+
+    media.addEventListener("change", updatePageSize);
+    return () => media.removeEventListener("change", updatePageSize);
+  }, []);
+
+  useEffect(() => {
     if (!courseId) {
       return;
     }
     const fetchSources = async () => {
+      setSourcesLoading(true);
       try {
         const response = await taskBankAPI.sources(courseId);
         const nextSources = (response.data ?? []) as TaskBankSource[];
         setSources(nextSources);
-        if (nextSources.length > 0 && !nextSources.some((source) => source.code === sourceFilter)) {
-          setSourceFilter(nextSources[0].code);
-        }
+        setSourceFilter((current) =>
+          nextSources.some((source) => source.code === current) ? current : nextSources[0]?.code ?? "",
+        );
       } catch (error: unknown) {
         toast.error(getApiErrorMessage(error, "Ошибка загрузки источников банка задач"));
+      } finally {
+        setSourcesLoading(false);
       }
     };
     fetchSources();
-  }, [courseId, sourceFilter]);
+  }, [courseId]);
 
   useEffect(() => {
-    if (!courseId) {
+    if (!courseId || sourcesLoading) {
+      return;
+    }
+    if (!sourceFilter) {
+      setItems([]);
+      setTotalCount(0);
+      setLoading(false);
       return;
     }
     const fetchItems = async () => {
@@ -76,7 +104,7 @@ const TaskBank = () => {
           has_answer:
             hasAnswerFilter === "all" ? undefined : hasAnswerFilter === "yes",
           skip,
-          limit: PAGE_SIZE,
+          limit: pageSize,
         });
         setItems((response.data.items ?? []) as TaskBankItem[]);
         setTotalCount(response.data.total_count ?? 0);
@@ -87,9 +115,11 @@ const TaskBank = () => {
       }
     };
     fetchItems();
-  }, [courseId, sourceFilter, paragraphFilter, topicFilter, hasAnswerFilter, skip]);
+  }, [courseId, sourceFilter, paragraphFilter, topicFilter, hasAnswerFilter, skip, pageSize, sourcesLoading]);
 
   const selectedNumbers = useMemo(() => Object.values(selectedItems), [selectedItems]);
+  const currentPage = Math.floor(skip / pageSize) + 1;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   const toggleSelection = (item: TaskBankItem) => {
     setSelectedItems((prev) => {
@@ -177,6 +207,22 @@ const TaskBank = () => {
 
   if (!courseId) {
     return null;
+  }
+
+  if (sourcesLoading) {
+    return <PageLoader label="Загружаем источники банка задач…" />;
+  }
+
+  if (sources.length === 0) {
+    return (
+      <PageShell title="Банк задач" subtitle="Источники задач подключаются отдельно для каждого курса">
+        <EmptyState
+          icon={SearchX}
+          title="Для этого курса банк задач ещё не подключён"
+          description="Задачи другого предмета здесь не показываются. Преподаватель сможет опубликовать подготовленный банк из Picrete Studio."
+        />
+      </PageShell>
+    );
   }
 
   return (
@@ -318,8 +364,8 @@ const TaskBank = () => {
                       <Badge variant="muted">Без ответа</Badge>
                     )}
                   </div>
-                  <h3 className="mb-2 font-semibold">{renderLatex(item.topic)}</h3>
-                  <div className="whitespace-pre-wrap text-sm text-muted-foreground">
+                  <h3 className="latex-scroll mb-2 font-semibold">{renderLatex(item.topic)}</h3>
+                  <div className="latex-scroll whitespace-pre-wrap text-sm text-muted-foreground">
                     {renderTaskText(item.text)}
                   </div>
                   {item.images.length > 0 && (
@@ -353,29 +399,31 @@ const TaskBank = () => {
         </div>
       )}
 
-      <div className="mt-6 flex items-center justify-between">
+      <nav className="mt-6 flex items-center justify-between gap-3" aria-label="Страницы банка задач">
         <Button
           variant="outline"
-          className="gap-1.5"
+          className="min-h-11 min-w-11 gap-1.5 px-3 sm:min-w-0 sm:px-4"
           disabled={skip === 0}
-          onClick={() => setSkip((prev) => Math.max(0, prev - PAGE_SIZE))}
+          onClick={() => setSkip((prev) => Math.max(0, prev - pageSize))}
+          aria-label={`Предыдущая страница, сейчас страница ${currentPage}`}
         >
           <ChevronLeft className="h-4 w-4" />
-          Назад
+          <span className="hidden sm:inline">Назад</span>
         </Button>
-        <span className="text-sm text-muted-foreground">
-          Страница {Math.floor(skip / PAGE_SIZE) + 1}
+        <span className="text-center text-sm text-muted-foreground" aria-live="polite">
+          Страница {currentPage} из {totalPages}
         </span>
         <Button
           variant="outline"
-          className="gap-1.5"
-          disabled={skip + PAGE_SIZE >= totalCount}
-          onClick={() => setSkip((prev) => prev + PAGE_SIZE)}
+          className="min-h-11 min-w-11 gap-1.5 px-3 sm:min-w-0 sm:px-4"
+          disabled={skip + pageSize >= totalCount}
+          onClick={() => setSkip((prev) => prev + pageSize)}
+          aria-label={`Следующая страница, сейчас страница ${currentPage}`}
         >
-          Вперёд
+          <span className="hidden sm:inline">Вперёд</span>
           <ChevronRight className="h-4 w-4" />
         </Button>
-      </div>
+      </nav>
 
       {lightboxOpen && (
         <ImageLightbox

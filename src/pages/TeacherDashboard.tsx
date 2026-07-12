@@ -183,7 +183,7 @@ const TeacherDashboard = () => {
         <div className="space-y-3">
           {filteredExams.map((exam) => (
             <Card key={exam.id} className="p-5 transition-shadow hover:shadow-elegant">
-              <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="mb-1.5 flex flex-wrap items-center gap-2">
                     <h3 className="text-lg font-semibold">{exam.title}</h3>
@@ -205,10 +205,11 @@ const TeacherDashboard = () => {
                     )}
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="grid gap-2 sm:flex sm:flex-wrap">
                   {exam.status === "draft" && (
                     <Button
                       variant="accent"
+                      className="w-full sm:w-auto"
                       onClick={() => handlePublishExam(exam.id)}
                       disabled={publishingExamId === exam.id}
                     >
@@ -216,7 +217,7 @@ const TeacherDashboard = () => {
                     </Button>
                   )}
                   <Link to={`/c/${courseId}/exam/${exam.id}/submissions`}>
-                    <Button variant="outline">
+                    <Button variant="outline" className="w-full sm:w-auto">
                       Решения
                       {exam.pending_count > 0 && (
                         <span className="ml-1.5 rounded-full bg-warning/15 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-warning">
@@ -226,7 +227,9 @@ const TeacherDashboard = () => {
                     </Button>
                   </Link>
                   <Link to={`/c/${courseId}/exam/${exam.id}/edit`}>
-                    <Button variant="ghost">Изменить</Button>
+                    <Button variant="ghost" className="w-full sm:w-auto">
+                      Изменить
+                    </Button>
                   </Link>
                 </div>
               </div>
