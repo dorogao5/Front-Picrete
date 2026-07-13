@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback } from "./ui/avatar";
@@ -12,6 +12,7 @@ import {
 } from "./ui/dropdown-menu";
 import { BookOpen, Bot, Check, ChevronDown, Dumbbell, GraduationCap, LogOut, Settings, User, UserPlus } from "lucide-react";
 import logo from "@/assets/logo.png";
+import { coursesAPI } from "@/lib/api";
 import {
   getActiveCourseId,
   getCourseHomePath,
@@ -22,6 +23,7 @@ import {
   isAuthenticated,
   logout,
   setActiveCourseId,
+  setMemberships,
   type Membership,
 } from "@/lib/auth";
 
@@ -36,14 +38,34 @@ export const Navbar = () => {
   const { courseId: routeCourseId } = useParams<{ courseId?: string }>();
   const isAuth = isAuthenticated();
   const user = getUser();
-  const memberships = getMemberships().filter((membership) => membership.status === "active");
-  const activeCourseId = memberships.some((membership) => membership.course_id === routeCourseId)
-    ? routeCourseId!
-    : getActiveCourseId();
+  const [memberships, setMembershipState] = useState(() =>
+    getMemberships().filter((membership) => membership.status === "active"),
+  );
+  const activeCourseId = routeCourseId ?? getActiveCourseId();
 
   useEffect(() => {
-    if (routeCourseId) setActiveCourseId(routeCourseId);
-  }, [routeCourseId]);
+    if (!isAuth) return;
+    let cancelled = false;
+    void coursesAPI
+      .list()
+      .then((response) => {
+        if (cancelled) return;
+        setMemberships(response.data);
+        setMembershipState(response.data.filter((membership) => membership.status === "active"));
+      })
+      .catch(() => {
+        // Navigation remains usable with the last stored session if refresh is temporarily unavailable.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuth, routeCourseId]);
+
+  useEffect(() => {
+    if (routeCourseId && memberships.some((membership) => membership.course_id === routeCourseId)) {
+      setActiveCourseId(routeCourseId);
+    }
+  }, [memberships, routeCourseId]);
 
   const getInitials = (fullName: string) => {
     const names = fullName.split(" ");

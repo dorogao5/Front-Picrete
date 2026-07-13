@@ -1,6 +1,6 @@
 import axios from "axios";
 
-import { clearAuthSession, getActiveCourseId, getAuthToken } from "./auth";
+import { clearAuthSession, getActiveCourseId, getAuthToken, type Membership } from "./auth";
 
 export interface ApiErrorBody {
   detail?: string;
@@ -271,7 +271,7 @@ export const authAPI = {
 };
 
 export const coursesAPI = {
-  list: () => api.get("/courses"),
+  list: () => api.get<Membership[]>("/courses"),
 
   create: (data: { slug: string; title: string; organization?: string }) => api.post("/courses", data),
 
