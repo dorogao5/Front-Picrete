@@ -2,6 +2,8 @@ import 'katex/dist/katex.min.css';
 import katex from 'katex';
 import { InlineMath, BlockMath } from 'react-katex';
 
+const KATEX_SETTINGS = { strict: "ignore" as const, throwOnError: false };
+
 /**
  * Renders text with mixed plain content and LaTeX.
  * Supported delimiters:
@@ -32,16 +34,16 @@ export function renderLatex(text: string): React.ReactNode {
     if (!token) return null;
 
     if (token.startsWith('$$') && token.endsWith('$$')) {
-      return <BlockMath key={`block-dollar-${index}`}>{token.slice(2, -2).trim()}</BlockMath>;
+      return <BlockMath key={`block-dollar-${index}`} math={token.slice(2, -2).trim()} settings={KATEX_SETTINGS} />;
     }
     if (token.startsWith('\\[') && token.endsWith('\\]')) {
-      return <BlockMath key={`block-bracket-${index}`}>{token.slice(2, -2).trim()}</BlockMath>;
+      return <BlockMath key={`block-bracket-${index}`} math={token.slice(2, -2).trim()} settings={KATEX_SETTINGS} />;
     }
     if (token.startsWith('\\(') && token.endsWith('\\)')) {
-      return <InlineMath key={`inline-paren-${index}`}>{token.slice(2, -2).trim()}</InlineMath>;
+      return <InlineMath key={`inline-paren-${index}`} math={token.slice(2, -2).trim()} settings={KATEX_SETTINGS} />;
     }
     if (token.startsWith('$') && token.endsWith('$')) {
-      return <InlineMath key={`inline-dollar-${index}`}>{token.slice(1, -1).trim()}</InlineMath>;
+      return <InlineMath key={`inline-dollar-${index}`} math={token.slice(1, -1).trim()} settings={KATEX_SETTINGS} />;
     }
 
     return renderPlainText(token, `text-${index}`);

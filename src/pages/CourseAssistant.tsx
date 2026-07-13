@@ -51,22 +51,32 @@ function MessageContent({ content }: { content: string }) {
           if (/^#{1,3}\s/.test(trimmed)) {
             return (
               <p key={key} className="pt-1 font-semibold">
-                {renderLatex(trimmed.replace(/^#{1,3}\s+/, ""))}
+                {renderMessageInline(trimmed.replace(/^#{1,3}\s+/, ""))}
               </p>
             );
           }
           if (/^[-*]\s/.test(trimmed)) {
             return (
               <p key={key} className="pl-4 before:-ml-4 before:mr-2 before:content-['•']">
-                {renderLatex(trimmed.slice(2))}
+                {renderMessageInline(trimmed.slice(2))}
               </p>
             );
           }
-          return <p key={key}>{renderLatex(line)}</p>;
+          return <p key={key}>{renderMessageInline(line)}</p>;
         });
       })}
     </div>
   );
+}
+
+function renderMessageInline(text: string) {
+  return text.split(/(\*\*[^*\n]+\*\*)/g).map((part, index) => {
+    if (!part) return null;
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={`strong-${index}`}>{renderLatex(part.slice(2, -2))}</strong>;
+    }
+    return <span key={`inline-${index}`}>{renderLatex(part)}</span>;
+  });
 }
 
 function ChatMessage({ message }: { message: AssistantChatMessage }) {
