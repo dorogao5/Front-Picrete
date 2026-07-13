@@ -1,8 +1,18 @@
 import 'katex/dist/katex.min.css';
 import katex from 'katex';
-import { InlineMath, BlockMath } from 'react-katex';
 
 const KATEX_SETTINGS = { strict: "ignore" as const, throwOnError: false };
+
+function renderMath(math: string, displayMode: boolean, key: string): React.ReactNode {
+  const html = katex.renderToString(math, { ...KATEX_SETTINGS, displayMode });
+  return (
+    <span
+      key={key}
+      className={displayMode ? "block" : undefined}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
 
 /**
  * Renders text with mixed plain content and LaTeX.
@@ -34,16 +44,16 @@ export function renderLatex(text: string): React.ReactNode {
     if (!token) return null;
 
     if (token.startsWith('$$') && token.endsWith('$$')) {
-      return <BlockMath key={`block-dollar-${index}`} math={token.slice(2, -2).trim()} settings={KATEX_SETTINGS} />;
+      return renderMath(token.slice(2, -2).trim(), true, `block-dollar-${index}`);
     }
     if (token.startsWith('\\[') && token.endsWith('\\]')) {
-      return <BlockMath key={`block-bracket-${index}`} math={token.slice(2, -2).trim()} settings={KATEX_SETTINGS} />;
+      return renderMath(token.slice(2, -2).trim(), true, `block-bracket-${index}`);
     }
     if (token.startsWith('\\(') && token.endsWith('\\)')) {
-      return <InlineMath key={`inline-paren-${index}`} math={token.slice(2, -2).trim()} settings={KATEX_SETTINGS} />;
+      return renderMath(token.slice(2, -2).trim(), false, `inline-paren-${index}`);
     }
     if (token.startsWith('$') && token.endsWith('$')) {
-      return <InlineMath key={`inline-dollar-${index}`} math={token.slice(1, -1).trim()} settings={KATEX_SETTINGS} />;
+      return renderMath(token.slice(1, -1).trim(), false, `inline-dollar-${index}`);
     }
 
     return renderPlainText(token, `text-${index}`);
@@ -63,16 +73,16 @@ function sanitizeTableHtml(html: string): string {
 
 function renderLatexTokenToHtml(token: string): string {
   if (token.startsWith('$$') && token.endsWith('$$')) {
-    return katex.renderToString(token.slice(2, -2).trim(), { throwOnError: false, displayMode: true });
+    return katex.renderToString(token.slice(2, -2).trim(), { ...KATEX_SETTINGS, displayMode: true });
   }
   if (token.startsWith('\\[') && token.endsWith('\\]')) {
-    return katex.renderToString(token.slice(2, -2).trim(), { throwOnError: false, displayMode: true });
+    return katex.renderToString(token.slice(2, -2).trim(), { ...KATEX_SETTINGS, displayMode: true });
   }
   if (token.startsWith('\\(') && token.endsWith('\\)')) {
-    return katex.renderToString(token.slice(2, -2).trim(), { throwOnError: false, displayMode: false });
+    return katex.renderToString(token.slice(2, -2).trim(), { ...KATEX_SETTINGS, displayMode: false });
   }
   if (token.startsWith('$') && token.endsWith('$')) {
-    return katex.renderToString(token.slice(1, -1).trim(), { throwOnError: false, displayMode: false });
+    return katex.renderToString(token.slice(1, -1).trim(), { ...KATEX_SETTINGS, displayMode: false });
   }
   return token;
 }
