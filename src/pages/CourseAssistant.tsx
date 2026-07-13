@@ -28,26 +28,41 @@ import { hasCourseRole, isAdmin } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 function MessageContent({ content }: { content: string }) {
+  const blockMathRegex = /(\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$)/g;
+  const chunks = content.split(blockMathRegex);
+
   return (
     <div className="space-y-1.5 text-sm leading-6">
-      {content.split("\n").map((line, index) => {
-        const trimmed = line.trim();
-        if (!trimmed) return <div key={index} className="h-1" />;
-        if (/^#{1,3}\s/.test(trimmed)) {
+      {chunks.map((chunk, chunkIndex) => {
+        if (!chunk) return null;
+        if ((chunk.startsWith("\\[") && chunk.endsWith("\\]")) || (chunk.startsWith("$$") && chunk.endsWith("$$"))) {
           return (
-            <p key={index} className="pt-1 font-semibold">
-              {renderLatex(trimmed.replace(/^#{1,3}\s+/, ""))}
-            </p>
+            <div key={`math-${chunkIndex}`} className="latex-scroll min-w-0 max-w-full">
+              {renderLatex(chunk)}
+            </div>
           );
         }
-        if (/^[-*]\s/.test(trimmed)) {
-          return (
-            <p key={index} className="pl-4 before:-ml-4 before:mr-2 before:content-['•']">
-              {renderLatex(trimmed.slice(2))}
-            </p>
-          );
-        }
-        return <p key={index}>{renderLatex(line)}</p>;
+
+        return chunk.split("\n").map((line, lineIndex) => {
+          const key = `text-${chunkIndex}-${lineIndex}`;
+          const trimmed = line.trim();
+          if (!trimmed) return <div key={key} className="h-1" />;
+          if (/^#{1,3}\s/.test(trimmed)) {
+            return (
+              <p key={key} className="pt-1 font-semibold">
+                {renderLatex(trimmed.replace(/^#{1,3}\s+/, ""))}
+              </p>
+            );
+          }
+          if (/^[-*]\s/.test(trimmed)) {
+            return (
+              <p key={key} className="pl-4 before:-ml-4 before:mr-2 before:content-['•']">
+                {renderLatex(trimmed.slice(2))}
+              </p>
+            );
+          }
+          return <p key={key}>{renderLatex(line)}</p>;
+        });
       })}
     </div>
   );
