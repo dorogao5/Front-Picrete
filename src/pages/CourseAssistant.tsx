@@ -22,6 +22,7 @@ import {
   CourseAssistantStatus,
   courseAssistantAPI,
   getApiErrorMessage,
+  getApiErrorStatus,
 } from "@/lib/api";
 import { renderLatex } from "@/lib/renderLatex";
 import { hasCourseRole, isAdmin } from "@/lib/auth";
@@ -109,6 +110,11 @@ export default function CourseAssistant() {
   const endRef = useRef<HTMLDivElement>(null);
   const renderedThreadIdRef = useRef<string | null>(null);
   const canConfigureAssistant = isAdmin() || (courseId ? hasCourseRole(courseId, "teacher") : false);
+  const activeThreadIsStale = Boolean(
+    activeThread &&
+      status?.snapshot_version &&
+      activeThread.snapshot_version !== status.snapshot_version,
+  );
 
   useEffect(() => {
     if (!courseId) return;
@@ -139,10 +145,15 @@ export default function CourseAssistant() {
     }
   }, [activeThread?.id, activeThread?.messages.length, sending]);
 
+  const startNewDialog = () => {
+    setActiveThread(null);
+    setError("");
+  };
+
   const submit = async (event?: FormEvent) => {
     event?.preventDefault();
     const value = message.trim();
-    if (!courseId || !value || sending) return;
+    if (!courseId || !value || sending || activeThreadIsStale) return;
     setSending(true);
     setError("");
     try {
@@ -163,7 +174,16 @@ export default function CourseAssistant() {
       ]);
       setActiveThread(response.data);
     } catch (reason) {
-      setError(getApiErrorMessage(reason, "Ассистент не смог ответить — попробуйте ещё раз"));
+      if (getApiErrorStatus(reason) === 409) {
+        try {
+          setStatus((await courseAssistantAPI.status(courseId)).data);
+          setError("");
+        } catch {
+          setError(getApiErrorMessage(reason, "Ассистент курса обновился. Начните новый диалог."));
+        }
+      } else {
+        setError(getApiErrorMessage(reason, "Ассистент не смог ответить — попробуйте ещё раз"));
+      }
     } finally {
       setSending(false);
     }
@@ -256,7 +276,7 @@ export default function CourseAssistant() {
           <Button
             variant="outline"
             className="w-full justify-start gap-2"
-            onClick={() => setActiveThread(null)}
+            onClick={startNewDialog}
           >
             <MessageSquarePlus className="h-4 w-4" />
             Новый диалог
@@ -316,6 +336,33 @@ export default function CourseAssistant() {
             <div ref={endRef} />
           </div>
 
+          {activeThreadIsStale && (
+            <div
+              className="border-t border-border bg-muted/40 px-4 py-3 sm:px-6"
+              role="status"
+              aria-live="polite"
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">Ассистент курса обновился</p>
+                  <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                    Эта история сохранена для справки. Продолжите работу в новом диалоге с актуальными
+                    промптом и материалами курса.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 gap-2"
+                  onClick={startNewDialog}
+                >
+                  <MessageSquarePlus className="h-4 w-4" /> Новый диалог
+                </Button>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={submit} className="border-t bg-background/80 p-3 sm:p-4">
             {error && (
               <p className="mb-2 text-sm text-destructive" role="alert">
@@ -329,17 +376,21 @@ export default function CourseAssistant() {
                 onKeyDown={onKeyDown}
                 maxLength={4000}
                 rows={2}
-                placeholder="Опишите вопрос или вставьте своё решение…"
+                placeholder={
+                  activeThreadIsStale
+                    ? "Начните новый диалог, чтобы продолжить…"
+                    : "Опишите вопрос или вставьте своё решение…"
+                }
                 aria-label="Сообщение ассистенту"
                 className="min-h-[3.25rem] max-h-40 resize-none text-base sm:text-sm"
-                disabled={sending}
+                disabled={sending || activeThreadIsStale}
               />
               <Button
                 type="submit"
                 variant="accent"
                 size="icon"
                 className="h-12 w-12 shrink-0"
-                disabled={!message.trim() || sending}
+                disabled={!message.trim() || sending || activeThreadIsStale}
                 aria-label="Отправить"
               >
                 {sending ? (
