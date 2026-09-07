@@ -193,6 +193,7 @@ const ExamResult = () => {
   const waitingOcr =
     submission.ocr_overall_status === "pending" || submission.ocr_overall_status === "processing";
   const isPreliminary = submission.status === "preliminary";
+  const hasAiScore = submission.llm_precheck_status === "completed" && submission.ai_score !== null;
   const feedbackReleased =
     typeof submission.feedback_released === "boolean"
       ? submission.feedback_released
@@ -226,18 +227,18 @@ const ExamResult = () => {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="mb-1 text-sm text-muted-foreground">
-              {isPreliminary ? "Предварительный балл" : displayScore === null ? "Результат проверки" : "Итоговый балл"}
+              {isPreliminary && hasAiScore ? "Предварительный балл" : displayScore === null ? "Результат проверки" : "Итоговый балл"}
             </p>
             <p className="font-display text-5xl font-semibold leading-none sm:text-6xl">
               {displayScore ?? "—"}
               <span className="ml-2 text-2xl text-muted-foreground">/ {submission.max_score}</span>
             </p>
-            {isPreliminary && (
+            {isPreliminary && hasAiScore && (
               <p className="mt-2 text-sm text-muted-foreground">
                 Предварительная оценка AI — преподаватель ещё проверит работу
               </p>
             )}
-            {displayScore === null && !isPreliminary && (
+            {displayScore === null && (
               <p className="mt-2 text-sm text-muted-foreground">Оценка появится, когда обработка и проверка завершатся.</p>
             )}
           </div>
@@ -293,7 +294,7 @@ const ExamResult = () => {
           <h3 className="font-semibold">Подробный разбор пока закрыт</h3>
           <p className="mt-1 text-sm text-muted-foreground">
             {isPreliminary
-              ? "Результат рассчитан. Баллы и разбор откроются после последней попытки или завершения работы."
+              ? "Баллы и разбор откроются после последней попытки или завершения работы."
               : "Баллы, комментарии и разбалловка откроются после последней попытки или завершения работы."}
           </p>
         </Card>
