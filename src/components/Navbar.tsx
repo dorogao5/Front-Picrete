@@ -176,7 +176,7 @@ export const Navbar = () => {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => navigate(getDefaultAppPath())} className="cursor-pointer">
                     <User className="mr-2 h-4 w-4" />
-                    Мои работы
+                    Экзамены и задания
                   </DropdownMenuItem>
                   {activeCourseId && (
                     <>
@@ -201,7 +201,7 @@ export const Navbar = () => {
                         className="cursor-pointer"
                       >
                         <Bot className="mr-2 h-4 w-4" />
-                        Ассистент курса
+                        Изучать с ассистентом
                       </DropdownMenuItem>
                     </>
                   )}

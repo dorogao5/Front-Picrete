@@ -4,7 +4,7 @@ import { ChunkTypeChip } from "@/components/ChunkListPanel";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { cleanOcrMarkdown } from "@/lib/ocr";
-import { renderTaskText } from "@/lib/renderLatex";
+import { RichText } from "@/components/RichText";
 import { cn } from "@/lib/utils";
 
 export interface OcrIssueView {
@@ -53,28 +53,29 @@ export const OcrIssueCard = ({ issue, pageNumber, onRemove, className }: OcrIssu
             className={cn("h-6 px-1.5 text-muted-foreground hover:text-destructive", typeof pageNumber !== "number" && "ml-auto")}
           >
             <X className="h-3.5 w-3.5" />
+            <span className="sr-only">Удалить замечание</span>
           </Button>
         )}
       </div>
 
-      <div className="ocr-rich-text mt-2 text-sm">{renderTaskText(issue.note)}</div>
+      <RichText className="ocr-rich-text mt-2 text-sm">{issue.note}</RichText>
 
       {(issue.original_text || issue.suggested_text) && (
         <div className="mt-2 space-y-1.5 border-t pt-2 text-xs">
           {issue.original_text && (
             <div className="flex gap-2">
               <span className="w-20 flex-shrink-0 text-muted-foreground">Распознано</span>
-              <div className="ocr-rich-text min-w-0 text-muted-foreground line-through decoration-destructive/40">
-                {renderTaskText(cleanOcrMarkdown(issue.original_text))}
-              </div>
+              <RichText className="ocr-rich-text min-w-0 text-muted-foreground line-through decoration-destructive/40">
+                {cleanOcrMarkdown(issue.original_text)}
+              </RichText>
             </div>
           )}
           {issue.suggested_text && (
             <div className="flex gap-2">
               <span className="w-20 flex-shrink-0 text-muted-foreground">Должно быть</span>
-              <div className="ocr-rich-text min-w-0 font-medium text-success">
-                {renderTaskText(issue.suggested_text)}
-              </div>
+              <RichText className="ocr-rich-text min-w-0 font-medium text-success">
+                {cleanOcrMarkdown(issue.suggested_text)}
+              </RichText>
             </div>
           )}
         </div>

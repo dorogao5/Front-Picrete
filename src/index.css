@@ -207,6 +207,24 @@
     @apply border border-border px-2 py-1 align-top;
   }
 
+  .rich-text .katex-display {
+    @apply max-w-full overflow-x-auto overflow-y-hidden py-1;
+    margin: 0.5rem 0;
+    scrollbar-width: thin;
+  }
+
+  .rich-text img {
+    @apply h-auto;
+  }
+
+  /* Browser-native virtualization for paginated banks and long training sets. */
+  @media (min-width: 768px) {
+    .virtualized-card {
+      content-visibility: auto;
+      contain-intrinsic-size: auto 260px;
+    }
+  }
+
   /* Длинная формула прокручивается внутри своего блока и не расширяет страницу. */
   .latex-scroll {
     @apply min-w-0 max-w-full overflow-x-auto overflow-y-hidden;

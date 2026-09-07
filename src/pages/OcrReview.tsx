@@ -32,7 +32,6 @@ import {
   extractOcrBlocks,
   OcrChunkBlock,
 } from "@/lib/ocr";
-import { renderTaskText } from "@/lib/renderLatex";
 import { getApiErrorMessage, JsonObject, OcrIssueInput, submissionsAPI } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -168,7 +167,7 @@ const OcrReview = () => {
     setShowOcrText(false);
   }, [blocks.length, currentImageId]);
 
-  const currentEdits = currentImageId ? edits[currentImageId] ?? {} : {};
+  const currentEdits = useMemo(() => currentImageId ? edits[currentImageId] ?? {} : {}, [currentImageId, edits]);
   const editedIndexes = useMemo(() => new Set(Object.keys(currentEdits).map(Number)), [currentEdits]);
 
   const selectedBlock = selectedChunkIndex !== null ? blocks[selectedChunkIndex] ?? null : null;

@@ -1,6 +1,4 @@
-import React from 'react';
-import 'katex/dist/katex.min.css';
-import { InlineMath, BlockMath } from 'react-katex';
+import { RichText } from "@/components/RichText";
 
 type Criterion = {
   criterion_name?: string;
@@ -31,7 +29,6 @@ export default function AiAnalysis({ data }: { data: AiAnalysisData }) {
   const max = data.max_score ?? null;
   const criteria = Array.isArray(data.criteria_scores) ? data.criteria_scores : [];
   const errors = Array.isArray(data.errors_found) ? data.errors_found : [];
-  const recommendations = Array.isArray(data.recommendations) ? data.recommendations : [];
 
   return (
     <div className="space-y-6">
@@ -60,7 +57,7 @@ export default function AiAnalysis({ data }: { data: AiAnalysisData }) {
                     <td className="py-2 pr-4 font-medium">{c.criterion_name || "—"}</td>
                     <td className="py-2 pr-4 whitespace-nowrap">{(c.score ?? "—")} / {(c.max_score ?? "—")}</td>
                     <td className="py-2">
-                      <div className="whitespace-pre-wrap text-muted-foreground">{c.comment || "—"}</div>
+                      {c.comment ? <RichText className="text-muted-foreground">{c.comment}</RichText> : "—"}
                     </td>
                   </tr>
                 ))}
@@ -75,25 +72,25 @@ export default function AiAnalysis({ data }: { data: AiAnalysisData }) {
           {data.method_correctness && (
             <div>
               <h4 className="font-semibold mb-1">Корректность метода</h4>
-              <p className="text-sm whitespace-pre-wrap">{data.method_correctness}</p>
+              <RichText className="text-sm">{data.method_correctness}</RichText>
             </div>
           )}
           {data.calculations && (
             <div>
               <h4 className="font-semibold mb-1">Вычисления</h4>
-              <p className="text-sm whitespace-pre-wrap">{data.calculations}</p>
+              <RichText className="text-sm">{data.calculations}</RichText>
             </div>
           )}
           {data.units_and_dimensions && (
             <div>
               <h4 className="font-semibold mb-1">Размерности и единицы</h4>
-              <p className="text-sm whitespace-pre-wrap">{data.units_and_dimensions}</p>
+              <RichText className="text-sm">{data.units_and_dimensions}</RichText>
             </div>
           )}
           {data.chemical_rules && (
             <div>
               <h4 className="font-semibold mb-1">Химические правила</h4>
-              <p className="text-sm whitespace-pre-wrap">{data.chemical_rules}</p>
+              <RichText className="text-sm">{data.chemical_rules}</RichText>
             </div>
           )}
         </div>
@@ -104,7 +101,7 @@ export default function AiAnalysis({ data }: { data: AiAnalysisData }) {
           <h4 className="font-semibold mb-1 text-red-600">Найденные ошибки</h4>
           <ul className="list-disc list-inside text-sm">
             {errors.map((err, i) => (
-              <li key={i}>{err}</li>
+              <li key={i}><RichText inline>{err}</RichText></li>
             ))}
           </ul>
         </div>
@@ -114,13 +111,13 @@ export default function AiAnalysis({ data }: { data: AiAnalysisData }) {
         <div>
           <h4 className="font-semibold mb-1">Подробный разбор</h4>
           {typeof data.detailed_analysis === "string" ? (
-            <p className="text-sm whitespace-pre-wrap">{data.detailed_analysis}</p>
+            <RichText className="text-sm">{data.detailed_analysis}</RichText>
           ) : (
             <div className="space-y-2 text-sm">
               {Object.entries(data.detailed_analysis).map(([k, v]) => (
                 <div key={k}>
                   <div className="font-medium">{k}</div>
-                  <div className="text-muted-foreground whitespace-pre-wrap">{String(v)}</div>
+                  <RichText className="text-muted-foreground">{String(v)}</RichText>
                 </div>
               ))}
             </div>
@@ -131,21 +128,10 @@ export default function AiAnalysis({ data }: { data: AiAnalysisData }) {
       {data.feedback && (
         <div>
           <h4 className="font-semibold mb-1">Обратная связь</h4>
-          <p className="text-sm whitespace-pre-wrap">{data.feedback}</p>
+          <RichText className="text-sm">{data.feedback}</RichText>
         </div>
       )}
 
-      {recommendations.length > 0 && (
-        <div>
-          <h4 className="font-semibold mb-1">Рекомендации</h4>
-          <ul className="list-disc list-inside text-sm">
-            {recommendations.map((r, i) => (
-              <li key={i}>{r}</li>
-            ))}
-          </ul>
-        </div>
-      )}
     </div>
   );
 }
-

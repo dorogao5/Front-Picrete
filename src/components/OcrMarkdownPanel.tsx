@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { RichText } from "@/components/RichText";
 import { cleanOcrMarkdown } from "@/lib/ocr";
-import { renderTaskText } from "@/lib/renderLatex";
 
 interface OcrMarkdownPanelProps {
   markdown?: string | null;
@@ -28,16 +28,14 @@ const OcrMarkdownPanel = ({
     <div className="min-w-0 space-y-2">
       <div className="min-w-0 overflow-hidden rounded border bg-background p-3 text-sm">
         {visibleText ? (
-          <div className="ocr-rich-text min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-            {renderTaskText(visibleText)}
-          </div>
+          <RichText className="ocr-rich-text min-w-0 break-words [overflow-wrap:anywhere]">{visibleText}</RichText>
         ) : (
-          <span className="text-muted-foreground">OCR markdown отсутствует</span>
+          <span className="text-muted-foreground">Распознанный текст пока недоступен</span>
         )}
       </div>
       {needsCollapse && !alwaysExpanded && !hideToggle && (
         <Button type="button" variant="outline" size="sm" onClick={() => setExpanded((prev) => !prev)}>
-          {expanded ? "Свернуть OCR текст" : "Показать полный OCR текст"}
+          {expanded ? "Свернуть распознанный текст" : "Показать весь распознанный текст"}
         </Button>
       )}
     </div>

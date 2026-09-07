@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 const workflow = [
-  { label: "Загрузка", value: "фото или PDF", icon: Upload },
+  { label: "Загрузка", value: "страницы в JPEG или PNG", icon: Upload },
   { label: "OCR", value: "формулы и рукописный текст", icon: ScanText },
   { label: "Проверка", value: "баллы по критериям", icon: ClipboardCheck },
   { label: "Ревью", value: "решение остается за преподавателем", icon: GraduationCap },

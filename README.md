@@ -28,7 +28,7 @@ Frontend платформы Picrete (React + TypeScript + Vite).
 
 - React 18 + TypeScript
 - Vite
-- React Router 6
+- React Router 7
 - TanStack Query
 - Axios
 - shadcn/ui + Tailwind
@@ -51,7 +51,7 @@ VITE_API_URL=http://localhost:8000/api/v1
 Если `VITE_API_URL` не задан:
 
 - dev: `http://localhost:8000/api/v1`
-- prod: `https://picrete.com/api/v1`
+- prod: `/api/v1` на текущем origin (same-origin reverse proxy).
 
 ## Скрипты
 
@@ -61,6 +61,10 @@ npm run build
 npm run lint
 npm run preview
 ```
+
+`npm run build` выполняет сборку Vite без отдельной проверки типов.
+Для изменений TypeScript дополнительно используйте установленный компилятор:
+`./node_modules/.bin/tsc --noEmit`.
 
 ## Ключевые директории
 
@@ -92,6 +96,18 @@ src/
 
 ## Документация
 
-- Front architecture: `ARCHITECTURE.md`
+- Маршруты и API: [src/App.tsx](src/App.tsx), [src/lib/api.ts](src/lib/api.ts).
 - Backend README: `../Picrete/README.md`
 - Backend architecture: `../Picrete/ARCHITECTURE.md`
+
+
+## Согласованный выпуск
+
+Релиз собирается из чистых коммитов `main` Picrete, Studio-Picrete и Front-Picrete.
+SHA всех трёх репозиториев записываются в общий `release-manifest.json` рядом с
+каталогами выпуска на сервере. Собранные файлы не редактируются вручную.
+API публикуют свой SHA через `/version`, frontend — через `/build-info.json`.
+Изменения контракта Studio → Picrete проверяются вместе с обоими интерфейсами.
+
+Перед публикацией проходят проверки `.github/workflows/verify.yml`.
+Секреты, пользовательские данные, каталоги банка и артефакты проверки не коммитятся.

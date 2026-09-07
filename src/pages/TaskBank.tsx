@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Dumbbell, SearchX, Sparkles } from "lucide-react";
+import { CheckSquare, ChevronLeft, ChevronRight, Dumbbell, FilterX, Search, SearchX, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import AuthImage from "@/components/AuthImage";
 import ImageLightbox from "@/components/ImageLightbox";
 import { EmptyState } from "@/components/EmptyState";
+import { InlineError } from "@/components/InlineError";
 import { PageLoader, PageShell } from "@/components/PageShell";
+import { RichText } from "@/components/RichText";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { fetchImageAsBlobUrl, getApiErrorMessage, taskBankAPI, trainerAPI } from "@/lib/api";
 import type { TaskBankItem, TaskBankSource, TrainerSet } from "@/lib/api";
-import { renderLatex, renderTaskText } from "@/lib/renderLatex";
 
 const MOBILE_PAGE_SIZE = 16;
 const DESKTOP_PAGE_SIZE = 40;
@@ -33,19 +34,27 @@ const TaskBank = () => {
 
   const [sources, setSources] = useState<TaskBankSource[]>([]);
   const [sourcesLoading, setSourcesLoading] = useState(true);
+  const [sourcesError, setSourcesError] = useState("");
+  const [sourcesRetry, setSourcesRetry] = useState(0);
   const [items, setItems] = useState<TaskBankItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [itemsError, setItemsError] = useState("");
+  const [itemsRetry, setItemsRetry] = useState(0);
   const [skip, setSkip] = useState(0);
   const [pageSize, setPageSize] = useState(getPageSize);
 
   const [sourceFilter, setSourceFilter] = useState("");
+  const [paragraphDraft, setParagraphDraft] = useState("");
+  const [topicDraft, setTopicDraft] = useState("");
   const [paragraphFilter, setParagraphFilter] = useState("");
   const [topicFilter, setTopicFilter] = useState("");
   const [hasAnswerFilter, setHasAnswerFilter] = useState<"all" | "yes" | "no">("all");
   const [generateCount, setGenerateCount] = useState(10);
   const [setTitle, setSetTitle] = useState("");
   const [selectedItems, setSelectedItems] = useState<Record<string, string>>({});
+  const [creatingSet, setCreatingSet] = useState<"automatic" | "manual" | null>(null);
+  const itemsRequestRef = useRef(0);
 
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -63,11 +72,22 @@ const TaskBank = () => {
   }, []);
 
   useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setParagraphFilter(paragraphDraft.trim());
+      setTopicFilter(topicDraft.trim());
+      setSkip(0);
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [paragraphDraft, topicDraft]);
+
+  useEffect(() => {
     if (!courseId) {
       return;
     }
     const fetchSources = async () => {
       setSourcesLoading(true);
+      setSourcesError("");
       try {
         const response = await taskBankAPI.sources(courseId);
         const nextSources = (response.data ?? []) as TaskBankSource[];
@@ -76,13 +96,13 @@ const TaskBank = () => {
           nextSources.some((source) => source.code === current) ? current : nextSources[0]?.code ?? "",
         );
       } catch (error: unknown) {
-        toast.error(getApiErrorMessage(error, "Ошибка загрузки источников банка задач"));
+        setSourcesError(getApiErrorMessage(error, "Не удалось загрузить источники банка задач"));
       } finally {
         setSourcesLoading(false);
       }
     };
     fetchSources();
-  }, [courseId]);
+  }, [courseId, sourcesRetry]);
 
   useEffect(() => {
     if (!courseId || sourcesLoading) {
@@ -95,7 +115,9 @@ const TaskBank = () => {
       return;
     }
     const fetchItems = async () => {
+      const requestId = ++itemsRequestRef.current;
       setLoading(true);
+      setItemsError("");
       try {
         const response = await taskBankAPI.listItems(courseId, {
           source: sourceFilter,
@@ -106,20 +128,26 @@ const TaskBank = () => {
           skip,
           limit: pageSize,
         });
-        setItems((response.data.items ?? []) as TaskBankItem[]);
-        setTotalCount(response.data.total_count ?? 0);
+        if (requestId === itemsRequestRef.current) {
+          setItems((response.data.items ?? []) as TaskBankItem[]);
+          setTotalCount(response.data.total_count ?? 0);
+        }
       } catch (error: unknown) {
-        toast.error(getApiErrorMessage(error, "Ошибка загрузки задач"));
+        if (requestId === itemsRequestRef.current) {
+          setItemsError(getApiErrorMessage(error, "Не удалось загрузить задачи"));
+        }
       } finally {
-        setLoading(false);
+        if (requestId === itemsRequestRef.current) setLoading(false);
       }
     };
     fetchItems();
-  }, [courseId, sourceFilter, paragraphFilter, topicFilter, hasAnswerFilter, skip, pageSize, sourcesLoading]);
+  }, [courseId, sourceFilter, paragraphFilter, topicFilter, hasAnswerFilter, skip, pageSize, sourcesLoading, itemsRetry]);
 
   const selectedNumbers = useMemo(() => Object.values(selectedItems), [selectedItems]);
   const currentPage = Math.floor(skip / pageSize) + 1;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const hasActiveFilters = Boolean(paragraphDraft || topicDraft || hasAnswerFilter !== "all");
+  const allPageItemsSelected = items.length > 0 && items.every((item) => Boolean(selectedItems[item.id]));
 
   const toggleSelection = (item: TaskBankItem) => {
     setSelectedItems((prev) => {
@@ -133,10 +161,34 @@ const TaskBank = () => {
     });
   };
 
+  const toggleCurrentPage = () => {
+    setSelectedItems((current) => {
+      const next = { ...current };
+      if (allPageItemsSelected) {
+        items.forEach((item) => delete next[item.id]);
+      } else {
+        items.forEach((item) => {
+          next[item.id] = item.number;
+        });
+      }
+      return next;
+    });
+  };
+
+  const clearFilters = () => {
+    setParagraphDraft("");
+    setTopicDraft("");
+    setParagraphFilter("");
+    setTopicFilter("");
+    setHasAnswerFilter("all");
+    setSkip(0);
+  };
+
   const createGeneratedSet = async () => {
-    if (!courseId) {
+    if (!courseId || creatingSet) {
       return;
     }
+    setCreatingSet("automatic");
     try {
       const response = await trainerAPI.generateSet(
         {
@@ -157,17 +209,20 @@ const TaskBank = () => {
       navigate(`/c/${courseId}/trainer/${trainerSet.id}`);
     } catch (error: unknown) {
       toast.error(getApiErrorMessage(error, "Ошибка создания набора"));
+    } finally {
+      setCreatingSet(null);
     }
   };
 
   const createManualSet = async () => {
-    if (!courseId) {
+    if (!courseId || creatingSet) {
       return;
     }
     if (selectedNumbers.length === 0) {
       toast.error("Выберите хотя бы одну задачу");
       return;
     }
+    setCreatingSet("manual");
     try {
       const response = await trainerAPI.createManualSet(
         {
@@ -182,6 +237,8 @@ const TaskBank = () => {
       navigate(`/c/${courseId}/trainer/${trainerSet.id}`);
     } catch (error: unknown) {
       toast.error(getApiErrorMessage(error, "Ошибка создания ручного набора"));
+    } finally {
+      setCreatingSet(null);
     }
   };
 
@@ -210,7 +267,19 @@ const TaskBank = () => {
   }
 
   if (sourcesLoading) {
-    return <PageLoader label="Загружаем источники банка задач…" />;
+    return (
+      <PageShell title="Банк задач" subtitle="Поиск задач для самостоятельной тренировки">
+        <PageLoader label="Загружаем источники банка задач…" />
+      </PageShell>
+    );
+  }
+
+  if (sourcesError) {
+    return (
+      <PageShell title="Банк задач" subtitle="Поиск задач для самостоятельной тренировки">
+        <InlineError description={sourcesError} onRetry={() => setSourcesRetry((value) => value + 1)} />
+      </PageShell>
+    );
   }
 
   if (sources.length === 0) {
@@ -228,7 +297,7 @@ const TaskBank = () => {
   return (
     <PageShell
       title="Банк задач"
-      subtitle="Фильтруйте задачи и собирайте тренировочные наборы"
+      subtitle="Найдите задачи по источнику и теме, затем соберите личный тренировочный набор"
       actions={
         <Link to={`/c/${courseId}/trainer`}>
           <Button variant="outline" className="gap-1.5">
@@ -238,9 +307,21 @@ const TaskBank = () => {
         </Link>
       }
     >
-      <Card className="mb-6 p-6">
-        <div className="grid gap-4 md:grid-cols-5">
+      <Card className="mb-6 p-4 sm:p-6">
+        <div className="mb-4 flex items-start justify-between gap-3">
           <div>
+            <h2 className="font-semibold">Поиск и фильтры</h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">Результаты обновляются после небольшой паузы ввода</p>
+          </div>
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" className="gap-1.5" onClick={clearFilters}>
+              <FilterX className="h-4 w-4" />
+              Сбросить
+            </Button>
+          )}
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-12">
+          <div className="lg:col-span-3">
             <Label htmlFor="source">Источник</Label>
             <select
               id="source"
@@ -248,6 +329,7 @@ const TaskBank = () => {
               value={sourceFilter}
               onChange={(event) => {
                 setSourceFilter(event.target.value);
+                setSelectedItems({});
                 setSkip(0);
               }}
             >
@@ -258,33 +340,31 @@ const TaskBank = () => {
               ))}
             </select>
           </div>
-          <div>
+          <div className="lg:col-span-2">
             <Label htmlFor="paragraph">Параграф</Label>
             <Input
               id="paragraph"
               className="mt-1"
-              value={paragraphFilter}
-              onChange={(event) => {
-                setParagraphFilter(event.target.value);
-                setSkip(0);
-              }}
+              value={paragraphDraft}
+              onChange={(event) => setParagraphDraft(event.target.value)}
               placeholder="Например: 7"
             />
           </div>
-          <div>
-            <Label htmlFor="topic">Тема</Label>
-            <Input
-              id="topic"
-              className="mt-1"
-              value={topicFilter}
-              onChange={(event) => {
-                setTopicFilter(event.target.value);
-                setSkip(0);
-              }}
-              placeholder="Поиск по теме"
-            />
+          <div className="lg:col-span-3">
+            <Label htmlFor="topic">Поиск по теме</Label>
+            <div className="relative mt-1">
+              <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                id="topic"
+                className="pl-9"
+                type="search"
+                value={topicDraft}
+                onChange={(event) => setTopicDraft(event.target.value)}
+                placeholder="Например: коллоидные растворы"
+              />
+            </div>
           </div>
-          <div>
+          <div className="lg:col-span-2">
             <Label htmlFor="answer">Наличие ответа</Label>
             <select
               id="answer"
@@ -300,7 +380,7 @@ const TaskBank = () => {
               <option value="no">Без ответа</option>
             </select>
           </div>
-          <div>
+          <div className="lg:col-span-2">
             <Label htmlFor="count">Задач в подборке</Label>
             <Input
               id="count"
@@ -309,12 +389,12 @@ const TaskBank = () => {
               min={1}
               max={100}
               value={generateCount}
-              onChange={(event) => setGenerateCount(Math.max(1, Number(event.target.value) || 1))}
+              onChange={(event) => setGenerateCount(Math.min(100, Math.max(1, Number(event.target.value) || 1)))}
             />
             <p className="mt-1 text-xs text-muted-foreground">Для автоматической подборки</p>
           </div>
         </div>
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <div className="mt-5 grid gap-4 border-t pt-5 md:grid-cols-2">
           <div>
             <Label htmlFor="set-title">Название набора</Label>
             <Input
@@ -325,24 +405,45 @@ const TaskBank = () => {
               placeholder="Необязательно — придумаем сами"
             />
           </div>
-          <div className="flex flex-wrap items-end justify-end gap-2">
-            <Button variant="outline" className="gap-1.5" onClick={createGeneratedSet}>
+          <div className="flex flex-wrap items-end justify-start gap-2 md:justify-end">
+            <Button
+              variant="outline"
+              className="gap-1.5"
+              onClick={createGeneratedSet}
+              disabled={Boolean(creatingSet)}
+            >
               <Sparkles className="h-4 w-4" />
-              Сгенерировать набор
+              {creatingSet === "automatic" ? "Подбираем…" : "Подобрать случайно"}
             </Button>
-            <Button variant="accent" onClick={createManualSet}>
-              Создать из выбранных ({selectedNumbers.length})
+            <Button variant="accent" onClick={createManualSet} disabled={Boolean(creatingSet) || selectedNumbers.length === 0}>
+              {creatingSet === "manual" ? "Создаём…" : `Создать из выбранных (${selectedNumbers.length})`}
             </Button>
           </div>
         </div>
       </Card>
 
-      <div className="mb-3 text-sm text-muted-foreground">
-        Найдено задач: {totalCount} · на странице: {items.length}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground" aria-live="polite">
+        <span>Найдено: {totalCount} · показано: {items.length}</span>
+        {items.length > 0 && (
+          <Button variant="ghost" size="sm" className="gap-1.5" onClick={toggleCurrentPage}>
+            <CheckSquare className="h-4 w-4" />
+            {allPageItemsSelected ? "Снять выбор на странице" : "Выбрать страницу"}
+          </Button>
+        )}
       </div>
 
       {loading ? (
-        <PageLoader label="Загружаем задачи..." />
+        <div className="space-y-4" aria-label="Загружаем задачи" aria-busy="true">
+          {[0, 1, 2].map((item) => (
+            <Card key={item} className="animate-pulse p-5">
+              <div className="h-4 w-28 rounded bg-muted" />
+              <div className="mt-4 h-4 w-2/3 rounded bg-muted" />
+              <div className="mt-2 h-4 w-full rounded bg-muted" />
+            </Card>
+          ))}
+        </div>
+      ) : itemsError ? (
+        <InlineError description={itemsError} onRetry={() => setItemsRetry((value) => value + 1)} />
       ) : items.length === 0 ? (
         <EmptyState
           icon={SearchX}
@@ -352,8 +453,8 @@ const TaskBank = () => {
       ) : (
         <div className="space-y-4">
           {items.map((item) => (
-            <Card key={item.id} className="p-5 transition-shadow hover:shadow-elegant">
-              <div className="flex items-start justify-between gap-4">
+            <Card key={item.id} className="virtualized-card p-4 transition-shadow hover:shadow-elegant sm:p-5">
+              <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="mb-3 flex flex-wrap items-center gap-2">
                     <Badge variant="secondary">{item.number}</Badge>
@@ -364,10 +465,10 @@ const TaskBank = () => {
                       <Badge variant="muted">Без ответа</Badge>
                     )}
                   </div>
-                  <h3 className="latex-scroll mb-2 font-semibold">{renderLatex(item.topic)}</h3>
-                  <div className="latex-scroll whitespace-pre-wrap text-sm text-muted-foreground">
-                    {renderTaskText(item.text)}
-                  </div>
+                  <h3 className="latex-scroll mb-2 font-semibold">
+                    <RichText inline>{item.topic}</RichText>
+                  </h3>
+                  <RichText className="text-sm text-muted-foreground">{item.text}</RichText>
                   {item.images.length > 0 && (
                     <div className="mt-4 flex flex-wrap gap-2">
                       {item.images.map((image, index) => (
@@ -376,6 +477,7 @@ const TaskBank = () => {
                           type="button"
                           onClick={() => openLightbox(item, index)}
                           className="overflow-hidden rounded-md border transition-shadow hover:shadow-soft"
+                          aria-label={`Открыть изображение ${index + 1} к задаче ${item.number}`}
                         >
                           <AuthImage
                             src={image.thumbnail_url}
@@ -389,8 +491,9 @@ const TaskBank = () => {
                 </div>
                 <Button
                   variant={selectedItems[item.id] ? "default" : "outline"}
-                  className="min-h-11 sm:min-h-10"
+                  className="min-h-11 w-full sm:min-h-10 sm:w-auto"
                   onClick={() => toggleSelection(item)}
+                  aria-pressed={Boolean(selectedItems[item.id])}
                 >
                   {selectedItems[item.id] ? "Выбрано" : "Выбрать"}
                 </Button>
@@ -400,7 +503,8 @@ const TaskBank = () => {
         </div>
       )}
 
-      <nav className="mt-6 flex items-center justify-between gap-3" aria-label="Страницы банка задач">
+      {!loading && !itemsError && totalCount > 0 && (
+        <nav className="mt-6 flex items-center justify-between gap-3" aria-label="Страницы банка задач">
         <Button
           variant="outline"
           className="min-h-11 min-w-11 gap-1.5 px-3 sm:min-w-0 sm:px-4"
@@ -424,7 +528,8 @@ const TaskBank = () => {
           <span className="hidden sm:inline">Вперёд</span>
           <ChevronRight className="h-4 w-4" />
         </Button>
-      </nav>
+        </nav>
+      )}
 
       {lightboxOpen && (
         <ImageLightbox

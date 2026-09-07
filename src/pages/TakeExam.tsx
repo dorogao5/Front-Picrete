@@ -8,6 +8,7 @@ import {
   Image as ImageIcon,
   Loader2,
   Send,
+  ShieldCheck,
   Smartphone,
   Trash2,
   Upload,
@@ -15,11 +16,25 @@ import {
 import { toast } from "sonner";
 
 import { PageShell, PageLoader } from "@/components/PageShell";
+import AuthImage from "@/components/AuthImage";
+import { EmptyState } from "@/components/EmptyState";
+import { InlineError } from "@/components/InlineError";
+import { RichText } from "@/components/RichText";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   getApiErrorMessage,
   getApiErrorStatus,
@@ -28,7 +43,6 @@ import {
   type SessionImage,
   type WorkKind,
 } from "@/lib/api";
-import { renderLatex, renderTaskText } from "@/lib/renderLatex";
 import { cn } from "@/lib/utils";
 
 interface ExamSession {
@@ -52,6 +66,7 @@ interface SessionTaskType {
 
 interface SessionTaskVariant {
   content: string;
+  attachments?: string[];
 }
 
 interface SessionTask {
@@ -84,6 +99,9 @@ const TakeExam = () => {
   const navigate = useNavigate();
 
   const [session, setSession] = useState<ExamSession | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
   const [tasks, setTasks] = useState<SessionTask[]>([]);
   const [workKind, setWorkKind] = useState<WorkKind>("control");
   const [hardDeadline, setHardDeadline] = useState<string | null>(null);
@@ -93,6 +111,7 @@ const TakeExam = () => {
   const [submitting, setSubmitting] = useState(false);
   const [isTimeUp, setIsTimeUp] = useState(false);
   const [showTimeoutDialog, setShowTimeoutDialog] = useState(false);
+  const [showSubmitDialog, setShowSubmitDialog] = useState(false);
   const [openingMaterials, setOpeningMaterials] = useState(false);
   const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -171,6 +190,7 @@ const TakeExam = () => {
     if (!sessionId || isTimeUp || submitting) return;
 
     setSubmitting(true);
+    setShowSubmitDialog(false);
     try {
       const waitStartedAt = Date.now();
       while (uploadQueueRef.current.some((item) => item.status === "uploading")) {
@@ -348,6 +368,8 @@ const TakeExam = () => {
 
   useEffect(() => {
     const enterExam = async () => {
+      setLoading(true);
+      setLoadError("");
       try {
         const response = await submissionsAPI.enterExam(examId!, courseId);
         const sessionData = response.data as ExamSession;
@@ -384,16 +406,17 @@ const TakeExam = () => {
         }
       } catch (error: unknown) {
         if (getApiErrorStatus(error) !== 401) {
-          toast.error(getApiErrorMessage(error, "Не удалось открыть работу"));
-          navigate(courseId ? `/c/${courseId}/student` : "/dashboard");
+          setLoadError(getApiErrorMessage(error, "Не удалось открыть работу"));
         }
+      } finally {
+        setLoading(false);
       }
     };
 
     if (examId && courseId) {
       void enterExam();
     }
-  }, [courseId, examId, navigate]);
+  }, [courseId, examId, reloadKey]);
 
   useEffect(() => {
     if (!isTimedWork || timeRemaining === null || timeRemaining <= 0 || isTimeUp) {
@@ -454,10 +477,29 @@ const TakeExam = () => {
     };
   }, []);
 
-  if (!session || tasks.length === 0) {
+  if (loading) {
     return (
       <PageShell title="Работа">
         <PageLoader label="Открываем вашу работу..." />
+      </PageShell>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <PageShell title="Не удалось открыть работу" backLabel="К списку работ" onBack={() => navigate(courseId ? `/c/${courseId}/student` : "/dashboard")}>
+        <InlineError
+          description={loadError}
+          onRetry={() => setReloadKey((value) => value + 1)}
+        />
+      </PageShell>
+    );
+  }
+
+  if (!session) {
+    return (
+      <PageShell title="Работа" backLabel="К списку работ" onBack={() => navigate(courseId ? `/c/${courseId}/student` : "/dashboard")}>
+        <EmptyState title="Сессия не найдена" description="Вернитесь к списку работ и попробуйте открыть задание снова." />
       </PageShell>
     );
   }
@@ -483,7 +525,7 @@ const TakeExam = () => {
       actions={
         <Button variant="outline" onClick={handleOpenMaterials} disabled={openingMaterials} className="gap-1.5">
           <BookOpen className="h-4 w-4" />
-          {openingMaterials ? "Открываем..." : "Справочные материалы"}
+          {openingMaterials ? "Открываем PDF…" : "Открыть справочник (PDF)"}
         </Button>
       }
     >
@@ -496,10 +538,38 @@ const TakeExam = () => {
         </div>
       )}
 
+      <Card className="mb-6 border-accent/25 bg-accent/5 p-4">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="flex gap-2.5">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+            <div>
+              <p className="text-sm font-semibold">Решайте самостоятельно</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Эталоны и разбор во время попытки скрыты.</p>
+            </div>
+          </div>
+          <div className="flex gap-2.5">
+            <Upload className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+            <div>
+              <p className="text-sm font-semibold">Загрузите все страницы</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">JPEG и PNG сохраняются сразу после загрузки.</p>
+            </div>
+          </div>
+          <div className="flex gap-2.5">
+            <Send className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+            <div>
+              <p className="text-sm font-semibold">Проверьте и сдайте</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">После сдачи изменить страницы нельзя.</p>
+            </div>
+          </div>
+        </div>
+      </Card>
+
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         {/* Задачи */}
         <div className="min-w-0 space-y-4">
-          {tasks.map((task, index) => {
+          {tasks.length === 0 ? (
+            <EmptyState title="В работе нет заданий" description="Сообщите преподавателю: для опубликованной работы не настроены задания." />
+          ) : tasks.map((task, index) => {
             const descriptionText = (task.task_type.description || "").trim();
             const variantText = (task.variant.content || "").trim();
             const showVariantBlock = variantText.length > 0 && variantText !== descriptionText;
@@ -517,7 +587,7 @@ const TakeExam = () => {
 
                 {descriptionText && (
                   <div className="task-rich-text mb-3 text-sm leading-relaxed">
-                    {renderTaskText(task.task_type.description)}
+                    <RichText>{task.task_type.description}</RichText>
                   </div>
                 )}
 
@@ -526,20 +596,33 @@ const TakeExam = () => {
                     <p className="mb-1 text-xs font-medium uppercase tracking-wide text-accent">
                       Ваш вариант
                     </p>
-                    <div className="task-rich-text text-sm">{renderTaskText(task.variant.content)}</div>
+                    <RichText className="text-sm">{task.variant.content}</RichText>
                   </div>
                 )}
 
-                {task.task_type.formulas.length > 0 && (
+                {(task.task_type.formulas ?? []).length > 0 && (
                   <div className="rounded-md bg-info/5 p-3">
                     <p className="mb-1 text-xs font-medium uppercase tracking-wide text-info">
                       Справочные формулы
                     </p>
                     <div className="space-y-1 text-sm">
                       {task.task_type.formulas.map((formula: string, i: number) => (
-                        <div key={i}>{renderLatex(formula)}</div>
+                        <RichText key={i} inline>{formula}</RichText>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {(task.variant.attachments ?? []).length > 0 && (
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {task.variant.attachments?.map((attachment, attachmentIndex) => (
+                      <AuthImage
+                        key={attachment}
+                        src={attachment}
+                        alt={`Иллюстрация ${attachmentIndex + 1} к задаче ${index + 1}`}
+                        className="max-h-96 w-full rounded-md border bg-card object-contain"
+                      />
+                    ))}
                   </div>
                 )}
               </Card>
@@ -562,6 +645,8 @@ const TakeExam = () => {
                   "mt-1 font-mono text-4xl font-semibold tabular-nums",
                   lowTime ? "text-destructive" : "text-foreground"
                 )}
+                role="timer"
+                aria-label={`Осталось времени: ${timeRemaining !== null ? formatTime(timeRemaining) : "неизвестно"}`}
               >
                 {timeRemaining !== null ? formatTime(timeRemaining) : "--:--:--"}
               </p>
@@ -684,10 +769,11 @@ const TakeExam = () => {
                     {canModifyImages && (
                       <button
                         type="button"
-                        className="absolute right-1 top-1 rounded bg-card/90 p-1 text-destructive opacity-0 shadow-soft transition-opacity group-hover:opacity-100 disabled:opacity-40"
+                        className="absolute right-1 top-1 rounded bg-card/90 p-1 text-destructive opacity-0 shadow-soft transition-opacity focus:opacity-100 group-hover:opacity-100 disabled:opacity-40"
                         onClick={() => handleDeleteServerImage(image.id)}
                         disabled={deletingImageId === image.id}
                         title="Удалить фото"
+                        aria-label={`Удалить страницу ${image.order_index + 1}`}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -708,21 +794,52 @@ const TakeExam = () => {
           </Card>
 
           <Button
-            onClick={handleSubmit}
-            disabled={submitting || isTimeUp || hasUploadsInProgress}
+            onClick={() => setShowSubmitDialog(true)}
+            disabled={submitting || isTimeUp || hasUploadsInProgress || tasks.length === 0}
             variant="accent"
             size="lg"
             className="w-full gap-2"
             title={hasUploadsInProgress ? "Дождитесь завершения загрузки фото" : undefined}
           >
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            {isTimeUp ? "Время истекло" : submitting ? "Отправляем..." : "Сдать работу"}
+            {isTimeUp ? "Время истекло" : submitting ? "Отправляем..." : "Проверить и сдать"}
           </Button>
           <p className="text-center text-xs text-muted-foreground">
             Автосохранение включено — фото сохраняются сразу после загрузки
           </p>
         </aside>
       </div>
+
+      <AlertDialog open={showSubmitDialog} onOpenChange={setShowSubmitDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Сдать работу на проверку?</AlertDialogTitle>
+            <AlertDialogDescription>
+              После отправки добавить, удалить или заменить страницы уже не получится.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="rounded-md border bg-muted/40 p-4 text-sm">
+            <p>Загружено страниц: <span className="font-semibold">{serverImages.length}</span></p>
+            {serverImages.length === 0 && (
+              <p className="mt-2 text-warning">Вы не загрузили ни одной страницы решения.</p>
+            )}
+            <p className="mt-2 text-muted-foreground">Убедитесь, что страницы читаемы и идут в правильном порядке.</p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Вернуться и проверить</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={submitting || isTimeUp || hasUploadsInProgress}
+              className="bg-accent text-accent-foreground hover:bg-accent/90"
+              onClick={(event) => {
+                event.preventDefault();
+                void handleSubmit();
+              }}
+            >
+              Сдать работу
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {isTimedWork && (
         <Dialog open={showTimeoutDialog} onOpenChange={setShowTimeoutDialog}>

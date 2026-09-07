@@ -45,9 +45,11 @@ export function AuthImage({ src, alt, className, onError }: AuthImageProps) {
   if (failed) {
     return (
       <div
-        className={className}
+        className={`${className ?? ""} flex items-center justify-center bg-muted/60 p-2 text-center`}
         style={{ minHeight: 80, minWidth: 80 }}
         title="Не удалось загрузить изображение"
+        role="img"
+        aria-label={`${alt}. Не удалось загрузить изображение`}
       >
         <span className="text-muted-foreground text-xs">Ошибка загрузки</span>
       </div>
@@ -57,9 +59,10 @@ export function AuthImage({ src, alt, className, onError }: AuthImageProps) {
   if (!objectUrl) {
     return (
       <div
-        className={className}
+        className={`${className ?? ""} animate-pulse bg-muted/60`}
         style={{ minHeight: 80, minWidth: 80 }}
         aria-busy="true"
+        aria-label={`Загружается: ${alt}`}
       />
     );
   }

@@ -12,6 +12,7 @@ import {
 import { useParams } from "react-router-dom";
 
 import { PageLoader, PageShell } from "@/components/PageShell";
+import { RichText } from "@/components/RichText";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,59 +25,11 @@ import {
   getApiErrorMessage,
   getApiErrorStatus,
 } from "@/lib/api";
-import { renderLatex } from "@/lib/renderLatex";
 import { hasCourseRole, isAdmin } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 function MessageContent({ content }: { content: string }) {
-  const blockMathRegex = /(\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$)/g;
-  const chunks = content.split(blockMathRegex);
-
-  return (
-    <div className="space-y-1.5 text-sm leading-6">
-      {chunks.map((chunk, chunkIndex) => {
-        if (!chunk) return null;
-        if ((chunk.startsWith("\\[") && chunk.endsWith("\\]")) || (chunk.startsWith("$$") && chunk.endsWith("$$"))) {
-          return (
-            <div key={`math-${chunkIndex}`} className="latex-scroll min-w-0 max-w-full">
-              {renderLatex(chunk)}
-            </div>
-          );
-        }
-
-        return chunk.split("\n").map((line, lineIndex) => {
-          const key = `text-${chunkIndex}-${lineIndex}`;
-          const trimmed = line.trim();
-          if (!trimmed) return <div key={key} className="h-1" />;
-          if (/^#{1,3}\s/.test(trimmed)) {
-            return (
-              <p key={key} className="pt-1 font-semibold">
-                {renderMessageInline(trimmed.replace(/^#{1,3}\s+/, ""))}
-              </p>
-            );
-          }
-          if (/^[-*]\s/.test(trimmed)) {
-            return (
-              <p key={key} className="pl-4 before:-ml-4 before:mr-2 before:content-['•']">
-                {renderMessageInline(trimmed.slice(2))}
-              </p>
-            );
-          }
-          return <p key={key}>{renderMessageInline(line)}</p>;
-        });
-      })}
-    </div>
-  );
-}
-
-function renderMessageInline(text: string) {
-  return text.split(/(\*\*[^*\n]+\*\*)/g).map((part, index) => {
-    if (!part) return null;
-    if (part.startsWith("**") && part.endsWith("**")) {
-      return <strong key={`strong-${index}`}>{renderLatex(part.slice(2, -2))}</strong>;
-    }
-    return <span key={`inline-${index}`}>{renderLatex(part)}</span>;
-  });
+  return <RichText className="text-sm leading-6">{content}</RichText>;
 }
 
 function ChatMessage({ message }: { message: AssistantChatMessage }) {

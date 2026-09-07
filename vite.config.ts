@@ -1,3 +1,4 @@
+import { buildInfo } from "./build-info";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
@@ -8,10 +9,10 @@ export default defineConfig(() => ({
     host: "::",
     port: 8080,
   },
-  plugins: [react()],
+  plugins: [react(), buildInfo()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(import.meta.dirname, "./src"),
     },
   },
   build: {
@@ -20,15 +21,14 @@ export default defineConfig(() => ({
     chunkSizeWarningLimit: 1200,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: [
-            "react",
-            "react-dom",
-            "react-router-dom",
-          ],
-          ui: [
-            "lucide-react",
-          ],
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (/\/(react-markdown|remark-|rehype-|katex|unified|micromark|mdast-|hast-)/.test(id)) {
+            return "content";
+          }
+          if (/\/(react|react-dom|react-router|react-router-dom)\//.test(id)) return "vendor";
+          if (id.includes("/lucide-react/")) return "ui";
+          return undefined;
         },
       },
     },

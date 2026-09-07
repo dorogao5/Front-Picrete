@@ -163,3 +163,14 @@ playwright/.cache/
 .vercel/
 .turbo/
 .astro/
+
+# Local verification artifacts and private deployment backups
+/output/
+/outputs/
+/audit/
+/tmp/
+/.playwright-cli/
+/-.png
+.env.*
+!.env.example
+*.tsbuildinfo

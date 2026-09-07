@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2 } from "lucide-react";
 
 import { Navbar } from "@/components/Navbar";
+import { StudentModeNav } from "@/components/StudentModeNav";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -37,6 +38,7 @@ export const PageShell = ({
     <div className="min-h-screen bg-notebook">
       <Navbar />
       <main className={cn("container mx-auto px-4 pb-16 pt-24 sm:px-6", widthClass[width])}>
+        <StudentModeNav />
         {(title || actions || backLabel) && (
           <header className="mb-8">
             {backLabel && (
@@ -68,8 +70,8 @@ export const PageShell = ({
 };
 
 export const PageLoader = ({ label = "Загрузка..." }: { label?: string }) => (
-  <div className="flex items-center justify-center gap-3 py-24 text-muted-foreground">
-    <Loader2 className="h-5 w-5 animate-spin" />
+  <div className="flex items-center justify-center gap-3 py-24 text-muted-foreground" role="status" aria-live="polite">
+    <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
     <span className="text-sm">{label}</span>
   </div>
 );

@@ -2,7 +2,9 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { lazy, Suspense } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { PageLoader, PageShell } from "@/components/PageShell";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { getDefaultAppPath, isAuthenticated } from "@/lib/auth";
 import Landing from "./pages/Landing";
@@ -10,23 +12,24 @@ import Demo from "./pages/Demo";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import JoinCourse from "./pages/JoinCourse";
-import TeacherDashboard from "./pages/TeacherDashboard";
-import StudentDashboard from "./pages/StudentDashboard";
-import CreateExam from "./pages/CreateExam";
-import TakeExam from "./pages/TakeExam";
-import TaskBank from "./pages/TaskBank";
-import TrainerSets from "./pages/TrainerSets";
-import TrainerSetView from "./pages/TrainerSetView";
-import OcrReview from "./pages/OcrReview";
-import ExamResult from "./pages/ExamResult";
-import ExamSubmissions from "./pages/ExamSubmissions";
-import SubmissionReview from "./pages/SubmissionReview";
 import NotFound from "./pages/NotFound";
-import AdminDashboard from "./pages/AdminDashboard";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfUse from "./pages/TermsOfUse";
 import DataProcessingConsent from "./pages/DataProcessingConsent";
-import CourseAssistant from "./pages/CourseAssistant";
+
+const TeacherDashboard = lazy(() => import("./pages/TeacherDashboard"));
+const StudentDashboard = lazy(() => import("./pages/StudentDashboard"));
+const CreateExam = lazy(() => import("./pages/CreateExam"));
+const TakeExam = lazy(() => import("./pages/TakeExam"));
+const TaskBank = lazy(() => import("./pages/TaskBank"));
+const TrainerSets = lazy(() => import("./pages/TrainerSets"));
+const TrainerSetView = lazy(() => import("./pages/TrainerSetView"));
+const OcrReview = lazy(() => import("./pages/OcrReview"));
+const ExamResult = lazy(() => import("./pages/ExamResult"));
+const ExamSubmissions = lazy(() => import("./pages/ExamSubmissions"));
+const SubmissionReview = lazy(() => import("./pages/SubmissionReview"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const CourseAssistant = lazy(() => import("./pages/CourseAssistant"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,6 +61,7 @@ const App = () => (
       <TooltipProvider>
         <Sonner />
         <BrowserRouter>
+          <Suspense fallback={<PageShell><PageLoader label="Открываем раздел…" /></PageShell>}>
           <Routes>
             {/* Public routes */}
             <Route path="/" element={<HomeRoute />} />
@@ -102,6 +106,7 @@ const App = () => (
 
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

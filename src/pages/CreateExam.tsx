@@ -188,6 +188,8 @@ const CreateExam = () => {
     loadBankItems();
   }, [courseId, bankParagraph, bankTopic, bankHasAnswer, bankSkip]);
 
+  const [rubricErrors, setRubricErrors] = useState<Record<number, boolean>>({});
+
   const addTaskType = () => {
     setTaskTypes([
       ...taskTypes,
@@ -224,6 +226,7 @@ const CreateExam = () => {
 
   const removeTaskType = (index: number) => {
     setTaskTypes(taskTypes.filter((_, i) => i !== index));
+    setRubricErrors((prev) => Object.fromEntries(Object.entries(prev).filter(([key]) => Number(key) !== index).map(([key, value]) => [Number(key) > index ? Number(key) - 1 : Number(key), value])));
   };
 
   const updateTaskType = <K extends keyof TaskType>(
@@ -320,6 +323,10 @@ const CreateExam = () => {
 
   const buildExamPayload = (options?: { requireTaskTypes?: boolean }) => {
     const requireTaskTypes = options?.requireTaskTypes ?? false;
+    if (Object.values(rubricErrors).some(Boolean)) {
+      toast.error("Исправьте JSON критериев перед сохранением работы");
+      return null;
+    }
 
     if (!examData.title || !examData.start_time || !examData.end_time) {
       toast.error("Заполните все обязательные поля");
@@ -775,12 +782,15 @@ const CreateExam = () => {
                       variant="ghost"
                       size="sm"
                       className="text-destructive hover:text-destructive"
+                      disabled={Boolean(taskType.id)}
+                      aria-label={`Удалить задачу ${taskIndex + 1}`}
                       onClick={() => removeTaskType(taskIndex)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
 
+                  {taskType.id && <p className="mb-3 text-sm text-muted-foreground">Сохранённые условия доступны для просмотра. Здесь можно изменить параметры работы и добавить новые задачи.</p>}
                   <Tabs defaultValue="basic">
                     <TabsList>
                       <TabsTrigger value="basic">Основное</TabsTrigger>
@@ -790,7 +800,7 @@ const CreateExam = () => {
                       <TabsTrigger value="grading">Оценивание</TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="basic" className="space-y-4">
+                    <TabsContent value="basic" className="space-y-4"><fieldset disabled={Boolean(taskType.id)} className="space-y-4">
                       <div>
                         <Label>Название *</Label>
                         <Input
@@ -860,9 +870,9 @@ const CreateExam = () => {
                           </select>
                         </div>
                       </div>
-                    </TabsContent>
+                    </fieldset></TabsContent>
 
-                    <TabsContent value="variants" className="space-y-4">
+                    <TabsContent value="variants" className="space-y-4"><fieldset disabled={Boolean(taskType.id)} className="space-y-4">
                       {taskType.variants.length === 1 ? (
                         <p className="text-sm text-muted-foreground">
                           Один вариант — условие заполняется во вкладке «Основное».
@@ -958,28 +968,34 @@ const CreateExam = () => {
                           </div>
                         </Card>
                       ))}
-                    </TabsContent>
+                    </fieldset></TabsContent>
 
-                    <TabsContent value="grading">
+                    <TabsContent value="grading"><fieldset disabled={Boolean(taskType.id)}>
                       <div className="space-y-4">
                         <p className="text-sm text-muted-foreground">
                           Дополнительно: критерии оценивания (JSON). По умолчанию — стандартные.
                         </p>
                         <Textarea
-                          value={JSON.stringify(taskType.rubric, null, 2)}
-                          onChange={(e) => {
+                          key={`rubric-${taskType.id ?? taskIndex}`}
+                          defaultValue={JSON.stringify(taskType.rubric, null, 2)}
+                          onBlur={(e) => {
                             try {
                               const rubric = JSON.parse(e.target.value);
                               updateTaskType(taskIndex, "rubric", rubric);
+                              e.target.setCustomValidity("");
+                              setRubricErrors((prev) => ({ ...prev, [taskIndex]: false }));
                             } catch (error) {
-                              // Invalid JSON, ignore
+                              toast.error("Критерии не сохранены: исправьте JSON перед сохранением работы");
+                              e.target.setCustomValidity("Некорректный JSON критериев");
+                              e.target.reportValidity();
+                              setRubricErrors((prev) => ({ ...prev, [taskIndex]: true }));
                             }
                           }}
                           rows={10}
                           className="font-mono text-sm"
                         />
                       </div>
-                    </TabsContent>
+                    </fieldset></TabsContent>
                   </Tabs>
                 </Card>
               ))}

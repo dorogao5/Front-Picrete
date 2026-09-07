@@ -1,13 +1,23 @@
 import { useState, useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
-import { BookOpen, Bot, Calendar, CheckCircle, Clock, Dumbbell, ScanText } from "lucide-react";
-import { toast } from "sonner";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { Calendar, CheckCircle, Clock, ScanText, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { PageShell } from "@/components/PageShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { EmptyState } from "@/components/EmptyState";
+import { InlineError } from "@/components/InlineError";
 import { examsAPI, getApiErrorStatus, submissionsAPI } from "@/lib/api";
 import type { WorkKind } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -20,16 +30,17 @@ interface ExamSummary {
   end_time: string;
   duration_minutes: number | null;
   status: string;
+  task_count?: number;
 }
 
 interface StudentSubmission {
-  id: string;
+  id: string | null;
   session_id: string;
   exam_id: string;
   exam_title: string;
   exam_kind?: WorkKind | null;
-  submitted_at: string;
-  status: string;
+  submitted_at: string | null;
+  status: string | null;
   ocr_overall_status?:
     | "not_required"
     | "pending"
@@ -43,7 +54,7 @@ interface StudentSubmission {
   report_flag?: boolean;
   ai_score: number | null;
   final_score: number | null;
-  max_score: number;
+  max_score: number | null;
   teacher_comments: string | null;
 }
 
@@ -56,10 +67,14 @@ const SkeletonCard = () => (
 
 const StudentDashboard = () => {
   const { courseId } = useParams<{ courseId: string }>();
+  const navigate = useNavigate();
   const [exams, setExams] = useState<ExamSummary[]>([]);
   const [submissions, setSubmissions] = useState<StudentSubmission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dataError, setDataError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
   const [kindFilter, setKindFilter] = useState<"all" | WorkKind>("all");
+  const [examToStart, setExamToStart] = useState<ExamSummary | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -67,6 +82,7 @@ const StudentDashboard = () => {
         setLoading(false);
         return;
       }
+      setDataError("");
       try {
         const [examsResponse, submissionsResponse] = await Promise.all([
           examsAPI.list(courseId),
@@ -79,20 +95,30 @@ const StudentDashboard = () => {
           setLoading(false);
           return;
         }
-        toast.error("Не удалось загрузить работы — обновите страницу");
+        setDataError("Не удалось загрузить расписание и результаты. Проверьте соединение и повторите запрос.");
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [courseId]);
+  }, [courseId, reloadKey]);
 
   if (!courseId) {
     return null;
   }
 
-  const submittedExamIds = new Set(submissions.map((s) => s.exam_id));
+  if (!loading && dataError) {
+    return (
+      <PageShell title="Экзамены и задания" subtitle="Сроки, активные попытки и результаты проверки">
+        <InlineError description={dataError} onRetry={() => setReloadKey((value) => value + 1)} />
+      </PageShell>
+    );
+  }
+
+  const submittedExamIds = new Set(
+    submissions.filter((submission) => submission.id !== null).map((submission) => submission.exam_id),
+  );
   const now = new Date();
   const examsById = new Map(exams.map((exam) => [exam.id, exam]));
 
@@ -101,7 +127,18 @@ const StudentDashboard = () => {
       !submittedExamIds.has(exam.id) && (exam.status === "published" || exam.status === "active")
   );
 
-  const completedSubmissions = submissions.filter((s) => s.id != null);
+  const completedSubmissions = submissions.filter(
+    (submission): submission is StudentSubmission & {
+      id: string;
+      submitted_at: string;
+      status: string;
+      max_score: number;
+    } =>
+      submission.id !== null &&
+      submission.submitted_at !== null &&
+      submission.status !== null &&
+      submission.max_score !== null,
+  );
   const withResolvedKind = completedSubmissions.map((submission) => {
     const kind = submission.exam_kind ?? examsById.get(submission.exam_id)?.kind ?? null;
     return { ...submission, exam_kind: kind };
@@ -126,56 +163,42 @@ const StudentDashboard = () => {
     };
   };
 
+  const scoredSubmissions = completedSubmissions.filter(
+    (submission) => submission.final_score !== null || submission.ai_score !== null,
+  );
   const averageScore =
-    completedSubmissions.length > 0
-      ? completedSubmissions.reduce((sum, s) => {
-          const score = s.final_score !== null ? s.final_score : s.ai_score || 0;
+    scoredSubmissions.length > 0
+      ? scoredSubmissions.reduce((sum, s) => {
+          const score = s.final_score !== null ? s.final_score : (s.ai_score ?? 0);
           const percentage = s.max_score > 0 ? (score / s.max_score) * 100 : 0;
           return sum + percentage;
-        }, 0) / completedSubmissions.length
+        }, 0) / scoredSubmissions.length
       : null;
 
   const stats = [
-    { label: "Предстоящих работ", value: loading ? "…" : String(filteredUpcoming.length) },
-    { label: "Сдано работ", value: loading ? "…" : String(filteredCompleted.length) },
     {
-      label: "Средний результат",
+      label: "Впереди",
+      value: loading
+        ? "…"
+        : String(upcomingExams.filter((exam) => new Date(exam.end_time) >= now).length),
+    },
+    { label: "Сдано", value: loading ? "…" : String(completedSubmissions.length) },
+    {
+      label: "Средний балл",
       value: loading ? "…" : averageScore === null ? "—" : `${averageScore.toFixed(0)}%`,
     },
   ];
 
   return (
     <PageShell
-      title="Мои работы"
-      subtitle="Расписание контрольных и домашних, результаты проверок"
-      actions={
-        <>
-          <Link to={`/c/${courseId}/task-bank`}>
-            <Button variant="outline" className="gap-1.5">
-              <BookOpen className="h-4 w-4" />
-              Банк задач
-            </Button>
-          </Link>
-          <Link to={`/c/${courseId}/trainer`}>
-            <Button variant="outline" className="gap-1.5">
-              <Dumbbell className="h-4 w-4" />
-              Тренажёры
-            </Button>
-          </Link>
-          <Link to={`/c/${courseId}/assistant`}>
-            <Button variant="accent" className="gap-1.5">
-              <Bot className="h-4 w-4" />
-              Ассистент
-            </Button>
-          </Link>
-        </>
-      }
+      title="Экзамены и задания"
+      subtitle="Сроки, активные попытки и результаты проверки — время указано по Москве"
     >
-      <div className="mb-8 grid gap-4 sm:grid-cols-3">
+      <div className="mb-8 grid grid-cols-3 gap-2 sm:gap-4">
         {stats.map((stat) => (
-          <Card key={stat.label} className="p-5">
-            <p className="font-display text-3xl font-semibold">{stat.value}</p>
-            <p className="mt-1 text-sm text-muted-foreground">{stat.label}</p>
+          <Card key={stat.label} className="p-3 sm:p-5">
+            <p className="font-display text-2xl font-semibold sm:text-3xl">{stat.value}</p>
+            <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{stat.label}</p>
           </Card>
         ))}
       </div>
@@ -192,6 +215,7 @@ const StudentDashboard = () => {
             variant="ghost"
             className={cn("h-8", kindFilter === value && "bg-card shadow-soft")}
             onClick={() => setKindFilter(value)}
+            aria-pressed={kindFilter === value}
           >
             {label}
           </Button>
@@ -199,7 +223,7 @@ const StudentDashboard = () => {
       </div>
 
       <section className="mb-10">
-        <h2 className="section-rule mb-4 text-xl font-semibold">Предстоящие работы</h2>
+        <h2 className="section-rule mb-4 text-xl font-semibold">Расписание работ</h2>
         {loading ? (
           <div className="space-y-3">
             <SkeletonCard />
@@ -208,8 +232,8 @@ const StudentDashboard = () => {
         ) : filteredUpcoming.length === 0 ? (
           <EmptyState
             icon={Calendar}
-            title="Предстоящих работ нет"
-            description="Когда преподаватель опубликует новую работу, она появится здесь."
+            title="Работ по этому фильтру нет"
+            description="Когда преподаватель опубликует новую работу, она появится в расписании."
           />
         ) : (
           <div className="space-y-3">
@@ -252,13 +276,20 @@ const StudentDashboard = () => {
                             ? ` · ${exam.duration_minutes} мин`
                             : " · до дедлайна"}
                         </span>
+                        {exam.task_count !== undefined && <span>Заданий: {exam.task_count}</span>}
                         {isExpired && <span className="font-medium text-destructive">Время истекло</span>}
                       </div>
                     </div>
                     {isAvailable ? (
-                      <Link to={`/c/${courseId}/exam/${exam.id}`}>
-                        <Button variant="accent">Начать работу</Button>
-                      </Link>
+                      exam.kind === "control" ? (
+                        <Button variant="accent" onClick={() => setExamToStart(exam)}>
+                          Правила и вход
+                        </Button>
+                      ) : (
+                        <Button variant="accent" onClick={() => navigate(`/c/${courseId}/exam/${exam.id}`)}>
+                          Открыть задание
+                        </Button>
+                      )
                     ) : (
                       <Button disabled variant="outline">
                         {now < startTime ? "Ещё не началась" : "Завершена"}
@@ -350,6 +381,58 @@ const StudentDashboard = () => {
           </div>
         )}
       </section>
+
+      <AlertDialog open={Boolean(examToStart)} onOpenChange={(open) => !open && setExamToStart(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-accent" />
+              Перед началом контрольной
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              При первой попытке таймер запускается после входа и продолжает идти, даже если закрыть вкладку. Уже начатая попытка откроется с оставшимся временем.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {examToStart && (
+            <dl className="grid gap-3 rounded-md border bg-muted/40 p-4 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-muted-foreground">Длительность</dt>
+                <dd className="font-medium">
+                  {examToStart.duration_minutes
+                    ? `До ${examToStart.duration_minutes} мин, но не позже общего дедлайна`
+                    : "До общего дедлайна"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Окончание окна</dt>
+                <dd className="font-medium">
+                  {new Date(examToStart.end_time).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })} МСК
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Ответ</dt>
+                <dd className="font-medium">Фото решения в JPEG или PNG</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Когда время закончится</dt>
+                <dd className="font-medium">Сохранённые страницы отправятся автоматически</dd>
+              </div>
+            </dl>
+          )}
+          <p className="text-sm text-muted-foreground">
+            Во время выполнения эталонные ответы и разбор не показываются. Перед сдачей проверьте порядок и читаемость всех страниц.
+          </p>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-accent text-accent-foreground hover:bg-accent/90"
+              onClick={() => examToStart && navigate(`/c/${courseId}/exam/${examToStart.id}`)}
+            >
+              Начать или продолжить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageShell>
   );
 };

@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { AlertTriangle, Clock, FileText, Lightbulb, RefreshCw, ScanText, XCircle } from "lucide-react";
-import { toast } from "sonner";
 
 import { PageShell, PageLoader } from "@/components/PageShell";
+import { InlineError } from "@/components/InlineError";
+import { RichText } from "@/components/RichText";
 import { StatusBadge } from "@/components/StatusBadge";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,6 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { getApiErrorMessage, submissionsAPI } from "@/lib/api";
 import AiAnalysis from "@/components/AiAnalysis";
-import { renderLatex, renderTaskText } from "@/lib/renderLatex";
 
 interface SubmissionScore {
   criterion_name: string;
@@ -25,6 +25,7 @@ interface SubmissionScore {
 
 interface SubmissionExamInfo {
   id: string;
+  title?: string;
   max_attempts: number;
   kind?: "control" | "homework";
   end_time?: string;
@@ -38,6 +39,8 @@ interface SubmissionSessionInfo {
 interface SubmissionResult {
   submitted_at: string;
   status: string;
+  /** Explicit release gate in the current API; omitted by older deployments. */
+  feedback_released?: boolean;
   ocr_overall_status:
     | "not_required"
     | "pending"
@@ -69,17 +72,21 @@ const ExamResult = () => {
   const navigate = useNavigate();
   const [submission, setSubmission] = useState<SubmissionResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
   const [retaking, setRetaking] = useState(false);
   const submissionStatus = submission?.status;
   const submissionOcrStatus = submission?.ocr_overall_status;
 
   useEffect(() => {
     const loadResult = async () => {
+      setLoading(true);
+      setLoadError("");
       try {
         const response = await submissionsAPI.getResult(sessionId!, courseId);
         setSubmission(response.data as SubmissionResult);
       } catch (error: unknown) {
-        toast.error(getApiErrorMessage(error, "Не удалось загрузить результат"));
+        setLoadError(getApiErrorMessage(error, "Не удалось загрузить результат"));
       } finally {
         setLoading(false);
       }
@@ -88,7 +95,7 @@ const ExamResult = () => {
     if (sessionId) {
       loadResult();
     }
-  }, [courseId, sessionId]);
+  }, [courseId, reloadKey, sessionId]);
 
   useEffect(() => {
     if (!sessionId || !submissionStatus || !submissionOcrStatus) {
@@ -137,16 +144,20 @@ const ExamResult = () => {
   if (!submission) {
     return (
       <PageShell title="Результат работы">
-        <EmptyState
-          icon={XCircle}
-          title="Результат не найден"
-          description="Возможно, работа ещё не была сдана."
-          action={
-            <Link to={courseId ? `/c/${courseId}/student` : "/dashboard"}>
-              <Button variant="outline">К списку работ</Button>
-            </Link>
-          }
-        />
+        {loadError ? (
+          <InlineError description={loadError} onRetry={() => setReloadKey((value) => value + 1)} />
+        ) : (
+          <EmptyState
+            icon={XCircle}
+            title="Результат не найден"
+            description="Возможно, работа ещё не была сдана."
+            action={
+              <Link to={courseId ? `/c/${courseId}/student` : "/dashboard"}>
+                <Button variant="outline">К списку работ</Button>
+              </Link>
+            }
+          />
+        )}
       </PageShell>
     );
   }
@@ -182,6 +193,10 @@ const ExamResult = () => {
   const waitingOcr =
     submission.ocr_overall_status === "pending" || submission.ocr_overall_status === "processing";
   const isPreliminary = submission.status === "preliminary";
+  const feedbackReleased =
+    typeof submission.feedback_released === "boolean"
+      ? submission.feedback_released
+      : submission.status === "approved";
 
   const handleRetake = () => {
     if (!retakeContext) return;
@@ -193,11 +208,13 @@ const ExamResult = () => {
     <PageShell
       backLabel="К списку работ"
       onBack={() => navigate(courseId ? `/c/${courseId}/student` : "/dashboard")}
-      title="Результат работы"
+      title={submission.exam?.title ? `Результат: ${submission.exam.title}` : "Результат работы"}
       subtitle={
         <span className="inline-flex flex-wrap items-center gap-2">
           <StatusBadge domain="workKind" value={submission.exam?.kind} />
-          <span>Сдана {new Date(submission.submitted_at).toLocaleString("ru-RU")}</span>
+          <span>
+            Сдана {new Date(submission.submitted_at).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })} МСК
+          </span>
           {submission.exam && submission.session && (
             <span>· попытка {submission.session.attempt_number} из {submission.exam.max_attempts}</span>
           )}
@@ -205,11 +222,13 @@ const ExamResult = () => {
       }
     >
       {/* Балл */}
-      <Card className="mb-6 p-6 sm:p-8">
+      <Card className="mb-6 p-6 sm:p-8" aria-live="polite">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="mb-1 text-sm text-muted-foreground">Ваш балл</p>
-            <p className="font-display text-6xl font-semibold leading-none">
+            <p className="mb-1 text-sm text-muted-foreground">
+              {isPreliminary ? "Предварительный балл" : displayScore === null ? "Результат проверки" : "Итоговый балл"}
+            </p>
+            <p className="font-display text-5xl font-semibold leading-none sm:text-6xl">
               {displayScore ?? "—"}
               <span className="ml-2 text-2xl text-muted-foreground">/ {submission.max_score}</span>
             </p>
@@ -217,6 +236,9 @@ const ExamResult = () => {
               <p className="mt-2 text-sm text-muted-foreground">
                 Предварительная оценка AI — преподаватель ещё проверит работу
               </p>
+            )}
+            {displayScore === null && !isPreliminary && (
+              <p className="mt-2 text-sm text-muted-foreground">Оценка появится, когда обработка и проверка завершатся.</p>
             )}
           </div>
           <div className="text-right">
@@ -266,51 +288,65 @@ const ExamResult = () => {
         </Card>
       )}
 
+      {!feedbackReleased && !needsOcrReview && !waitingOcr && submission.status !== "processing" && (
+        <Card className="mb-6 border-accent/30 bg-accent/5 p-5">
+          <h3 className="font-semibold">Подробный разбор пока закрыт</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {isPreliminary
+              ? "Результат рассчитан. Баллы и разбор откроются после последней попытки или завершения работы."
+              : "Баллы, комментарии и разбалловка откроются после последней попытки или завершения работы."}
+          </p>
+        </Card>
+      )}
+
+      {(submission.ocr_overall_status === "failed" || submission.llm_precheck_status === "failed") && (
+        <Card className="mb-6 border-destructive/30 p-5" role="alert">
+          <h3 className="font-semibold">Часть автоматической проверки не завершилась</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Работа сохранена и остаётся доступной преподавателю. Итоговый результат появится после ручной проверки.
+          </p>
+        </Card>
+      )}
+
       {submission.report_flag && (
         <Card className="mb-6 border-warning/40 p-5">
           <h3 className="mb-1 font-semibold">Ваши замечания к распознаванию отправлены</h3>
-          <div className="ocr-rich-text text-sm text-muted-foreground">
-            {renderTaskText(
-              submission.report_summary || "Преподаватель увидит отмеченные ошибки распознавания."
-            )}
-          </div>
+          <RichText className="ocr-rich-text text-sm text-muted-foreground">
+            {submission.report_summary || "Преподаватель увидит отмеченные ошибки распознавания."}
+          </RichText>
         </Card>
       )}
 
       {/* Комментарий преподавателя */}
-      {submission.teacher_comments && (
+      {feedbackReleased && submission.teacher_comments && (
         <Card className="mb-6 border-l-2 border-l-accent p-5">
           <h3 className="mb-3 flex items-center gap-2 font-semibold">
             <FileText className="h-4 w-4 text-accent" />
             Комментарий преподавателя
           </h3>
-          <div className="whitespace-pre-wrap text-sm leading-relaxed">
-            {renderLatex(submission.teacher_comments)}
-          </div>
+          <RichText className="text-sm">{submission.teacher_comments}</RichText>
         </Card>
       )}
 
       {/* Комментарий AI */}
-      {submission.ai_comments && (
+      {feedbackReleased && submission.ai_comments && (
         <Card className="mb-6 p-5">
           <h3 className="mb-3 flex items-center gap-2 font-semibold">
             <FileText className="h-4 w-4" />
             Разбор AI
           </h3>
-          <div className="whitespace-pre-wrap text-sm leading-relaxed">
-            {renderLatex(submission.ai_comments)}
-          </div>
+          <RichText className="text-sm">{submission.ai_comments}</RichText>
         </Card>
       )}
 
       {/* Разбалловка */}
-      {submission.scores && submission.scores.length > 0 && (
+      {feedbackReleased && submission.scores && submission.scores.length > 0 && (
         <Card className="mb-6 p-5 sm:p-6">
           <h3 className="section-rule mb-5 text-xl font-semibold">Разбалловка по заданиям</h3>
           <div className="space-y-5">
             {submission.scores.map((score, index) => {
-              const taskScore = score.final_score !== null ? score.final_score : score.ai_score || 0;
-              const taskPercent = score.max_score > 0 ? (taskScore / score.max_score) * 100 : 0;
+              const taskScore = score.final_score ?? score.ai_score;
+              const taskPercent = score.max_score > 0 && taskScore !== null ? (taskScore / score.max_score) * 100 : 0;
 
               return (
                 <div key={index} className="border-b pb-5 last:border-0 last:pb-0">
@@ -318,16 +354,16 @@ const ExamResult = () => {
                     <div className="min-w-0">
                       <h4 className="font-semibold">{score.criterion_name}</h4>
                       {score.criterion_description && (
-                        <p className="mt-0.5 text-sm text-muted-foreground">
+                        <RichText className="mt-0.5 text-sm text-muted-foreground">
                           {score.criterion_description}
-                        </p>
+                        </RichText>
                       )}
                     </div>
                     <div className="whitespace-nowrap text-right">
                       <span className="font-display text-xl font-semibold">
-                        {taskScore.toFixed(1)} / {score.max_score}
+                        {taskScore !== null ? taskScore.toFixed(1) : "—"} / {score.max_score}
                       </span>
-                      <p className="text-xs text-muted-foreground">{taskPercent.toFixed(0)}%</p>
+                      {taskScore !== null && <p className="text-xs text-muted-foreground">{taskPercent.toFixed(0)}%</p>}
                     </div>
                   </div>
 
@@ -336,14 +372,14 @@ const ExamResult = () => {
                   {score.teacher_comment && (
                     <div className="rounded-md border-l-2 border-l-accent bg-accent/5 p-3">
                       <p className="mb-1 text-xs font-medium text-accent">Комментарий преподавателя</p>
-                      <p className="whitespace-pre-wrap text-sm">{score.teacher_comment}</p>
+                      <RichText className="text-sm">{score.teacher_comment}</RichText>
                     </div>
                   )}
 
                   {!score.teacher_comment && score.ai_comment && (
                     <div className="rounded-md bg-secondary/50 p-3">
                       <p className="mb-1 text-xs font-medium text-muted-foreground">Комментарий AI</p>
-                      <div className="whitespace-pre-wrap text-sm">{renderLatex(score.ai_comment)}</div>
+                      <RichText className="text-sm">{score.ai_comment}</RichText>
                     </div>
                   )}
                 </div>
@@ -354,7 +390,7 @@ const ExamResult = () => {
       )}
 
       {/* Детальный анализ */}
-      {submission.ai_analysis && (
+      {feedbackReleased && submission.ai_analysis && (
         <Card className="mb-6 p-5 sm:p-6">
           <h3 className="section-rule mb-4 text-xl font-semibold">Детальный анализ</h3>
           <AiAnalysis data={submission.ai_analysis} />
@@ -362,7 +398,7 @@ const ExamResult = () => {
       )}
 
       {/* Рекомендации */}
-      {recommendations.length > 0 && (
+      {feedbackReleased && recommendations.length > 0 && (
         <Card className="mb-6 border-info/30 bg-info/5 p-5">
           <h3 className="mb-3 flex items-center gap-2 font-semibold">
             <Lightbulb className="h-4 w-4 text-info" />
@@ -370,7 +406,7 @@ const ExamResult = () => {
           </h3>
           <ul className="list-inside list-disc space-y-1.5 text-sm">
             {recommendations.map((rec, i) => (
-              <li key={i}>{renderLatex(rec)}</li>
+              <li key={i}><RichText inline>{rec}</RichText></li>
             ))}
           </ul>
         </Card>
