@@ -55,6 +55,11 @@ export interface TaskBankItemImage {
 }
 
 export interface TaskBankItem {
+  solution?: string | null;
+  has_solution?: boolean;
+  task_type?: string | null;
+  difficulty?: string | null;
+  volume?: string | null;
   id: string;
   source: string;
   number: string;
@@ -344,6 +349,7 @@ export const examsAPI = {
 };
 
 export const taskBankAPI = {
+  facets: (courseId: string, source?: string) => api.get(`${coursePrefix(courseId)}/task-bank/facets`, { params: { source } }),
   sources: (courseId?: string) => api.get(`${coursePrefix(courseId)}/task-bank/sources`),
 
   listItems: (
@@ -353,6 +359,7 @@ export const taskBankAPI = {
       paragraph?: string;
       topic?: string;
       has_answer?: boolean;
+      q?: string; task_type?: string; difficulty?: string; volume?: string; has_solution?: boolean;
       skip?: number;
       limit?: number;
     }
@@ -363,7 +370,7 @@ export const trainerAPI = {
   generateSet: (
     data: {
       source: string;
-      filters?: { paragraph?: string; topic?: string; has_answer?: boolean };
+      filters?: { paragraph?: string; topic?: string; has_answer?: boolean; q?: string; task_type?: string; difficulty?: string; volume?: string; has_solution?: boolean; };
       count: number;
       title?: string;
       seed?: number;

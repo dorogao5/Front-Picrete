@@ -1,5 +1,10 @@
+import { BankAdvancedFilters } from "@/components/BankAdvancedFilters";
+import { bankFilterParams, emptyBankFilters } from "@/lib/bankFilters";
+import { BankTaskBadges, BankTaskReference } from "@/components/BankTaskDetails";
+import AuthImage from "@/components/AuthImage";
+import { RichText } from "@/components/RichText";
 import { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, ListPlus, Plus, Save, SearchX, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -16,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { examsAPI, getApiErrorMessage, taskBankAPI } from "@/lib/api";
 import type { ExamTaskTypePayload, JsonObject, TaskBankItem, WorkKind } from "@/lib/api";
-import { renderLatex, renderTaskText } from "@/lib/renderLatex";
+import { renderLatex } from "@/lib/renderLatex";
 
 interface TaskVariant {
   content: string;
@@ -75,6 +80,8 @@ const selectClass =
   "mt-1 h-11 w-full rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
 const CreateExam = () => {
+  const location = useLocation();
+  const [bankAdvanced, setBankAdvanced] = useState(emptyBankFilters);
   const navigate = useNavigate();
   const { courseId, examId } = useParams<{ courseId: string; examId?: string }>();
   const isEditMode = !!examId;
@@ -110,7 +117,7 @@ const CreateExam = () => {
   const [bankParagraph, setBankParagraph] = useState("");
   const [bankTopic, setBankTopic] = useState("");
   const [bankHasAnswer, setBankHasAnswer] = useState<"all" | "yes" | "no">("all");
-  const [selectedBankItems, setSelectedBankItems] = useState<Record<string, TaskBankItem>>({});
+  const [selectedBankItems, setSelectedBankItems] = useState<Record<string, TaskBankItem>>(() => Object.fromEntries(((location.state?.bankItems ?? []) as TaskBankItem[]).slice(0, 300).map(item => [item.id, item])));
 
   // Load exam data if editing
   useEffect(() => {
@@ -165,11 +172,13 @@ const CreateExam = () => {
   }, [courseId, examId, navigate]);
 
   useEffect(() => {
+    let cancelled = false;
     const loadBankItems = async () => {
       if (!courseId) return;
       setBankLoading(true);
       try {
         const response = await taskBankAPI.listItems(courseId, {
+          ...bankFilterParams(bankAdvanced),
           source: "sviridov",
           paragraph: bankParagraph || undefined,
           topic: bankTopic || undefined,
@@ -177,16 +186,18 @@ const CreateExam = () => {
           skip: bankSkip,
           limit: 20,
         });
+        if (cancelled) return;
         setBankItems((response.data.items ?? []) as TaskBankItem[]);
         setBankTotalCount(response.data.total_count ?? 0);
       } catch (error: unknown) {
-        toast.error(getApiErrorMessage(error, "Ошибка загрузки банка задач"));
+        if (!cancelled) toast.error(getApiErrorMessage(error, "Ошибка загрузки банка задач"));
       } finally {
-        setBankLoading(false);
+        if (!cancelled) setBankLoading(false);
       }
     };
-    loadBankItems();
-  }, [courseId, bankParagraph, bankTopic, bankHasAnswer, bankSkip]);
+    const timer = window.setTimeout(loadBankItems, 350);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [courseId, bankParagraph, bankTopic, bankHasAnswer, bankSkip, bankAdvanced]);
 
   const [rubricErrors, setRubricErrors] = useState<Record<number, boolean>>({});
 
@@ -278,7 +289,7 @@ const CreateExam = () => {
       const next = { ...prev };
       if (next[item.id]) {
         delete next[item.id];
-      } else {
+      } else if (Object.keys(next).length < 300) {
         next[item.id] = item;
       }
       return next;
@@ -430,15 +441,14 @@ const CreateExam = () => {
   const handleSubmit = async (publish: boolean = false) => {
     if (!courseId) return;
     setLoading(true);
+    let resultExamId = examId;
     try {
-      const prepared = buildExamPayload({ requireTaskTypes: true });
+      const prepared = buildExamPayload({ requireTaskTypes: Object.keys(selectedBankItems).length === 0 });
       if (!prepared) {
         return;
       }
 
       const { payload, preparedTaskTypes } = prepared;
-
-      let resultExamId = examId;
 
       if (isEditMode) {
         // Update exam metadata (backend ignores task_types in PATCH)
@@ -463,6 +473,12 @@ const CreateExam = () => {
         toast.success("Работа создана");
       }
 
+      const pendingBankIds = Object.keys(selectedBankItems);
+      if (resultExamId && pendingBankIds.length) {
+        await examsAPI.addTaskTypesFromBank(resultExamId, { bank_item_ids: pendingBankIds }, courseId);
+        setSelectedBankItems({});
+      }
+
       if (publish && resultExamId) {
         await examsAPI.publish(resultExamId, courseId);
         setExamStatus("published");
@@ -474,6 +490,9 @@ const CreateExam = () => {
       toast.error(
         getApiErrorMessage(error, `Ошибка при ${isEditMode ? "обновлении" : "создании"} работы`)
       );
+      if (!isEditMode && resultExamId) {
+        navigate(`/c/${courseId}/exam/${resultExamId}/edit`, { replace: true });
+      }
     } finally {
       setLoading(false);
     }
@@ -1009,7 +1028,7 @@ const CreateExam = () => {
             <div>
               <h2 className="section-rule text-xl font-semibold">Банк задач</h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                Задачи из источника Свиридова добавляются в работу как снимок.
+                Условия, изображения, сложность и эталонные решения переносятся в работу.
               </p>
               {!isEditMode && (
                 <p className="mt-1 text-xs text-warning">
@@ -1031,6 +1050,7 @@ const CreateExam = () => {
               <Label htmlFor="bank-paragraph">Параграф</Label>
               <Input
                 id="bank-paragraph"
+                list="exam-bank-paragraphs"
                 className="mt-1"
                 value={bankParagraph}
                 onChange={(event) => {
@@ -1044,6 +1064,7 @@ const CreateExam = () => {
               <Label htmlFor="bank-topic">Тема</Label>
               <Input
                 id="bank-topic"
+                list="exam-bank-topics"
                 className="mt-1"
                 value={bankTopic}
                 onChange={(event) => {
@@ -1071,6 +1092,15 @@ const CreateExam = () => {
             </div>
           </div>
 
+          {courseId && <BankAdvancedFilters value={bankAdvanced} onChange={value => { setBankAdvanced(value); setBankSkip(0); }} courseId={courseId} source="sviridov" listPrefix="exam-bank" />}
+          {Object.keys(selectedBankItems).length > 0 && <div className="my-3 max-h-32 overflow-y-auto rounded-md border p-3">
+            <p className="mb-2 text-sm">Выбранные задания будут добавлены при сохранении работы. Нажмите на номер, чтобы убрать его.</p>
+            <div className="flex flex-wrap gap-2">{Object.values(selectedBankItems).map(item => <Button key={item.id} size="sm" variant="secondary" onClick={() => toggleBankSelection(item)} aria-label={`Убрать задачу ${item.number}`}>№ {item.number} ×</Button>)}</div>
+          </div>}
+          <div className="my-3 flex flex-wrap items-center gap-2">
+            <Button variant="ghost" onClick={() => { setBankParagraph(""); setBankTopic(""); setBankHasAnswer("all"); setBankAdvanced(emptyBankFilters); setBankSkip(0); }}>Сбросить фильтры</Button>
+            <Button variant="ghost" disabled={!Object.keys(selectedBankItems).length} onClick={() => setSelectedBankItems({})}>Снять выбор ({Object.keys(selectedBankItems).length})</Button>
+          </div>
           <p className="mb-3 text-sm text-muted-foreground">
             Найдено задач: {bankTotalCount}
           </p>
@@ -1094,11 +1124,12 @@ const CreateExam = () => {
                       <div className="mb-2 flex flex-wrap items-center gap-2">
                         <Badge variant="secondary">{item.number}</Badge>
                         <Badge variant="outline">§ {item.paragraph}</Badge>
+                        <BankTaskBadges item={item} />
                       </div>
                       <p className="mb-1 font-semibold">{renderLatex(item.topic)}</p>
-                      <div className="line-clamp-3 text-sm text-muted-foreground">
-                        {renderTaskText(item.text)}
-                      </div>
+                      <RichText className="text-sm text-muted-foreground">{item.text}</RichText>
+                      {item.images.map(image => <AuthImage key={image.id} src={image.full_url} alt={`Иллюстрация к задаче ${item.number}`} className="my-3 max-h-72 max-w-full rounded-md border object-contain" />)}
+                      <BankTaskReference item={item} />
                     </div>
                     <Button
                       variant={selectedBankItems[item.id] ? "default" : "outline"}

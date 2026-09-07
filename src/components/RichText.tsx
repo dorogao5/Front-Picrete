@@ -1,3 +1,4 @@
+import "katex/dist/katex.min.css";
 import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
@@ -94,10 +95,12 @@ export function RichText({ children, className, inline = false }: RichTextProps)
     <Wrapper className={cn("rich-text min-w-0 max-w-full leading-relaxed", inline && "inline", className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
-        rehypePlugins={[rehypeRaw, rehypeSanitize, rehypeKatex]}
+        rehypePlugins={[rehypeRaw, rehypeSanitize, [rehypeKatex, { strict: "ignore" }]]}
         components={inline ? inlineComponents : blockComponents}
       >
-        {children}
+        {children
+          .replace(/\\\(([\s\S]*?)\\\)/g, (_, math: string) => `$${math}$`)
+          .replace(/\\\[([\s\S]*?)\\\]/g, (_, math: string) => `\n\n$$\n${math}\n$$\n\n`)}
       </ReactMarkdown>
     </Wrapper>
   );

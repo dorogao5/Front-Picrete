@@ -1,3 +1,7 @@
+import { BankAdvancedFilters } from "@/components/BankAdvancedFilters";
+import { bankFilterParams, emptyBankFilters } from "@/lib/bankFilters";
+import { BankTaskBadges, BankTaskReference } from "@/components/BankTaskDetails";
+import { getMembershipForCourse, isAdmin } from "@/lib/auth";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { CheckSquare, ChevronLeft, ChevronRight, Dumbbell, FilterX, Search, SearchX, Sparkles } from "lucide-react";
@@ -31,6 +35,13 @@ const selectClass =
 const TaskBank = () => {
   const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
+  const teacherMode = isAdmin() || Boolean(courseId && getMembershipForCourse(courseId)?.roles.includes("teacher"));
+  const [advanced, setAdvanced] = useState(emptyBankFilters);
+  const [appliedAdvanced, setAppliedAdvanced] = useState(emptyBankFilters);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { setAppliedAdvanced(advanced); setSkip(0); }, 350);
+    return () => window.clearTimeout(timer);
+  }, [advanced]);
 
   const [sources, setSources] = useState<TaskBankSource[]>([]);
   const [sourcesLoading, setSourcesLoading] = useState(true);
@@ -52,7 +63,7 @@ const TaskBank = () => {
   const [hasAnswerFilter, setHasAnswerFilter] = useState<"all" | "yes" | "no">("all");
   const [generateCount, setGenerateCount] = useState(10);
   const [setTitle, setSetTitle] = useState("");
-  const [selectedItems, setSelectedItems] = useState<Record<string, string>>({});
+  const [selectedItems, setSelectedItems] = useState<Record<string, TaskBankItem>>({});
   const [creatingSet, setCreatingSet] = useState<"automatic" | "manual" | null>(null);
   const itemsRequestRef = useRef(0);
 
@@ -85,23 +96,27 @@ const TaskBank = () => {
     if (!courseId) {
       return;
     }
+    let cancelled = false;
+    setSelectedItems({});
     const fetchSources = async () => {
       setSourcesLoading(true);
       setSourcesError("");
       try {
         const response = await taskBankAPI.sources(courseId);
+        if (cancelled) return;
         const nextSources = (response.data ?? []) as TaskBankSource[];
         setSources(nextSources);
         setSourceFilter((current) =>
           nextSources.some((source) => source.code === current) ? current : nextSources[0]?.code ?? "",
         );
       } catch (error: unknown) {
-        setSourcesError(getApiErrorMessage(error, "Не удалось загрузить источники банка задач"));
+        if (!cancelled) setSourcesError(getApiErrorMessage(error, "Не удалось загрузить источники банка задач"));
       } finally {
-        setSourcesLoading(false);
+        if (!cancelled) setSourcesLoading(false);
       }
     };
     fetchSources();
+    return () => { cancelled = true; };
   }, [courseId, sourcesRetry]);
 
   useEffect(() => {
@@ -120,6 +135,7 @@ const TaskBank = () => {
       setItemsError("");
       try {
         const response = await taskBankAPI.listItems(courseId, {
+          ...bankFilterParams(appliedAdvanced),
           source: sourceFilter,
           paragraph: paragraphFilter || undefined,
           topic: topicFilter || undefined,
@@ -141,12 +157,13 @@ const TaskBank = () => {
       }
     };
     fetchItems();
-  }, [courseId, sourceFilter, paragraphFilter, topicFilter, hasAnswerFilter, skip, pageSize, sourcesLoading, itemsRetry]);
+    return () => { itemsRequestRef.current += 1; };
+  }, [courseId, sourceFilter, paragraphFilter, topicFilter, hasAnswerFilter, appliedAdvanced, skip, pageSize, sourcesLoading, itemsRetry]);
 
-  const selectedNumbers = useMemo(() => Object.values(selectedItems), [selectedItems]);
+  const selectedNumbers = useMemo(() => Object.values(selectedItems).map(item => item.number), [selectedItems]);
   const currentPage = Math.floor(skip / pageSize) + 1;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
-  const hasActiveFilters = Boolean(paragraphDraft || topicDraft || hasAnswerFilter !== "all");
+  const hasActiveFilters = Boolean(paragraphDraft || topicDraft || hasAnswerFilter !== "all" || JSON.stringify(advanced) !== JSON.stringify(emptyBankFilters));
   const allPageItemsSelected = items.length > 0 && items.every((item) => Boolean(selectedItems[item.id]));
 
   const toggleSelection = (item: TaskBankItem) => {
@@ -155,7 +172,7 @@ const TaskBank = () => {
       if (next[item.id]) {
         delete next[item.id];
       } else {
-        next[item.id] = item.number;
+        if (Object.keys(next).length < 300) next[item.id] = item;
       }
       return next;
     });
@@ -168,7 +185,7 @@ const TaskBank = () => {
         items.forEach((item) => delete next[item.id]);
       } else {
         items.forEach((item) => {
-          next[item.id] = item.number;
+          if (Object.keys(next).length < 300) next[item.id] = item;
         });
       }
       return next;
@@ -176,6 +193,8 @@ const TaskBank = () => {
   };
 
   const clearFilters = () => {
+    setAdvanced(emptyBankFilters);
+    setAppliedAdvanced(emptyBankFilters);
     setParagraphDraft("");
     setTopicDraft("");
     setParagraphFilter("");
@@ -194,6 +213,7 @@ const TaskBank = () => {
         {
           source: sourceFilter,
           filters: {
+            ...bankFilterParams(appliedAdvanced),
             paragraph: paragraphFilter || undefined,
             topic: topicFilter || undefined,
             has_answer:
@@ -297,12 +317,12 @@ const TaskBank = () => {
   return (
     <PageShell
       title="Банк задач"
-      subtitle="Найдите задачи по источнику и теме, затем соберите личный тренировочный набор"
+      subtitle={teacherMode ? "Подберите задания для работы: условия, изображения и эталонные решения в одном месте" : "Найдите задачи по источнику и теме, затем соберите личный тренировочный набор"}
       actions={
-        <Link to={`/c/${courseId}/trainer`}>
+        <Link to={teacherMode ? `/c/${courseId}/create-exam` : `/c/${courseId}/trainer`}>
           <Button variant="outline" className="gap-1.5">
             <Dumbbell className="h-4 w-4" />
-            Мои тренажёры
+            {teacherMode ? "Создать работу" : "Мои тренажёры"}
           </Button>
         </Link>
       }
@@ -328,6 +348,7 @@ const TaskBank = () => {
               className={selectClass}
               value={sourceFilter}
               onChange={(event) => {
+                clearFilters();
                 setSourceFilter(event.target.value);
                 setSelectedItems({});
                 setSkip(0);
@@ -344,6 +365,7 @@ const TaskBank = () => {
             <Label htmlFor="paragraph">Параграф</Label>
             <Input
               id="paragraph"
+              list="bank-paragraphs"
               className="mt-1"
               value={paragraphDraft}
               onChange={(event) => setParagraphDraft(event.target.value)}
@@ -356,6 +378,7 @@ const TaskBank = () => {
               <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
               <Input
                 id="topic"
+                list="bank-topics"
                 className="pl-9"
                 type="search"
                 value={topicDraft}
@@ -380,7 +403,7 @@ const TaskBank = () => {
               <option value="no">Без ответа</option>
             </select>
           </div>
-          <div className="lg:col-span-2">
+          {!teacherMode && <div className="lg:col-span-2">
             <Label htmlFor="count">Задач в подборке</Label>
             <Input
               id="count"
@@ -392,9 +415,19 @@ const TaskBank = () => {
               onChange={(event) => setGenerateCount(Math.min(100, Math.max(1, Number(event.target.value) || 1)))}
             />
             <p className="mt-1 text-xs text-muted-foreground">Для автоматической подборки</p>
-          </div>
+          </div>}
         </div>
-        <div className="mt-5 grid gap-4 border-t pt-5 md:grid-cols-2">
+        <BankAdvancedFilters value={advanced} onChange={setAdvanced} courseId={courseId} source={sourceFilter} listPrefix="bank" />
+        {teacherMode ? <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
+          <p className="text-sm text-muted-foreground">Выбрано: {selectedNumbers.length} из 300. Выбор сохраняется при смене страницы и фильтров.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="ghost" disabled={!selectedNumbers.length} onClick={() => setSelectedItems({})}>Снять выбор</Button>
+            <Button variant="accent" disabled={!selectedNumbers.length} onClick={() => navigate(`/c/${courseId}/create-exam`, { state: { bankItems: Object.values(selectedItems) } })}>В новую работу ({selectedNumbers.length})</Button>
+          </div>
+          {selectedNumbers.length > 0 && <div className="flex max-h-28 w-full flex-wrap gap-2 overflow-y-auto" aria-label="Выбранные задания">
+            {Object.values(selectedItems).map(item => <Button key={item.id} variant="secondary" size="sm" onClick={() => toggleSelection(item)} aria-label={`Убрать задачу ${item.number}`}>№ {item.number} ×</Button>)}
+          </div>}
+        </div> : <div className="mt-5 grid gap-4 border-t pt-5 md:grid-cols-2">
           <div>
             <Label htmlFor="set-title">Название набора</Label>
             <Input
@@ -419,7 +452,7 @@ const TaskBank = () => {
               {creatingSet === "manual" ? "Создаём…" : `Создать из выбранных (${selectedNumbers.length})`}
             </Button>
           </div>
-        </div>
+        </div>}
       </Card>
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground" aria-live="polite">
@@ -459,6 +492,7 @@ const TaskBank = () => {
                   <div className="mb-3 flex flex-wrap items-center gap-2">
                     <Badge variant="secondary">{item.number}</Badge>
                     <Badge variant="outline">§ {item.paragraph}</Badge>
+                    <BankTaskBadges item={item} />
                     {item.has_answer ? (
                       <Badge variant="success">С ответом</Badge>
                     ) : (
@@ -488,6 +522,7 @@ const TaskBank = () => {
                       ))}
                     </div>
                   )}
+                  <BankTaskReference item={item} />
                 </div>
                 <Button
                   variant={selectedItems[item.id] ? "default" : "outline"}
