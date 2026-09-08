@@ -17,7 +17,7 @@ export function ItmoLogin() {
       const target = new URL(data.authorization_url);
       const callback = new URL(target.searchParams.get("redirect_uri") || "");
       if (target.origin !== "https://id.itmo.ru" || callback.origin !== window.location.origin) {
-        throw new Error("Для входа откройте Picrete по основному адресу https://picrete.ru");
+        throw new Error("Для входа откройте Picrete по основному адресу https://picrete.com");
       }
       sessionStorage.setItem("itmo-login", JSON.stringify({ state: data.state, binding: data.binding }));
       window.location.assign(target.href);
