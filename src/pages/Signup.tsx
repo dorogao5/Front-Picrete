@@ -1,5 +1,6 @@
+import { useItmoAvailability } from "@/hooks/useItmoAvailability";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +26,7 @@ const Signup = () => {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { enabled: itmoEnabled, pending: itmoPending } = useItmoAvailability();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,6 +95,9 @@ const Signup = () => {
       setLoading(false);
     }
   };
+
+  if (itmoPending) return <main className="p-8" role="status">Загружаем вход…</main>;
+  if (itmoEnabled) return <Navigate to="/login" replace />;
 
   return (
     <div className="min-h-screen bg-notebook px-4 py-6 sm:px-6 lg:py-10">

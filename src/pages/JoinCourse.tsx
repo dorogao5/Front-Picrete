@@ -1,4 +1,4 @@
-import { ItmoLogin } from "@/components/ItmoLogin";
+import { useItmoAvailability } from "@/hooks/useItmoAvailability";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { GraduationCap } from "lucide-react";
@@ -25,6 +25,7 @@ const roleLabel = (membership: Membership) =>
 
 const JoinCourse = () => {
   const navigate = useNavigate();
+  const { enabled: itmoEnabled, pending: itmoPending } = useItmoAvailability();
   const [inviteCode, setInviteCode] = useState("");
   const [identityValue, setIdentityValue] = useState("");
   const [loading, setLoading] = useState(false);
@@ -80,12 +81,11 @@ const JoinCourse = () => {
   return (
     <PageShell
       width="narrow"
-      title="Присоединиться к курсу"
-      subtitle="Введите код приглашения, который вам дал преподаватель"
+      title={itmoEnabled ? "Мои курсы" : "Присоединиться к курсу"}
+      subtitle={itmoEnabled ? "Курсы, назначенные вам в Picrete" : "Введите код приглашения, который вам дал преподаватель"}
     >
-      <Card className="p-6">
-        <ItmoLogin linkAccount />
-          <form onSubmit={handleJoin} className="space-y-4">
+      {!itmoPending && !itmoEnabled && <Card className="p-6">
+        <form onSubmit={handleJoin} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="inviteCode">Код приглашения</Label>
             <Input
@@ -109,14 +109,14 @@ const JoinCourse = () => {
             {loading ? "Присоединяемся..." : "Присоединиться"}
           </Button>
         </form>
-      </Card>
+      </Card>}
 
       <Card className="mt-6 p-6">
         <h2 className="mb-4 text-lg font-semibold">Ваши курсы</h2>
         {activeMemberships.length === 0 ? (
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <GraduationCap className="h-5 w-5" />
-            Вы пока не состоите ни в одном курсе.
+            {itmoEnabled ? "Курсы пока не назначены. Обратитесь к преподавателю или администратору курса." : "Вы пока не состоите ни в одном курсе."}
           </div>
         ) : (
           <div className="space-y-2">

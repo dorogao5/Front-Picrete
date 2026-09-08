@@ -1,3 +1,4 @@
+import { useItmoAvailability } from "@/hooks/useItmoAvailability";
 import { ItmoLogin } from "@/components/ItmoLogin";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -16,6 +17,7 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { enabled: itmoEnabled, pending: itmoPending } = useItmoAvailability();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,6 +91,9 @@ const Login = () => {
             </div>
 
             <ItmoLogin />
+            {itmoPending && <p role="status">Загружаем способы входа…</p>}
+            {!itmoPending && <details open={!itmoEnabled}>
+              {itmoEnabled && <summary className="mb-4 cursor-pointer text-sm text-muted-foreground">Служебный вход</summary>}
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
                 <Label htmlFor="username">Логин</Label>
@@ -123,13 +128,14 @@ const Login = () => {
                 {loading ? "Входим..." : "Войти"}
               </Button>
             </form>
+            </details>}
 
-            <div className="mt-6 border-t border-border pt-5 text-center text-sm text-muted-foreground">
+            {!itmoPending && !itmoEnabled && <div className="mt-6 border-t border-border pt-5 text-center text-sm text-muted-foreground">
               Нет аккаунта?{" "}
               <Link to="/signup" className="font-medium text-accent hover:underline">
                 Создать аккаунт
               </Link>
-            </div>
+            </div>}
           </Card>
         </section>
       </div>
