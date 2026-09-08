@@ -31,8 +31,8 @@ export function ItmoLogin({ linkAccount = false }: { linkAccount?: boolean }) {
     }
   };
   return <div className="mb-6 space-y-3 rounded-lg border border-border p-4">
-    <p className="font-medium">{linkAccount ? "Связать аккаунт с ITMO.ID" : "Для студентов ИТМО"}</p>
-    <p className="text-sm text-muted-foreground">ФИО, группа и курс обучения поступят из ИТМО. Доступные учебные курсы определяются по группе и году обучения.</p>
+    <p className="font-medium">{linkAccount ? "Связать аккаунт с ITMO.ID" : "Студентам и преподавателям ИТМО"}</p>
+    <p className="text-sm text-muted-foreground">ФИО поступит из ИТМО. Студенты получат доступ к учебным курсам по группе и году обучения; преподавателям доступ назначает администратор курса.</p>
     <label className="flex items-start gap-2 text-sm">
       <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} className="mt-1" />
       <span>Согласен на получение и обработку данных ITMO.ID согласно <Link className="underline" to="/consent" target="_blank">согласию</Link> и <Link className="underline" to="/privacy" target="_blank">политике конфиденциальности</Link>; принимаю <Link className="underline" to="/terms" target="_blank">условия использования</Link>.</span>
