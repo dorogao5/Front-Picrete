@@ -8,6 +8,7 @@ type Criterion = {
 };
 
 type AiAnalysisData = {
+  needs_teacher_review?: boolean;
   total_score?: number | null;
   max_score?: number | null;
   criteria_scores?: Criterion[];
@@ -22,6 +23,14 @@ type AiAnalysisData = {
   [key: string]: unknown;
 };
 
+const ANALYSIS_LABELS: Record<string, string> = {
+  method_correctness: "Корректность метода",
+  calculations: "Вычисления",
+  units_and_dimensions: "Размерности и единицы",
+  chemical_rules: "Химические правила",
+  errors_found: "Замечания проверки",
+};
+
 export default function AiAnalysis({ data }: { data: AiAnalysisData }) {
   if (!data) return null;
 
@@ -32,6 +41,12 @@ export default function AiAnalysis({ data }: { data: AiAnalysisData }) {
 
   return (
     <div className="space-y-6">
+      {data.needs_teacher_review === true && (
+        <div role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950">
+          <h4 className="font-semibold">Требуется проверка преподавателя</h4>
+          <p className="text-sm mt-1">ИИ отметил неоднозначность в решении, условии или эталоне. Указанный балл предварительный — ознакомьтесь с замечаниями ниже.</p>
+        </div>
+      )}
       {(total !== null || max !== null) && (
         <div>
           <h4 className="font-semibold mb-1">Сводка</h4>
@@ -116,8 +131,8 @@ export default function AiAnalysis({ data }: { data: AiAnalysisData }) {
             <div className="space-y-2 text-sm">
               {Object.entries(data.detailed_analysis).map(([k, v]) => (
                 <div key={k}>
-                  <div className="font-medium">{k}</div>
-                  <RichText className="text-muted-foreground">{String(v)}</RichText>
+                  <div className="font-medium">{ANALYSIS_LABELS[k] || k}</div>
+                  <RichText className="text-muted-foreground">{Array.isArray(v) ? v.join("\n") : String(v)}</RichText>
                 </div>
               ))}
             </div>
