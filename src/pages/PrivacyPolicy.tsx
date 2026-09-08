@@ -7,7 +7,7 @@ const PrivacyPolicy = () => {
       <div className="container mx-auto max-w-4xl space-y-6">
         <div className="space-y-2">
           <h1 className="text-3xl font-bold">Политика конфиденциальности</h1>
-          <p className="text-muted-foreground">Версия от 09.12.2025</p>
+          <p className="text-muted-foreground">Версия от 08.09.2026</p>
           <p className="text-muted-foreground text-sm">
             Настоящая политика подготовлена с учётом требований 152-ФЗ «О персональных данных», 242-ФЗ (локализация данных) и 149-ФЗ.
           </p>
@@ -25,7 +25,8 @@ const PrivacyPolicy = () => {
             <h2 className="text-xl font-semibold">2. Какие данные обрабатываем</h2>
             <ul className="list-disc list-inside text-muted-foreground space-y-1">
               <li>ФИО</li>
-              <li>Номер ИСУ (6 цифр)</li>
+              <li>Номер ИСУ</li>
+              <li>При использовании ITMO.ID: идентификатор аккаунта, ФИО, электронная почта, признак её подтверждения, академические группы, курс обучения и статус студента</li>
               <li>Учётные данные (пароль хранится в виде хэша)</li>
               <li>Роль пользователя (студент, преподаватель, администратор)</li>
               <li>Загруженные изображения работ и ответы</li>
@@ -37,6 +38,7 @@ const PrivacyPolicy = () => {
             <h2 className="text-xl font-semibold">3. Цели обработки</h2>
             <ul className="list-disc list-inside text-muted-foreground space-y-1">
               <li>Предоставление доступа к сервису и учёт ролей</li>
+              <li>Получение профиля из ITMO.ID при входе, обновление данных и зачисление в учебный курс по подтверждённой группе и году обучения</li>
               <li>Проверка и хранение работ студентов</li>
               <li>Генерация аналитики и отчётов</li>
               <li>Обеспечение информационной безопасности</li>

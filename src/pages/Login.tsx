@@ -1,3 +1,4 @@
+import { ItmoLogin } from "@/components/ItmoLogin";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -87,6 +88,7 @@ const Login = () => {
               </div>
             </div>
 
+            <ItmoLogin />
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
                 <Label htmlFor="username">Логин</Label>

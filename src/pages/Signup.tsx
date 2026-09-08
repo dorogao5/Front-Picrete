@@ -11,7 +11,8 @@ import { getDefaultAppPath, setAuthSession } from "@/lib/auth";
 import { toast } from "sonner";
 import { ArrowLeft, UserPlus } from "lucide-react";
 
-const POLICY_VERSION = "2025-12-09";
+const POLICY_VERSION = "2026-09-08";
+const TERMS_VERSION = "2025-12-09";
 
 const Signup = () => {
   const [username, setUsername] = useState("");
@@ -70,7 +71,7 @@ const Signup = () => {
         identity_payload: identityPayload,
         pd_consent: true,
         pd_consent_version: POLICY_VERSION,
-        terms_version: POLICY_VERSION,
+        terms_version: TERMS_VERSION,
         privacy_version: POLICY_VERSION,
       });
 
@@ -230,7 +231,7 @@ const Signup = () => {
                     <Link to="/terms" className="font-medium text-accent hover:underline">пользовательское соглашение</Link>.
                   </Label>
                 </div>
-                <p className="text-xs text-muted-foreground">Версия документов: {POLICY_VERSION}</p>
+                <p className="text-xs text-muted-foreground">Политика и согласие: {POLICY_VERSION}; условия использования: {TERMS_VERSION}</p>
               </div>
 
               <Button

@@ -235,7 +235,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       const pathname = window.location.pathname;
       const isPublic =
-        pathname === "/" || pathname.startsWith("/login") || pathname.startsWith("/signup");
+        pathname === "/" || pathname.startsWith("/login") || pathname.startsWith("/signup") || pathname === "/auth/itmo/callback";
 
       if (!isPublic && !isRedirecting) {
         isRedirecting = true;

@@ -1,3 +1,4 @@
+import { ItmoLogin } from "@/components/ItmoLogin";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { GraduationCap } from "lucide-react";
@@ -83,7 +84,8 @@ const JoinCourse = () => {
       subtitle="Введите код приглашения, который вам дал преподаватель"
     >
       <Card className="p-6">
-        <form onSubmit={handleJoin} className="space-y-4">
+        <ItmoLogin linkAccount />
+          <form onSubmit={handleJoin} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="inviteCode">Код приглашения</Label>
             <Input

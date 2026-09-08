@@ -7,7 +7,7 @@ const DataProcessingConsent = () => {
       <div className="container mx-auto max-w-4xl space-y-6">
         <div className="space-y-2">
           <h1 className="text-3xl font-bold">Согласие на обработку персональных данных</h1>
-          <p className="text-muted-foreground">Версия от 09.12.2025</p>
+          <p className="text-muted-foreground">Версия от 08.09.2026</p>
         </div>
 
         <Card className="p-6 space-y-4">
@@ -21,6 +21,7 @@ const DataProcessingConsent = () => {
             <ul className="list-disc list-inside text-muted-foreground space-y-1">
               <li>ФИО</li>
               <li>Номер ИСУ</li>
+              <li>При входе через ITMO.ID: идентификатор аккаунта, ФИО, электронная почта и её подтверждение, группы, курс обучения и статус студента</li>
               <li>Роль в системе</li>
               <li>Загруженные изображения работ и ответы</li>
               <li>Техническая информация (логи, метаданные запросов) для целей безопасности</li>
@@ -31,6 +32,7 @@ const DataProcessingConsent = () => {
             <h2 className="text-xl font-semibold">Цели обработки</h2>
             <ul className="list-disc list-inside text-muted-foreground space-y-1">
               <li>Регистрация и авторизация в сервисе</li>
+              <li>При использовании ITMO.ID — получение данных из ИТМО, обновление профиля и предоставление доступа к учебному курсу по группе и году обучения</li>
               <li>Предоставление функционала проверки работ</li>
               <li>Хранение и учёт результатов</li>
               <li>Исполнение пользовательского соглашения</li>

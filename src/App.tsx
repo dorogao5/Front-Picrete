@@ -1,3 +1,4 @@
+import ItmoCallback from "./pages/ItmoCallback";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -65,6 +66,7 @@ const App = () => (
           <Routes>
             {/* Public routes */}
             <Route path="/" element={<HomeRoute />} />
+            <Route path="/auth/itmo/callback" element={<ItmoCallback />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/demo" element={<Demo />} />
