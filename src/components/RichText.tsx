@@ -8,6 +8,9 @@ import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 
+import { MathViewport } from "@/components/MathViewport";
+import remarkReadableMath from "@/lib/remarkReadableMath";
+
 import AuthImage from "@/components/AuthImage";
 import { cn } from "@/lib/utils";
 
@@ -82,6 +85,9 @@ const createComponents = (inline: boolean): Components => ({
   code: ({ children, className }) => (
     <code className={cn("rounded bg-muted px-1 py-0.5 font-mono text-[0.92em]", className)}>{children}</code>
   ),
+  span: ({ node, children, ...props }) => props.className?.split(" ").includes("katex")
+    ? <MathViewport><span {...props}>{children}</span></MathViewport>
+    : <span {...props}>{children}</span>,
   img: ExternalImage,
 });
 
@@ -92,9 +98,9 @@ const inlineComponents = createComponents(true);
 export function RichText({ children, className, inline = false }: RichTextProps) {
   const Wrapper = inline ? "span" : "div";
   return (
-    <Wrapper className={cn("rich-text min-w-0 max-w-full leading-relaxed", inline && "inline", className)}>
+    <Wrapper className={cn("rich-text min-w-0 max-w-full leading-relaxed", inline ? "inline" : "academic-content", className)}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
+        remarkPlugins={[remarkGfm, remarkMath, remarkReadableMath, remarkBreaks]}
         rehypePlugins={[rehypeRaw, rehypeSanitize, [rehypeKatex, { strict: "ignore" }]]}
         components={inline ? inlineComponents : blockComponents}
       >

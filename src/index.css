@@ -207,11 +207,85 @@
     @apply border border-border px-2 py-1 align-top;
   }
 
-  .rich-text .katex-display {
-    @apply max-w-full overflow-x-auto overflow-y-hidden py-1;
-    margin: 0.5rem 0;
-    scrollbar-width: thin;
+  /* A single reading face for prose and text inside equations. KaTeX retains
+     its mathematical fonts/metrics for operators, fractions and extensible signs. */
+  .rich-text.academic-content {
+    --reading-font: "STIX Two Text", "Times New Roman", serif;
+    font-family: var(--reading-font);
+    font-size: max(1.0625rem, 1em);
+    line-height: 1.65;
+    overflow-wrap: break-word;
+    white-space: normal;
   }
+
+  .rich-text .katex {
+    font-size: 1em;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: normal;
+    text-indent: 0;
+  }
+
+  .academic-content .katex .text,
+  .academic-content .katex .textrm {
+    font-family: var(--reading-font);
+  }
+
+  .math-viewport {
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: baseline;
+    white-space: normal;
+    text-indent: 0;
+  }
+
+  .math-scroll {
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: baseline;
+    scrollbar-width: thin;
+    overscroll-behavior-x: contain;
+  }
+
+  .is-overflowing > .math-scroll {
+    display: block;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.25em 0;
+  }
+
+  .math-scroll > .katex {
+    display: inline-block;
+    white-space: nowrap;
+  }
+
+  .math-scroll .katex-html { white-space: nowrap; }
+
+  .math-viewport.is-overflowing {
+    display: block;
+    margin: 0.65em 0;
+    padding: 0.25em 0;
+    border-bottom: 1px solid hsl(var(--border) / 0.65);
+  }
+
+  .math-scroll-hint {
+    display: block;
+    margin-top: 0.25rem;
+    font-family: "Golos Text", sans-serif;
+    font-size: 0.6875rem;
+    line-height: 1.4;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .rich-text .katex-display {
+    display: block;
+    max-width: 100%;
+    margin: 0.75em 0;
+    text-align: left;
+  }
+
+  .rich-text .katex-display > .math-viewport { display: block; }
+  .rich-text .katex-display > .math-viewport > .math-scroll > .katex { text-align: left; }
 
   .rich-text img {
     @apply h-auto;

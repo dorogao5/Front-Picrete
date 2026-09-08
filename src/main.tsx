@@ -5,6 +5,10 @@ import "@fontsource/golos-text/600.css";
 import "@fontsource/golos-text/700.css";
 import "@fontsource/jetbrains-mono/400.css";
 import "@fontsource/jetbrains-mono/500.css";
+import "@fontsource/stix-two-text/400.css";
+import "@fontsource/stix-two-text/400-italic.css";
+import "@fontsource/stix-two-text/600.css";
+import "@fontsource/stix-two-text/700.css";
 import App from "./App.tsx";
 import "./index.css";
 
