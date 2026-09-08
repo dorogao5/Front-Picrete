@@ -402,3 +402,9 @@
     text-align: left;
   }
 }
+
+.academic-content.inline { font-size: inherit; }
+
+.math-inline-numbers > .math-inline-item { counter-increment: math-item; }
+.math-inline-numbers > .math-inline-item::before { content: counter(math-item) ". "; }
+.math-inline-bullets > .math-inline-item::before { content: "• "; }

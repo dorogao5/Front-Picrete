@@ -54,8 +54,9 @@ const createComponents = (inline: boolean): Components => ({
     inline ? <strong>{children}</strong> : <h4 className="mb-2 mt-4 font-semibold first:mt-0">{children}</h4>,
   p: ({ children }) =>
     inline ? <span>{children}</span> : <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
-  ul: ({ children }) => <ul className="my-3 list-disc space-y-1 pl-5">{children}</ul>,
-  ol: ({ children }) => <ol className="my-3 list-decimal space-y-1 pl-5">{children}</ol>,
+  li: ({ children }) => inline ? <span role="listitem" className="math-inline-item block">{children}</span> : <li>{children}</li>,
+  ul: ({ children }) => inline ? <span role="list" className="math-inline-bullets block">{children}</span> : <ul className="my-3 list-disc space-y-1 pl-5">{children}</ul>,
+  ol: ({ children, start }) => inline ? <span role="list" className="math-inline-numbers block" style={{ counterReset: `math-item ${(start ?? 1) - 1}` }}>{children}</span> : <ol start={start} className="my-3 list-decimal space-y-1 pl-5">{children}</ol>,
   blockquote: ({ children }) => (
     <blockquote className="my-3 border-l-2 border-accent/50 pl-3 text-muted-foreground">{children}</blockquote>
   ),
@@ -98,7 +99,7 @@ const inlineComponents = createComponents(true);
 export function RichText({ children, className, inline = false }: RichTextProps) {
   const Wrapper = inline ? "span" : "div";
   return (
-    <Wrapper className={cn("rich-text min-w-0 max-w-full leading-relaxed", inline ? "inline" : "academic-content", className)}>
+    <Wrapper className={cn("rich-text min-w-0 max-w-full leading-relaxed", "academic-content", inline && "inline", className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath, remarkReadableMath, remarkBreaks]}
         rehypePlugins={[rehypeRaw, rehypeSanitize, [rehypeKatex, { strict: "ignore" }]]}

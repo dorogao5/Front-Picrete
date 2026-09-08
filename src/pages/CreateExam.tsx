@@ -1,3 +1,4 @@
+import { MathCombobox } from "@/components/MathCombobox";
 import { BankAdvancedFilters } from "@/components/BankAdvancedFilters";
 import { bankFilterParams, emptyBankFilters } from "@/lib/bankFilters";
 import { BankTaskBadges, BankTaskReference } from "@/components/BankTaskDetails";
@@ -81,6 +82,7 @@ const selectClass =
 
 const CreateExam = () => {
   const location = useLocation();
+  const [topicOptions, setTopicOptions] = useState<string[]>([]);
   const [bankAdvanced, setBankAdvanced] = useState(emptyBankFilters);
   const navigate = useNavigate();
   const { courseId, examId } = useParams<{ courseId: string; examId?: string }>();
@@ -1062,17 +1064,8 @@ const CreateExam = () => {
             </div>
             <div>
               <Label htmlFor="bank-topic">Тема</Label>
-              <Input
-                id="bank-topic"
-                list="exam-bank-topics"
-                className="mt-1"
-                value={bankTopic}
-                onChange={(event) => {
-                  setBankTopic(event.target.value);
-                  setBankSkip(0);
-                }}
-                placeholder="Поиск по теме"
-              />
+              <MathCombobox id="bank-topic" className="mt-1" value={bankTopic}
+                onChange={value => { setBankTopic(value); setBankSkip(0); }} options={topicOptions} placeholder="Поиск по теме" />
             </div>
             <div>
               <Label htmlFor="bank-answer">Наличие ответа</Label>
@@ -1092,7 +1085,7 @@ const CreateExam = () => {
             </div>
           </div>
 
-          {courseId && <BankAdvancedFilters value={bankAdvanced} onChange={value => { setBankAdvanced(value); setBankSkip(0); }} courseId={courseId} source="sviridov" listPrefix="exam-bank" />}
+          {courseId && <BankAdvancedFilters value={bankAdvanced} onChange={value => { setBankAdvanced(value); setBankSkip(0); }} courseId={courseId} source="sviridov" listPrefix="exam-bank" onTopics={setTopicOptions} />}
           {Object.keys(selectedBankItems).length > 0 && <div className="my-3 max-h-32 overflow-y-auto rounded-md border p-3">
             <p className="mb-2 text-sm">Выбранные задания будут добавлены при сохранении работы. Нажмите на номер, чтобы убрать его.</p>
             <div className="flex flex-wrap gap-2">{Object.values(selectedBankItems).map(item => <Button key={item.id} size="sm" variant="secondary" onClick={() => toggleBankSelection(item)} aria-label={`Убрать задачу ${item.number}`}>№ {item.number} ×</Button>)}</div>

@@ -1,10 +1,11 @@
+import { MathCombobox } from "@/components/MathCombobox";
 import { BankAdvancedFilters } from "@/components/BankAdvancedFilters";
 import { bankFilterParams, emptyBankFilters } from "@/lib/bankFilters";
 import { BankTaskBadges, BankTaskReference } from "@/components/BankTaskDetails";
 import { getMembershipForCourse, isAdmin } from "@/lib/auth";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { CheckSquare, ChevronLeft, ChevronRight, Dumbbell, FilterX, Search, SearchX, Sparkles } from "lucide-react";
+import { CheckSquare, ChevronLeft, ChevronRight, Dumbbell, FilterX, SearchX, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import AuthImage from "@/components/AuthImage";
@@ -36,6 +37,7 @@ const TaskBank = () => {
   const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
   const teacherMode = isAdmin() || Boolean(courseId && getMembershipForCourse(courseId)?.roles.includes("teacher"));
+  const [topicOptions, setTopicOptions] = useState<string[]>([]);
   const [advanced, setAdvanced] = useState(emptyBankFilters);
   const [appliedAdvanced, setAppliedAdvanced] = useState(emptyBankFilters);
   useEffect(() => {
@@ -374,18 +376,8 @@ const TaskBank = () => {
           </div>
           <div className="lg:col-span-3">
             <Label htmlFor="topic">Поиск по теме</Label>
-            <div className="relative mt-1">
-              <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                id="topic"
-                list="bank-topics"
-                className="pl-9"
-                type="search"
-                value={topicDraft}
-                onChange={(event) => setTopicDraft(event.target.value)}
-                placeholder="Например: коллоидные растворы"
-              />
-            </div>
+            <MathCombobox id="topic" className="mt-1" value={topicDraft} onChange={setTopicDraft}
+              options={topicOptions} placeholder="Например: коллоидные растворы" />
           </div>
           <div className="lg:col-span-2">
             <Label htmlFor="answer">Наличие ответа</Label>
@@ -417,7 +409,7 @@ const TaskBank = () => {
             <p className="mt-1 text-xs text-muted-foreground">Для автоматической подборки</p>
           </div>}
         </div>
-        <BankAdvancedFilters value={advanced} onChange={setAdvanced} courseId={courseId} source={sourceFilter} listPrefix="bank" />
+        <BankAdvancedFilters value={advanced} onChange={setAdvanced} courseId={courseId} source={sourceFilter} listPrefix="bank" onTopics={setTopicOptions} />
         {teacherMode ? <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
           <p className="text-sm text-muted-foreground">Выбрано: {selectedNumbers.length} из 300. Выбор сохраняется при смене страницы и фильтров.</p>
           <div className="flex flex-wrap gap-2">
