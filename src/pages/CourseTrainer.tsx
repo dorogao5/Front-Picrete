@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Check, Play, ArrowRight } from "lucide-react";
+import { Check, Play, ArrowRight, LockKeyhole, LoaderCircle } from "lucide-react";
 import { PageShell, PageLoader } from "@/components/PageShell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -119,6 +119,14 @@ export default function CourseTrainer() {
                 {total?.percent}%
               </span>
             </Card>
+            {!!busy && (
+              <p role="status" className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
+                <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />
+                {busy.startsWith("generate:")
+                  ? "Формируем новый набор. Дождитесь завершения — повторно нажимать кнопку не нужно."
+                  : "Открываем задачу…"}
+              </p>
+            )}
             <div className="space-y-4">
               {trainer.definition.sections.map((s, index) => {
                 const available = levels.filter((l) =>
@@ -135,9 +143,18 @@ export default function CourseTrainer() {
                 const done = Math.min(goal, p?.solved ?? 0);
                 const physicalGeneration = trainer.source === "studio_fizicheskaya_himiya";
                 const generationLocked = physicalGeneration && trainer.generation_unlock?.[s.id] !== true;
+                const unlockProgress = trainer.generation_progress?.[s.id];
+                const required = unlockProgress?.required ?? 3;
+                const generationHintId = `generation-hint-${s.id}`;
+                const bankHintId = `bank-hint-${s.id}`;
+                const generationHint = !trainer.source
+                  ? "Генерация недоступна: для тренажёра не настроен источник задач. Обратитесь к преподавателю."
+                  : generationLocked
+                    ? `Решите ${required} разные задачи из банка этой подтемы. Подойдёт любой уровень сложности.`
+                    : "Можно генерировать новые задачи выбранного уровня и продолжать практику.";
                 return (
                   <Card key={s.id} id={`section-${s.id}`} className="scroll-mt-24 p-5 sm:p-6">
-                    <div className="flex gap-4">
+                    <div className="flex gap-3 sm:gap-4">
                       <span
                         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${done === goal && goal ? "bg-success/10 text-success" : "bg-accent/10 text-accent"}`}
                       >
@@ -148,9 +165,10 @@ export default function CourseTrainer() {
                         )}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <h2 className="text-xl font-semibold">{s.title}</h2>
+                        <h2 className="text-lg font-semibold leading-snug sm:text-xl">{s.title}</h2>
+                        <p className="mt-4 text-xs font-medium text-muted-foreground">Уровень задач</p>
                         <div
-                          className="my-4 flex flex-wrap gap-2"
+                          className="mb-4 mt-2 flex flex-wrap gap-2"
                           role="group"
                           aria-label={`Сложность: ${s.title}`}
                         >
@@ -159,22 +177,27 @@ export default function CourseTrainer() {
                               key={l.id}
                               size="sm"
                               variant={level === l.id ? "accent" : "outline"}
-                              disabled={!available.includes(l) && !(physicalGeneration && !generationLocked)}
+                              disabled={!physicalGeneration && !available.includes(l)}
                               aria-pressed={level === l.id}
+                              title={`Готовых задач: ${s.items.filter((item) => item.difficulty === l.id).length}`}
                               onClick={() =>
-                                setChosen({ ...chosen, [s.id]: l.id })
+                                setChosen((current) => ({ ...current, [s.id]: l.id }))
                               }
                             >
                               {l.label}
                             </Button>
                           ))}
                         </div>
-                        <div className="flex flex-wrap items-center justify-between gap-4">
-                          <div className="text-sm text-muted-foreground">
-                            <p>
+                        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                          <div className="min-w-0 text-sm text-muted-foreground">
+                            <p id={bankHintId} aria-live="polite">
                               {physicalGeneration && count === 0
-                                ? "В банке пока нет задач этого уровня — сгенерируйте новый набор"
-                                : `${done} из ${goal} задач · в банке ${count}`}
+                                ? generationLocked
+                                  ? available.length
+                                    ? "Готовых задач этого уровня пока нет. Для начала выберите другой уровень."
+                                    : "В этой подтеме пока нет готовых задач. Преподавателю нужно добавить их в банк."
+                                  : "Готовых задач этого уровня пока нет — можно сгенерировать новый набор."
+                                : `Решено ${done} из ${goal} · готовых задач в банке: ${count}`}
                             </p>
                             {!!p?.solved && (
                               <p className="mt-1">
@@ -183,13 +206,18 @@ export default function CourseTrainer() {
                               </p>
                             )}
                           </div>
+                          <div className="grid shrink-0 grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
                           <Button
+                            className="flex-1 sm:flex-none"
                             disabled={!!busy || !count}
+                            aria-describedby={!count ? bankHintId : undefined}
                             onClick={() => start(s.id, level)}
                           >
                             {busy === s.id
                               ? "Открываем…"
-                              : done
+                              : goal > 0 && done >= goal
+                                ? "Решать ещё"
+                                : done
                                 ? "Продолжить"
                                 : "Начать"}
                             {done ? (
@@ -200,10 +228,18 @@ export default function CourseTrainer() {
                           </Button>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <span tabIndex={generationLocked ? 0 : undefined}>
+                              <span
+                                className="inline-flex flex-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:flex-none"
+                                tabIndex={generationLocked || !trainer.source ? 0 : undefined}
+                                role={generationLocked || !trainer.source ? "group" : undefined}
+                                aria-label={generationLocked || !trainer.source ? "Генерация недоступна" : undefined}
+                                aria-describedby={generationHintId}
+                              >
                                 <Button
+                                  className="w-full"
                                   variant="outline"
                                   disabled={!!busy || !trainer.source || generationLocked}
+                                  aria-describedby={generationHintId}
                                   onClick={() => void generateMore(s, level)}
                                 >
                                   {busy === `generate:${s.id}`
@@ -213,12 +249,28 @@ export default function CourseTrainer() {
                                       : done === goal
                                         ? "Новый набор задач"
                                         : "Сформировать набор"}
-                                  <ArrowRight className="h-4 w-4" />
+                                  {busy === `generate:${s.id}`
+                                    ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />
+                                    : generationLocked
+                                      ? <LockKeyhole aria-hidden="true" className="h-4 w-4" />
+                                      : <ArrowRight aria-hidden="true" className="h-4 w-4" />}
                                 </Button>
                               </span>
                             </TooltipTrigger>
-                            {generationLocked && <TooltipContent>решите 3 задачи</TooltipContent>}
+                            {(generationLocked || !trainer.source) && <TooltipContent className="max-w-xs">{generationHint}</TooltipContent>}
                           </Tooltip>
+                          </div>
+                        </div>
+                        <div className="mt-4 flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-start sm:justify-between">
+                          <p id={generationHintId} className="flex items-start gap-2 text-sm leading-relaxed text-muted-foreground">
+                            {generationLocked && <LockKeyhole aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />}
+                            {generationHint}
+                          </p>
+                          {generationLocked && unlockProgress && (
+                            <span className="shrink-0 self-start rounded-full bg-secondary px-2.5 py-1 text-xs font-medium tabular-nums">
+                              {`Решено ${Math.min(required, unlockProgress.solved)} из ${required}`}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>

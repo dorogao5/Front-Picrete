@@ -19,25 +19,26 @@ function compile(file, imports) {
 const primitive = () => null;
 const Button = () => null;
 const TooltipContent = () => null;
-function render({ unlocked = false, source = "studio_fizicheskaya_himiya", level = "easy", busy = "", generation, bankLevels = ["easy", "medium", "hard"] } = {}) {
+function render({ unlocked = false, source = "studio_fizicheskaya_himiya", level = "easy", busy = "", generation, bankLevels = ["easy", "medium", "hard"], solved = 0, progress = [], target = 3 } = {}) {
   const calls = [];
   const navigations = [];
   const trainer = {
     source,
     generation_unlock: source === "studio_fizicheskaya_himiya" ? { selected: unlocked, other: false } : {},
+    generation_progress: source === "studio_fizicheskaya_himiya" && solved !== null ? { selected: { solved, required: 3 } } : {},
     definition: { title: "Тема", sections: ["selected", "other"].map((id) => ({
-      id, title: id, target: 3,
+      id, title: id, target,
       items: bankLevels.map((difficulty) => ({ task_id: difficulty, difficulty })),
     })) },
     // Current-release progress can be empty even when generation is unlocked.
-    progress: [],
+    progress,
   };
   const states = [trainer, "", busy, { selected: level }];
   const practice = compile("../lib/practice.ts", { "./api": { api: {} } });
   const component = compile("./CourseTrainer.tsx", {
     react: { ...require("react"), useState: () => [states.shift(), () => {}], useRef: (current) => ({ current }), useEffect: () => {}, useCallback: (fn) => fn },
     "react-router-dom": { useParams: () => ({ courseId: "course", trainerId: "trainer" }), useNavigate: () => (path) => navigations.push(path) },
-    "lucide-react": { Check: primitive, Play: primitive, ArrowRight: primitive },
+    "lucide-react": { Check: primitive, Play: primitive, ArrowRight: primitive, LockKeyhole: primitive, LoaderCircle: primitive },
     "@/components/PageShell": { PageShell: primitive, PageLoader: primitive },
     "@/components/ui/card": { Card: primitive },
     "@/components/ui/button": { Button },
@@ -58,11 +59,14 @@ function render({ unlocked = false, source = "studio_fizicheskaya_himiya", level
   return { elements, buttons, calls, navigations };
 }
 
-test("locked subtopic disables generation at every level and exposes tooltip on a focusable wrapper", async () => {
+test("locked subtopic explains bank requirement visibly, accessibly and in tooltip at every level", async () => {
   for (const level of ["easy", "medium", "hard"]) {
     const view = render({ level });
     assert.equal(view.buttons[0].props.disabled, true);
-    assert.ok(view.elements.some((el) => el.type === TooltipContent && el.props.children === "решите 3 задачи"));
+    const hint = "Решите 3 разные задачи из банка этой подтемы. Подойдёт любой уровень сложности.";
+    assert.ok(view.elements.some((el) => el.type === TooltipContent && el.props.children === hint));
+    assert.ok(view.elements.some((el) => el.type === "p" && el.props.id === "generation-hint-selected" && el.props.children.includes(hint)), "reason is visible without hover");
+    assert.equal(view.buttons[0].props["aria-describedby"], "generation-hint-selected");
     assert.ok(view.elements.some((el) => el.type === "span" && el.props.tabIndex === 0 && el.props.children === view.buttons[0]));
     view.buttons[0].props.onClick();
     await new Promise(setImmediate);
@@ -97,10 +101,10 @@ test("unlocked physical subtopic allows generation at levels with no preloaded t
     const view = render({ unlocked: true, level, bankLevels: ["easy"] });
     const levels = view.elements.filter((el) => el.type === Button && el.props.size === "sm");
     assert.deepEqual(levels.slice(0, 3).map((el) => el.props.disabled), [false, false, false]);
-    assert.deepEqual(levels.slice(3, 6).map((el) => el.props.disabled), [false, true, true], "another locked subtopic stays restricted");
+    assert.deepEqual(levels.slice(3, 6).map((el) => el.props.disabled), [false, false, false], "levels are inspectable even before generation unlock");
     const start = view.elements.find((el) => el.type === Button && el.props.children?.[0] === "Начать");
     assert.equal(start.props.disabled, true);
-    assert.ok(view.elements.some((el) => el.type === "p" && el.props.children === "В банке пока нет задач этого уровня — сгенерируйте новый набор"));
+    assert.ok(view.elements.some((el) => el.type === "p" && el.props.children === "Готовых задач этого уровня пока нет — можно сгенерировать новый набор."));
     assert.equal(view.buttons[0].props.disabled, false);
     view.buttons[0].props.onClick();
     await new Promise(setImmediate);
@@ -110,9 +114,60 @@ test("unlocked physical subtopic allows generation at levels with no preloaded t
   for (const options of [{ unlocked: false }, { source: "other-subject", unlocked: true }]) {
     const view = render({ ...options, bankLevels: ["easy"] });
     const levels = view.elements.filter((el) => el.type === Button && el.props.size === "sm");
-    assert.deepEqual(levels.slice(0, 3).map((el) => el.props.disabled), [false, true, true]);
+    assert.deepEqual(levels.slice(0, 3).map((el) => el.props.disabled), options.source === "other-subject" ? [false, true, true] : [false, false, false]);
     const start = view.elements.find((el) => el.type === Button && el.props.children?.[0] === "Начать");
     assert.equal(start.props.disabled, false, "existing easy bank tasks remain playable");
+  }
+});
+test("unlock progress uses server count across releases, not current practice progress", () => {
+  for (const solved of [0, 1, 2]) {
+    const view = render({ solved });
+    assert.ok(view.elements.some((el) => el.type === "span" && el.props.children === `Решено ${solved} из 3`));
+  }
+  for (const options of [{ solved: null }, { unlocked: true, solved: 3 }]) {
+    const view = render(options);
+    assert.ok(!view.elements.some((el) => el.type === "span" && /^Решено \d из 3$/.test(el.props.children)), "do not invent absent historical progress or show a completed lock");
+  }
+});
+test("empty level and missing source explain disabled actions without offering an impossible action", () => {
+  const view = render({ level: "hard", bankLevels: ["easy"] });
+  assert.ok(view.elements.some((el) => el.type === "p" && el.props.children === "Готовых задач этого уровня пока нет. Для начала выберите другой уровень."));
+  const start = view.elements.find((el) => el.type === Button && el.props.children?.[0] === "Начать");
+  assert.equal(start.props.disabled, true);
+  assert.equal(start.props["aria-describedby"], "bank-hint-selected");
+  const missing = render({ source: "" });
+  assert.ok(missing.elements.some((el) => el.type === "p" && el.props.children?.includes("Генерация недоступна: для тренажёра не настроен источник задач. Обратитесь к преподавателю.")));
+  assert.ok(render({ busy: "generate:selected" }).elements.some((el) => el.props.role === "status"));
+});
+test("completed practice target offers repeat practice without conflating historical unlock progress", () => {
+  const view = render({
+    target: 1,
+    solved: 2,
+    progress: [{ section_id: "selected", difficulty: "easy", solved: 1, independent: 1 }],
+  });
+  const repeat = view.elements.find((el) => el.type === Button && el.props.children?.[0] === "Решать ещё");
+  assert.ok(repeat, "one solved task completes the configured practice target of one");
+  assert.equal(repeat.props.disabled, false);
+  assert.ok(view.elements.some((el) => el.type === "p" && el.props.id === "bank-hint-selected" && el.props.children === "Решено 1 из 1 · готовых задач в банке: 1"));
+  assert.ok(view.elements.some((el) => el.type === "span" && el.props.children === "Решено 2 из 3"));
+  assert.equal(view.buttons[0].props.disabled, true, "completing practice does not override the server generation lock");
+});
+test("entirely empty bank explains teacher action when locked and allows generation when unlocked", async () => {
+  for (const unlocked of [false, true]) {
+    const view = render({ bankLevels: [], unlocked, level: "hard" });
+    const hint = view.elements.find((el) => el.type === "p" && el.props.id === "bank-hint-selected");
+    assert.equal(hint.props.children, unlocked
+      ? "Готовых задач этого уровня пока нет — можно сгенерировать новый набор."
+      : "В этой подтеме пока нет готовых задач. Преподавателю нужно добавить их в банк.");
+    assert.ok(!view.elements.some((el) => el.type === "p" && typeof el.props.children === "string" && el.props.children.includes("выберите другой уровень")));
+    const start = view.elements.find((el) => el.type === Button && el.props.children?.[0] === "Начать");
+    assert.equal(start.props.disabled, true);
+    assert.equal(start.props["aria-describedby"], "bank-hint-selected");
+    assert.equal(view.buttons[0].props.disabled, !unlocked);
+    view.buttons[0].props.onClick();
+    await new Promise(setImmediate);
+    assert.equal(view.calls.length, unlocked ? 1 : 0);
+    if (unlocked) assert.equal(view.calls[0][0].filters.difficulty, "hard");
   }
 });
 test("pending generation rejects repeat clicks and releases guard after success or failure", async () => {
