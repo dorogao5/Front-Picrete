@@ -22,6 +22,7 @@ export interface Definition {
 export interface Trainer {
   id: string;
   source?: string;
+  studio_generation?: boolean;
   generation_unlock?: Record<string, boolean>;
   generation_progress?: Record<string, { solved: number; required: number }>;
   definition: Definition;

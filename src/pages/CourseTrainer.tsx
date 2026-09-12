@@ -51,7 +51,7 @@ export default function CourseTrainer() {
   async function generateMore(section: { id: string; title: string }, level: string) {
     if (busy || generationPending.current) return;
     if (
-      trainer?.source === "studio_fizicheskaya_himiya" &&
+      (trainer?.studio_generation === true || trainer?.source === "studio_fizicheskaya_himiya") &&
       trainer.generation_unlock?.[section.id] !== true
     ) return;
     if (!trainer?.source) {
@@ -141,7 +141,7 @@ export default function CourseTrainer() {
                   (p) => p.section_id === s.id && p.difficulty === level,
                 );
                 const done = Math.min(goal, p?.solved ?? 0);
-                const physicalGeneration = trainer.source === "studio_fizicheskaya_himiya";
+                const physicalGeneration = trainer.studio_generation === true || trainer.source === "studio_fizicheskaya_himiya";
                 const generationLocked = physicalGeneration && trainer.generation_unlock?.[s.id] !== true;
                 const unlockProgress = trainer.generation_progress?.[s.id];
                 const required = unlockProgress?.required ?? 3;
