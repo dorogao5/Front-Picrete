@@ -212,6 +212,8 @@ test("generated set returns to canonical section after reload and opens the sele
     { trainer_id: "origin", section_id: "section" },
     {},
     { trainer_id: "origin", section_id: "section", mode: "studio_generated", count: 3, requested_count: 5, pending_count: 2 },
+    { trainer_id: "origin", section_id: "section", mode: "studio_generated", count: 3, requested_count: 5, pending_count: 0 },
+    { trainer_id: "origin", section_id: "section", mode: "studio_generated", count: 3, requested_count: 5 },
     { trainer_id: "origin", section_id: "section", mode: "studio_generated", count: 5, requested_count: 5, pending_count: 0 },
   ]) {
     const navigations = [], starts = [];
@@ -232,14 +234,13 @@ test("generated set returns to canonical section after reload and opens the sele
       "@/lib/practice": { practice: { start: async (...args) => { starts.push(args); return "attempt"; } } },
     }).default;
     const tree = component();
-    const partial = filters.pending_count > 0;
+    const partial = filters.mode === "studio_generated" && itemCount < filters.requested_count;
     assert.equal(tree.props.subtitle, `Задач в наборе: ${itemCount}${partial ? " из 5" : ""} · Physical`);
     const notice = tree.props.children.find((node) => node?.props?.role === "status");
     assert.equal(Boolean(notice), partial);
     if (partial) {
-      assert.match(notice.props.children.join(""), /только проверенные задачи/);
-      assert.match(notice.props.children.join(""), /Ожидают проверки: 2/);
-      assert.match(notice.props.children.join(""), /Они не входят в этот набор/);
+      assert.equal(notice.props.children.join(""), "Набор сформирован частично: готово 3 из 5 задач. Можно решать готовые задачи.");
+      assert.doesNotMatch(notice.props.children.join(""), /ожида|автомат|повтор|ошиб|проверки/i);
     }
     tree.props.onBack();
     assert.equal(navigations[0], filters.trainer_id ? "/c/course/trainer/course/origin#section-section" : "/c/course/trainer");

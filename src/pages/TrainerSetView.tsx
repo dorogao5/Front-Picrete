@@ -92,8 +92,7 @@ export default function TrainerSetView() {
       )}{" "}
       {partial && data && typeof requestedCount === "number" && (
         <p role="status" className="mb-6 rounded-lg border bg-accent/5 p-4 text-sm">
-          В набор включены только проверенные задачи. Ожидают проверки: {requestedCount - data.items.length}.
-          Они не входят в этот набор.
+          Набор сформирован частично: готово {data.items.length} из {requestedCount} задач. Можно решать готовые задачи.
         </p>
       )}
       {!data && !error ? (
