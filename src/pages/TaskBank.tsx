@@ -409,7 +409,7 @@ const TaskBank = () => {
             <p className="mt-1 text-xs text-muted-foreground">Для автоматической подборки</p>
           </div>}
         </div>
-        <BankAdvancedFilters value={advanced} onChange={setAdvanced} courseId={courseId} source={sourceFilter} listPrefix="bank" onTopics={setTopicOptions} />
+        <BankAdvancedFilters sourceLabels value={advanced} onChange={setAdvanced} courseId={courseId} source={sourceFilter} listPrefix="bank" onTopics={setTopicOptions} />
         {teacherMode ? <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
           <p className="text-sm text-muted-foreground">Выбрано: {selectedNumbers.length} из 300. Выбор сохраняется при смене страницы и фильтров.</p>
           <div className="flex flex-wrap gap-2">
@@ -484,7 +484,7 @@ const TaskBank = () => {
                   <div className="mb-3 flex flex-wrap items-center gap-2">
                     <Badge variant="secondary">{item.number}</Badge>
                     <Badge variant="outline">§ {item.paragraph}</Badge>
-                    <BankTaskBadges item={item} />
+                    <BankTaskBadges sourceLabels item={item} />
                     {item.has_answer ? (
                       <Badge variant="success">С ответом</Badge>
                     ) : (

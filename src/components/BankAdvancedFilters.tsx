@@ -3,11 +3,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { taskBankAPI } from "@/lib/api";
 
-import { bankLabel, type BankFilters } from "@/lib/bankFilters";
+import { bankFacetLabel, bankFacetOptions, bankLabel, type BankFilters } from "@/lib/bankFilters";
 
 interface Facets { paragraphs: string[]; topics: string[]; task_types: string[]; difficulties: string[]; volumes: string[] }
-export function BankAdvancedFilters({ value, onChange, courseId, source, listPrefix, onTopics }: {
-  value: BankFilters; onChange: (value: BankFilters) => void; courseId: string; source: string; listPrefix: string; onTopics?: (topics: string[]) => void;
+export function BankAdvancedFilters({ value, onChange, courseId, source, listPrefix, onTopics, sourceLabels = false }: {
+  value: BankFilters; onChange: (value: BankFilters) => void; courseId: string; source: string; listPrefix: string; onTopics?: (topics: string[]) => void; sourceLabels?: boolean;
 }) {
   const id = useId();
   const [facets, setFacets] = useState<Facets | null>(null);
@@ -26,8 +26,8 @@ export function BankAdvancedFilters({ value, onChange, courseId, source, listPre
   const selectClass = "mt-1 h-11 w-full rounded-md border border-input bg-card px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
   const groups = [
     { key: "task_type" as const, title: "Тип задания", options: facets?.task_types ?? [] },
-    { key: "difficulty" as const, title: "Сложность", options: ["легкая", "средняя", "сложная"].filter(v => facets?.difficulties.includes(v)) },
-    { key: "volume" as const, title: "Объём", options: ["короткое", "среднее", "длинное"].filter(v => facets?.volumes.includes(v)) },
+    { key: "difficulty" as const, title: "Сложность", options: sourceLabels ? bankFacetOptions("difficulty", facets?.difficulties) : ["легкая", "средняя", "сложная"].filter(v => facets?.difficulties.includes(v)) },
+    { key: "volume" as const, title: "Объём", options: sourceLabels ? bankFacetOptions("volume", facets?.volumes) : ["короткое", "среднее", "длинное"].filter(v => facets?.volumes.includes(v)) },
   ];
   return <div className="mt-4 space-y-3">
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
@@ -41,7 +41,7 @@ export function BankAdvancedFilters({ value, onChange, courseId, source, listPre
         <select id={`${id}-${group.key}`} className={selectClass} value={value[group.key]}
           onChange={e => onChange({ ...value, [group.key]: e.target.value })}>
           <option value="">Все</option>
-          {group.options.map(option => <option key={option} value={option}>{bankLabel(option)}</option>)}
+          {group.options.map(option => <option key={option} value={option}>{sourceLabels ? bankFacetLabel(group.key, option) : bankLabel(option)}</option>)}
         </select>
       </div>)}
       <div>

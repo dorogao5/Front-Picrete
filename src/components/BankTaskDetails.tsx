@@ -1,13 +1,13 @@
 import { RichText } from "@/components/RichText";
 import { Badge } from "@/components/ui/badge";
-import { bankLabel } from "@/lib/bankFilters";
+import { bankFacetLabel, bankLabel } from "@/lib/bankFilters";
 import type { TaskBankItem } from "@/lib/api";
 
-export function BankTaskBadges({ item }: { item: TaskBankItem }) {
+export function BankTaskBadges({ item, sourceLabels = false }: { item: TaskBankItem; sourceLabels?: boolean }) {
   return <>
-    {item.task_type && <Badge variant="outline">{bankLabel(item.task_type)}</Badge>}
-    {item.difficulty && <Badge variant="outline">{bankLabel(item.difficulty)}</Badge>}
-    {item.volume && <Badge variant="outline">{bankLabel(item.volume)}</Badge>}
+    {item.task_type && <Badge variant="outline">{sourceLabels ? bankFacetLabel("task_type", item.task_type) : bankLabel(item.task_type)}</Badge>}
+    {item.difficulty && <Badge variant="outline">{sourceLabels ? `Сложность: ${bankFacetLabel("difficulty", item.difficulty)}` : bankLabel(item.difficulty)}</Badge>}
+    {item.volume && <Badge variant="outline">{sourceLabels ? `Объём: ${bankFacetLabel("volume", item.volume)}` : bankLabel(item.volume)}</Badge>}
     {item.has_solution && <Badge variant="success">С решением</Badge>}
   </>;
 }
