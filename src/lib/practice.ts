@@ -22,6 +22,7 @@ export interface Definition {
 export interface Trainer {
   id: string;
   source?: string;
+  generation_unlock?: Record<string, boolean>;
   definition: Definition;
   published: boolean;
   revision: number;

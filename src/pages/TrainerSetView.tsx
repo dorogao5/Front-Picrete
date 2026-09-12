@@ -60,14 +60,22 @@ export default function TrainerSetView() {
       setRemove(false);
     }
   }
+  const originTrainer = data?.filters.trainer_id;
+  const requestedCount = data?.filters.requested_count;
+  const partial = data?.filters.mode === "studio_generated" &&
+    typeof requestedCount === "number" && requestedCount > data.items.length;
+  const originSection = data?.filters.section_id;
+  const canonicalPath = typeof originTrainer === "string" && typeof originSection === "string"
+    ? `/c/${courseId}/trainer/course/${encodeURIComponent(originTrainer)}#section-${encodeURIComponent(originSection)}`
+    : null;
   return (
     <PageShell
       title={data?.title ?? "Личный набор"}
       subtitle={
-        data ? `${data.items.length} задач · ${data.source_title}` : undefined
+        data ? `Задач в наборе: ${data.items.length}${partial ? ` из ${requestedCount}` : ""} · ${data.source_title}` : undefined
       }
-      backLabel="Все тренажёры"
-      onBack={() => navigate(`/c/${courseId}/trainer`)}
+      backLabel={canonicalPath ? "К подтеме · генерировать ещё" : "Все тренажёры"}
+      onBack={() => navigate(canonicalPath ?? `/c/${courseId}/trainer`)}
       actions={
         <Button variant="ghost" onClick={() => setRemove(true)}>
           <Trash2 className="h-4 w-4" />
@@ -82,6 +90,12 @@ export default function TrainerSetView() {
           onRetry={load}
         />
       )}{" "}
+      {partial && data && typeof requestedCount === "number" && (
+        <p role="status" className="mb-6 rounded-lg border bg-accent/5 p-4 text-sm">
+          В набор включены только проверенные задачи. Ожидают проверки: {requestedCount - data.items.length}.
+          Они не входят в этот набор.
+        </p>
+      )}
       {!data && !error ? (
         <PageLoader />
       ) : (

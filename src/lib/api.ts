@@ -374,9 +374,15 @@ export const trainerAPI = {
       count: number;
       title?: string;
       seed?: number;
+      trainer_id?: string;
+      section_id?: string;
     },
     courseId?: string
-  ) => api.post(`${coursePrefix(courseId)}/trainer/sets/generate`, data),
+  ) => api.post(`${coursePrefix(courseId)}/trainer/sets/generate`, data, {
+    // Studio can take 1200s; allow proxy (1260s) and persistence overhead.
+    // Only generation gets this deadline. Do not automatically retry paid POSTs.
+    timeout: 1320_000,
+  }),
 
   createManualSet: (
     data: { source: string; numbers: string[]; title?: string },
