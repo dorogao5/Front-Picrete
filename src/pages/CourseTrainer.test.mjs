@@ -19,13 +19,15 @@ function compile(file, imports) {
 const primitive = () => null;
 const Button = () => null;
 const TooltipContent = () => null;
-function render({ unlocked = false, source = "studio_fizicheskaya_himiya", level = "easy", busy = "", generation, bankLevels = ["easy", "medium", "hard"], solved = 0, progress = [], target = 3 } = {}) {
+function render({ studioGeneration = false, generationLevels, unlocked = false, source = "studio_fizicheskaya_himiya", level = "easy", busy = "", generation, bankLevels = ["easy", "medium", "hard"], solved = 0, progress = [], target = 3 } = {}) {
   const calls = [];
   const navigations = [];
   const trainer = {
     source,
-    generation_unlock: source === "studio_fizicheskaya_himiya" ? { selected: unlocked, other: false } : {},
-    generation_progress: source === "studio_fizicheskaya_himiya" && solved !== null ? { selected: { solved, required: 3 } } : {},
+    studio_generation: studioGeneration,
+    generation_levels: generationLevels,
+    generation_unlock: (studioGeneration || source === "studio_fizicheskaya_himiya") ? { selected: unlocked, other: false } : {},
+    generation_progress: (studioGeneration || source === "studio_fizicheskaya_himiya") && solved !== null ? { selected: { solved, required: 3 } } : {},
     definition: { title: "Тема", sections: ["selected", "other"].map((id) => ({
       id, title: id, target,
       items: bankLevels.map((difficulty) => ({ task_id: difficulty, difficulty })),
@@ -253,5 +255,16 @@ test("generated set returns to canonical section after reload and opens the sele
     await findSolve(tree).props.onClick();
     assert.deepEqual(starts, [["course", { set_id: "set", task_id: "task" }]]);
     assert.equal(navigations[1], "/c/course/trainer/practice/attempt");
+  }
+});
+
+test("inorganic course opts in by policy and requires its available blueprint level", async () => {
+  const options = { source: "sviridov", studioGeneration: true, generationLevels: {selected:["medium"],other:[]}};
+  for (const [unlocked,level,expected] of [[false,"medium",false],[true,"easy",false],[true,"medium",true]]) {
+    const view=render({...options,unlocked,level});
+    assert.equal(view.buttons[0].props.disabled,!expected);
+    await view.buttons[0].props.onClick();
+    assert.equal(view.calls.length,expected ? 1 : 0);
+    assert.equal(view.buttons[1].props.disabled,true);
   }
 });

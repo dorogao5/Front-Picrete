@@ -54,6 +54,8 @@ export default function CourseTrainer() {
       (trainer?.studio_generation === true || trainer?.source === "studio_fizicheskaya_himiya") &&
       trainer.generation_unlock?.[section.id] !== true
     ) return;
+    const levels = trainer?.generation_levels?.[section.id];
+    if (levels !== undefined && !levels.includes(level)) return;
     if (!trainer?.source) {
       setError("Для этой подтемы не определён источник задач");
       return;
