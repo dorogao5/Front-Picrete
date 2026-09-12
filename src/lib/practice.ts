@@ -23,6 +23,7 @@ export interface Trainer {
   id: string;
   source?: string;
   studio_generation?: boolean;
+  generation_levels?: Record<string, string[]>;
   generation_unlock?: Record<string, boolean>;
   generation_progress?: Record<string, { solved: number; required: number }>;
   definition: Definition;

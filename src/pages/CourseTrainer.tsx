@@ -142,13 +142,17 @@ export default function CourseTrainer() {
                 );
                 const done = Math.min(goal, p?.solved ?? 0);
                 const physicalGeneration = trainer.studio_generation === true || trainer.source === "studio_fizicheskaya_himiya";
-                const generationLocked = physicalGeneration && trainer.generation_unlock?.[s.id] !== true;
+                const generationLevels = trainer.generation_levels?.[s.id];
+                const noBlueprint = generationLevels !== undefined && !generationLevels.includes(level);
+                const generationLocked = physicalGeneration && (trainer.generation_unlock?.[s.id] !== true || noBlueprint);
                 const unlockProgress = trainer.generation_progress?.[s.id];
                 const required = unlockProgress?.required ?? 3;
                 const generationHintId = `generation-hint-${s.id}`;
                 const bankHintId = `bank-hint-${s.id}`;
                 const generationHint = !trainer.source
                   ? "Генерация недоступна: для тренажёра не настроен источник задач. Обратитесь к преподавателю."
+                  : noBlueprint
+                    ? "Для этого уровня пока нет блюпринта. Выберите доступный уровень."
                   : generationLocked
                     ? `Решите ${required} разные задачи из банка этой подтемы чтобы генерировать новые задачи. Подойдёт любой уровень сложности.`
                     : "Можно генерировать новые задачи выбранного уровня и продолжать практику.";
@@ -177,7 +181,7 @@ export default function CourseTrainer() {
                               key={l.id}
                               size="sm"
                               variant={level === l.id ? "accent" : "outline"}
-                              disabled={!physicalGeneration && !available.includes(l)}
+                              disabled={!available.includes(l) && (!physicalGeneration || (generationLevels !== undefined && !generationLevels.includes(l.id)))}
                               aria-pressed={level === l.id}
                               title={`Готовых задач: ${s.items.filter((item) => item.difficulty === l.id).length}`}
                               onClick={() =>
