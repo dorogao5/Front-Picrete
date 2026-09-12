@@ -1,4 +1,4 @@
-import { buildInfo } from "./build-info";
+import { buildInfo } from "./build-info.ts";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
