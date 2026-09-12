@@ -15,14 +15,14 @@ const modes = [
   {
     id: "practice",
     label: "Тренироваться",
-    description: "Задачи и наборы",
+    description: "Практика с ИИ",
     icon: Dumbbell,
     path: "trainer",
   },
   {
     id: "exam",
-    label: "Экзамены",
-    description: "Работы и результаты",
+    label: "Работы",
+    description: "ДЗ, КР и результаты",
     icon: ClipboardCheck,
     path: "student",
   },

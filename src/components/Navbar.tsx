@@ -176,7 +176,7 @@ export const Navbar = () => {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => navigate(getDefaultAppPath())} className="cursor-pointer">
                     <User className="mr-2 h-4 w-4" />
-                    Экзамены и задания
+                    Работы курса
                   </DropdownMenuItem>
                   {activeCourseId && (
                     <>
@@ -187,13 +187,13 @@ export const Navbar = () => {
                         <BookOpen className="mr-2 h-4 w-4" />
                         Банк задач
                       </DropdownMenuItem>
-                      {(isAdmin() || activeMembership?.roles.includes("student")) && (
+                      {(isAdmin() || activeMembership?.roles.some(role=>role==="student"||role==="teacher")) && (
                         <DropdownMenuItem
                           onClick={() => navigate(`/c/${activeCourseId}/trainer`)}
                           className="cursor-pointer"
                         >
                           <Dumbbell className="mr-2 h-4 w-4" />
-                          Тренажёры
+                          {activeMembership?.roles.includes("teacher") ? "Конструктор тренажёров" : "Тренажёры"}
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuItem

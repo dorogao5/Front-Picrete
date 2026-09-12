@@ -110,7 +110,7 @@ const StudentDashboard = () => {
 
   if (!loading && dataError) {
     return (
-      <PageShell title="Экзамены и задания" subtitle="Сроки, активные попытки и результаты проверки">
+      <PageShell title="Работы курса" subtitle="Сроки, активные попытки и результаты проверки">
         <InlineError description={dataError} onRetry={() => setReloadKey((value) => value + 1)} />
       </PageShell>
     );
@@ -191,7 +191,7 @@ const StudentDashboard = () => {
 
   return (
     <PageShell
-      title="Экзамены и задания"
+      title="Работы курса"
       subtitle="Сроки, активные попытки и результаты проверки — время указано по Москве"
     >
       <div className="mb-8 grid grid-cols-3 gap-2 sm:gap-4">

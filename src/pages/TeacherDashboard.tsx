@@ -104,6 +104,7 @@ const TeacherDashboard = () => {
       subtitle="Создание контрольных и домашних, проверка решений"
       actions={
         <>
+          <Button variant="outline" asChild><Link to={`/c/${courseId}/trainer`}>Конструктор тренажёров</Link></Button>
           <Link to={`/c/${courseId}/task-bank`}>
             <Button variant="outline" className="gap-1.5">
               <BookOpen className="h-4 w-4" />

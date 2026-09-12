@@ -23,7 +23,10 @@ const StudentDashboard = lazy(() => import("./pages/StudentDashboard"));
 const CreateExam = lazy(() => import("./pages/CreateExam"));
 const TakeExam = lazy(() => import("./pages/TakeExam"));
 const TaskBank = lazy(() => import("./pages/TaskBank"));
-const TrainerSets = lazy(() => import("./pages/TrainerSets"));
+const TrainerCatalog = lazy(() => import("./pages/TrainerCatalog"));
+const CourseTrainer = lazy(() => import("./pages/CourseTrainer"));
+const TrainerEditor = lazy(() => import("./pages/TrainerEditor"));
+const PracticeAttempt = lazy(() => import("./pages/PracticeAttempt"));
 const TrainerSetView = lazy(() => import("./pages/TrainerSetView"));
 const OcrReview = lazy(() => import("./pages/OcrReview"));
 const ExamResult = lazy(() => import("./pages/ExamResult"));
@@ -97,7 +100,10 @@ const App = () => (
             <Route path="/c/:courseId/assistant" element={<ProtectedRoute roles={["student", "teacher", "admin"]}><CourseAssistant /></ProtectedRoute>} />
 
             <Route path="/c/:courseId/student" element={<ProtectedRoute roles={["student", "admin"]}><StudentDashboard /></ProtectedRoute>} />
-            <Route path="/c/:courseId/trainer" element={<ProtectedRoute roles={["student", "admin"]}><TrainerSets /></ProtectedRoute>} />
+            <Route path="/c/:courseId/trainer" element={<ProtectedRoute roles={["student", "teacher", "admin"]}><TrainerCatalog /></ProtectedRoute>} />
+            <Route path="/c/:courseId/trainer/course/:trainerId" element={<ProtectedRoute roles={["student", "admin"]}><CourseTrainer /></ProtectedRoute>} />
+            <Route path="/c/:courseId/trainer/manage/:trainerId" element={<ProtectedRoute roles={["teacher", "admin"]}><TrainerEditor /></ProtectedRoute>} />
+            <Route path="/c/:courseId/trainer/practice/:attemptId" element={<ProtectedRoute roles={["student", "teacher", "admin"]}><PracticeAttempt /></ProtectedRoute>} />
             <Route path="/c/:courseId/trainer/:setId" element={<ProtectedRoute roles={["student", "admin"]}><TrainerSetView /></ProtectedRoute>} />
             <Route path="/c/:courseId/exam/:examId" element={<ProtectedRoute roles={["student", "admin"]}><TakeExam /></ProtectedRoute>} />
             <Route path="/c/:courseId/exam/:sessionId/ocr-review" element={<ProtectedRoute roles={["student", "admin"]}><OcrReview /></ProtectedRoute>} />
