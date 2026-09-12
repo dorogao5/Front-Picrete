@@ -63,7 +63,7 @@ test("locked subtopic explains bank requirement visibly, accessibly and in toolt
   for (const level of ["easy", "medium", "hard"]) {
     const view = render({ level });
     assert.equal(view.buttons[0].props.disabled, true);
-    const hint = "Решите 3 разные задачи из банка этой подтемы. Подойдёт любой уровень сложности.";
+    const hint = "Решите 3 разные задачи из банка этой подтемы чтобы генерировать новые задачи. Подойдёт любой уровень сложности.";
     assert.ok(view.elements.some((el) => el.type === TooltipContent && el.props.children === hint));
     assert.ok(view.elements.some((el) => el.type === "p" && el.props.id === "generation-hint-selected" && el.props.children.includes(hint)), "reason is visible without hover");
     assert.equal(view.buttons[0].props["aria-describedby"], "generation-hint-selected");
