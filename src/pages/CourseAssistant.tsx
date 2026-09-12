@@ -15,7 +15,7 @@ import { PageLoader, PageShell } from "@/components/PageShell";
 import { RichText } from "@/components/RichText";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
+import MathEditor from "@/components/MathEditor";
 import {
   AssistantChatMessage,
   AssistantChatThread,
@@ -165,7 +165,7 @@ export default function CourseAssistant() {
     }
   };
 
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       void submit();
@@ -333,18 +333,17 @@ export default function CourseAssistant() {
               </p>
             )}
             <div className="flex items-end gap-2">
-              <Textarea
+              <MathEditor
                 value={message}
-                onChange={(event) => setMessage(event.target.value)}
+                onChange={setMessage}
                 onKeyDown={onKeyDown}
                 maxLength={4000}
-                rows={2}
-                placeholder={
+                hint={
                   activeThreadIsStale
                     ? "Начните новый диалог, чтобы продолжить…"
                     : "Опишите вопрос или вставьте своё решение…"
                 }
-                aria-label="Сообщение ассистенту"
+                label="Сообщение ассистенту"
                 className="min-h-[3.25rem] max-h-40 resize-none text-base sm:text-sm"
                 disabled={sending || activeThreadIsStale}
               />

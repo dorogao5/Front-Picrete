@@ -13,7 +13,7 @@ import {
 import { PageShell, PageLoader } from "@/components/PageShell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
+import MathEditor from "@/components/MathEditor";
 import { RichText } from "@/components/RichText";
 import AuthImage from "@/components/AuthImage";
 import { InlineError } from "@/components/InlineError";
@@ -29,6 +29,11 @@ import { getApiErrorMessage, materialsAPI } from "@/lib/api";
 import { getUser } from "@/lib/auth";
 import { practice, type Attempt } from "@/lib/practice";
 export default function PracticeAttempt() {
+  const { courseId, attemptId } = useParams();
+  return <PracticeAttemptContent key={`${courseId}:${attemptId}`} />;
+}
+
+function PracticeAttemptContent() {
   const { courseId = "", attemptId = "" } = useParams();
   const navigate = useNavigate();
   const cacheKey = `practice-draft:${getUser()?.id}:${courseId}:${attemptId}`;
@@ -320,17 +325,17 @@ export default function PracticeAttempt() {
                     {saved && !dirty.current ? "Сохранено" : "Сохранить"}
                   </Button>
                 </div>
-                <Textarea
-                  aria-label="Черновик решения"
+                <MathEditor key={cacheKey}
+                  label="Черновик решения"
                   value={draft}
-                  onChange={(e) => {
-                    setDraft(e.target.value);
+                  onChange={(text) => {
+                    setDraft(text);
                     dirty.current = true;
                     try {
                       sessionStorage.setItem(
                         cacheKey,
                         JSON.stringify({
-                          draft: e.target.value,
+                          draft: text,
                           revision: a.revision,
                         }),
                       );
@@ -340,9 +345,8 @@ export default function PracticeAttempt() {
                     setSaved(false);
                   }}
                   disabled={locked}
-                  rows={9}
                   maxLength={60000}
-                  placeholder="Запишите ход решения или загрузите фото. Можно начать с любого шага — помощник рядом."
+                  hint="Запишите ход решения или загрузите фото. Можно начать с любого шага — помощник рядом."
                   className="min-h-52 resize-y text-base leading-relaxed"
                 />
                 {a.photos.length > 0 && (
@@ -540,14 +544,13 @@ export default function PracticeAttempt() {
                   void act("message", message);
                 }}
               >
-                <Textarea
-                  aria-label="Вопрос помощнику"
-                  placeholder="Спросите о задаче или своём решении…"
-                  rows={3}
+                <MathEditor
+                  label="Вопрос помощнику"
+                  hint="Спросите о задаче или своём решении…"
                   maxLength={6000}
                   value={message}
                   disabled={locked}
-                  onChange={(e) => setMessage(e.target.value)}
+                  onChange={setMessage}
                 />
                 <div className="flex items-center justify-between gap-3">
                   <Button
